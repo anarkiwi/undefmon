@@ -1,0 +1,620 @@
+{
+  "$1026": {
+    "host_pc": 4134,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50598
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BPL"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$1057": {
+    "host_pc": 4183,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50632
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BPL"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$1088": {
+    "host_pc": 4232,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50666
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BPL"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$10B8": {
+    "host_pc": 4280,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      6031,
+      6048
+    ],
+    "current_mnem": "ADC",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "SBC"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$10BF": {
+    "host_pc": 4287,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      6034,
+      6051
+    ],
+    "current_mnem": "ADC",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$10D4": {
+    "host_pc": 4308,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      5405
+    ],
+    "current_mnem": "ASL",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "NOP"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$10D8": {
+    "host_pc": 4312,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4108,
+      4115
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "RTS"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$8D26": {
+    "host_pc": 36134,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      46774
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BIT"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$BDA4": {
+    "host_pc": 48548,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      48644,
+      48798,
+      49327,
+      49807,
+      49939
+    ],
+    "current_mnem": "BRK",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$C28D": {
+    "host_pc": 49805,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      48178
+    ],
+    "current_mnem": "BEQ",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$C826": {
+    "host_pc": 51238,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50493
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "INY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$C857": {
+    "host_pc": 51287,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50527
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "INY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$C888": {
+    "host_pc": 51336,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      50561
+    ],
+    "current_mnem": "STX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "INY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$C8D4": {
+    "host_pc": 51412,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      52509
+    ],
+    "current_mnem": "ASL",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "NOP"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D000": {
+    "host_pc": 53248,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43628
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BIT"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D003": {
+    "host_pc": 53251,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43656
+    ],
+    "current_mnem": "RTS",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D004": {
+    "host_pc": 53252,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43638
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "STY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D006": {
+    "host_pc": 53254,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43643
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "LDY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D008": {
+    "host_pc": 53256,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43648
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "CPY"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D010": {
+    "host_pc": 53264,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43670
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D015": {
+    "host_pc": 53269,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      2655,
+      43609,
+      47694
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D019": {
+    "host_pc": 53273,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      2666,
+      2724
+    ],
+    "current_mnem": "ADC",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D01B": {
+    "host_pc": 53275,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43612
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D01D": {
+    "host_pc": 53277,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43615
+    ],
+    "current_mnem": "BCC",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D021": {
+    "host_pc": 53281,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      2200,
+      29757,
+      31161,
+      48987,
+      50416,
+      50422
+    ],
+    "current_mnem": "INX",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "ASL",
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D028": {
+    "host_pc": 53288,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43680
+    ],
+    "current_mnem": "STA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D02B": {
+    "host_pc": 53291,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43689
+    ],
+    "current_mnem": "RTS",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D400": {
+    "host_pc": 54272,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4144
+    ],
+    "current_mnem": "JSR",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D403": {
+    "host_pc": 54275,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4137
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D406": {
+    "host_pc": 54278,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4158
+    ],
+    "current_mnem": "INY",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D407": {
+    "host_pc": 54279,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4193
+    ],
+    "current_mnem": "AND",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D409": {
+    "host_pc": 54281,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4183
+    ],
+    "current_mnem": "BEQ",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D40B": {
+    "host_pc": 54283,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      3243,
+      4213,
+      50623
+    ],
+    "current_mnem": "JSR",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D40E": {
+    "host_pc": 54286,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4242,
+      5372
+    ],
+    "current_mnem": "INY",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D40F": {
+    "host_pc": 54287,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4245,
+      5375
+    ],
+    "current_mnem": "INY",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D410": {
+    "host_pc": 54288,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      3224,
+      4232
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D413": {
+    "host_pc": 54291,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4259
+    ],
+    "current_mnem": "BMI",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  },
+  "$D417": {
+    "host_pc": 54295,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4267,
+      5417
+    ],
+    "current_mnem": "BNE",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
+  "$E29B": {
+    "host_pc": 58011,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      58833
+    ],
+    "current_mnem": "BEQ",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [],
+    "inconclusive": true,
+    "annotated": false,
+    "discovered": true
+  }
+}

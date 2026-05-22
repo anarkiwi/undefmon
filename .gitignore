@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# Intermediate build artefact: build/cmp_facts.json.
+build/
+
+# Produced by `make fetch-static` (delegates to `docker build`).
+# Not committed; fetched from upstream at build time.
+artefacts/defmon-static.bin
+artefacts/defmon-withtunes.d64
+artefacts/defmon-20201008.zip

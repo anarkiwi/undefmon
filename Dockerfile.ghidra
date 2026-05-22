@@ -1,0 +1,62 @@
+# syntax=docker/dockerfile:1.6
+#
+# Reproduce artefacts/ghidra/*.json from the repo's RE inputs.
+#
+# Usage:
+#   docker build -f Dockerfile.ghidra --target export --output <dir> .
+#       -> writes the 5 JSON files into <dir>
+#
+# Inputs the host must supply:
+#   - artefacts/defmon-static.bin   (produced by Dockerfile / make fetch-static)
+#   - trace/entrypoints.json
+#   - tools/re/annotations.toml
+#
+# Stages:
+#   1. ghidra-install   Eclipse Temurin 21 + Ghidra 12.1 extracted to /opt
+#   2. exporter         pyghidra + repo scripts; runs cmp_facts then
+#                       ghidra_import --no-decompile to produce the 5 JSONs
+#   3. export           scratch with just the 5 JSONs
+
+FROM eclipse-temurin:21-jdk-noble AS ghidra-install
+ARG GHIDRA_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1_build/ghidra_12.1_PUBLIC_20260513.zip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl unzip python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL "$GHIDRA_URL" -o /tmp/ghidra.zip \
+    && unzip -q /tmp/ghidra.zip -d /opt \
+    && rm /tmp/ghidra.zip \
+    && mv /opt/ghidra_* /opt/ghidra
+ENV GHIDRA_INSTALL_DIR=/opt/ghidra
+RUN pip install --no-cache-dir --break-system-packages pyghidra
+
+FROM ghidra-install AS exporter
+WORKDIR /work
+COPY tools/__init__.py tools/__init__.py
+COPY tools/re/__init__.py tools/re/__init__.py
+COPY tools/re/dasm6502.py tools/re/dasm6502.py
+COPY tools/re/callgraph.py tools/re/callgraph.py
+COPY tools/re/cmp_facts.py tools/re/cmp_facts.py
+COPY tools/re/emit_defmon_source.py tools/re/emit_defmon_source.py
+COPY tools/re/ghidra_import.py tools/re/ghidra_import.py
+COPY tools/re/annotations.toml tools/re/annotations.toml
+COPY trace/entrypoints.json trace/entrypoints.json
+COPY artefacts/defmon-static.bin artefacts/defmon-static.bin
+RUN mkdir -p build artefacts/ghidra \
+    && python3 -m tools.re.cmp_facts --out build/cmp_facts.json \
+    && python3 -m tools.re.ghidra_import \
+        --ghidra-install /opt/ghidra \
+        --project-dir /tmp/ghidra-proj \
+        --no-decompile \
+    && test -f artefacts/ghidra/symbols.json \
+    && test -f artefacts/ghidra/segments.json \
+    && test -f artefacts/ghidra/smc_dispatch.json \
+    && test -f artefacts/ghidra/smc_branch.json \
+    && test -f artefacts/ghidra/smc_opcode.json
+
+FROM scratch AS export
+COPY --from=exporter /work/artefacts/ghidra/symbols.json /symbols.json
+COPY --from=exporter /work/artefacts/ghidra/segments.json /segments.json
+COPY --from=exporter /work/artefacts/ghidra/smc_dispatch.json /smc_dispatch.json
+COPY --from=exporter /work/artefacts/ghidra/smc_branch.json /smc_branch.json
+COPY --from=exporter /work/artefacts/ghidra/smc_opcode.json /smc_opcode.json

@@ -1,0 +1,215 @@
+{
+  "$0BB2": {
+    "jsr_pc": 2994,
+    "description": "Trampoline \u2014 caller supplies target address in (X = low byte, Y = high byte). Used by the kbd-modifier dispatch chain at $0B9A-$0BB2 to call into per-modifier handlers without a switch.",
+    "patch_sources_annotated": [
+      2980,
+      2983
+    ],
+    "patch_sources_discovered": [
+      2980,
+      2983
+    ],
+    "targets": [],
+    "annotated": true,
+    "discovered": true
+  },
+  "$8575": {
+    "jsr_pc": 34165,
+    "description": "SMC dispatch: per-field writer chosen by (ui_mode, kbd_modifiers, kbd_decoded_key). Operand bytes are patched at $844F / $8452 by field_writer_dispatcher's caller chain.",
+    "patch_sources_annotated": [
+      33871,
+      33874
+    ],
+    "patch_sources_discovered": [
+      33871,
+      33874
+    ],
+    "targets": [
+      {
+        "addr": 45974,
+        "name": "writer_sidcall",
+        "context": "seqED"
+      },
+      {
+        "addr": 46047,
+        "name": "writer_note",
+        "context": "seqED"
+      },
+      {
+        "addr": 46070,
+        "name": "writer_clear_note",
+        "context": "seqED"
+      },
+      {
+        "addr": 46079,
+        "name": "writer_speed",
+        "context": "seqED"
+      },
+      {
+        "addr": 49478,
+        "name": "writer_sidtab_toggle",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 49503,
+        "name": "writer_sidtab_digit",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 49561,
+        "name": "writer_sidtab_clear_advance",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 49579,
+        "name": "writer_sidtab_inc",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 49614,
+        "name": "writer_sidtab_dec",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 49681,
+        "name": "writer_sidtab_supercmd",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 50002,
+        "name": "writer_sidtab_cbm_shift_a",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 50026,
+        "name": "writer_sidtab_inst_row",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 50182,
+        "name": "writer_sidtab_cbm_shift_b",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 50426,
+        "name": "writer_disk_filename",
+        "context": "sidTAB"
+      },
+      {
+        "addr": 57673,
+        "name": "writer_seqlist_advance",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 57873,
+        "name": "writer_seqlist_digit",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 57907,
+        "name": "writer_seqlist_clear",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 57916,
+        "name": "writer_seqlist_supercmd",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 58398,
+        "name": "writer_seqlist_row_clone",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 58436,
+        "name": "writer_seqlist_row_insert",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 58668,
+        "name": "writer_seqlist_dec",
+        "context": "seqLIST"
+      },
+      {
+        "addr": 58686,
+        "name": "writer_seqlist_inc",
+        "context": "seqLIST"
+      }
+    ],
+    "annotated": true,
+    "discovered": true
+  },
+  "$B251": {
+    "jsr_pc": 45649,
+    "description": "Auto-advance dispatch \u2014 4 (lo, hi) pairs at $B20F/$B214, $B21C/$B221, $B229/$B22E, $B236/$B23B select among 4 per-mode auto-advance handlers. Targets read from a 4-entry LUT indexed by the current ui_mode slot.",
+    "patch_sources_annotated": [
+      45583,
+      45588,
+      45596,
+      45601,
+      45609,
+      45614,
+      45622,
+      45627
+    ],
+    "patch_sources_discovered": [
+      45583,
+      45588,
+      45596,
+      45601,
+      45609,
+      45614,
+      45622,
+      45627
+    ],
+    "targets": [],
+    "annotated": true,
+    "discovered": true
+  },
+  "$D400": {
+    "jsr_pc": 54272,
+    "description": "save_encoder_jp_chain inner-loop call \u2014 operand patched per pattern-row encode iteration at $1026/$1033 to walk the JP chain across pattern body bytes. Lives at $D400 (RAM-under-IO band).",
+    "patch_sources_annotated": [
+      4134,
+      4147
+    ],
+    "patch_sources_discovered": [
+      4134,
+      4147
+    ],
+    "targets": [],
+    "annotated": true,
+    "discovered": true
+  },
+  "$D40B": {
+    "jsr_pc": 54283,
+    "description": "Second save_encoder JP-chain walker call \u2014 companion to $D400, patched per iteration at $106F/$1072. Same walker semantics, separate dispatch site for the second JP-chain leg.",
+    "patch_sources_annotated": [
+      4207,
+      4210
+    ],
+    "patch_sources_discovered": [
+      4207,
+      4210
+    ],
+    "targets": [],
+    "annotated": true,
+    "discovered": true
+  },
+  "$D780": {
+    "jsr_pc": 55168,
+    "description": "SMC-JMP. Operand bytes patched at $D769/$D7BE (STA-sourced from the surrounding setup chain). The JMP redirects execution to a runtime-computed target \u2014 emit_setup chooses where to resume after the configurable emitter writes a row.",
+    "patch_sources_annotated": [
+      55145,
+      55150
+    ],
+    "patch_sources_discovered": [
+      55145,
+      55150
+    ],
+    "targets": [],
+    "annotated": true,
+    "discovered": true
+  }
+}

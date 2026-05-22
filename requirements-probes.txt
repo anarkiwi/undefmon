@@ -1,0 +1,14 @@
+# Optional dependencies for running the dynamic-evidence probes
+# (tools/sweep.py + tools/probe.py). NOT required to build defmon.s.
+#
+# Install with:
+#     pip install -r requirements-probes.txt
+#
+# Both packages drive defMON inside the `anarkiwi/headlessvice` docker
+# image; a working docker daemon with access to that image is also
+# required at runtime. vice-driver>=0.2.0 is needed for the
+# ``ViceContainer.entrypoint`` override the headlessvice wiring uses.
+# See tools/probe.py for usage.
+
+defmon-driver==0.2.0
+vice-driver==0.2.0

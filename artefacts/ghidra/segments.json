@@ -1,0 +1,168 @@
+{
+  "segments": [
+    {
+      "start": "$1800",
+      "end_excl": "$1900",
+      "name": "song_position_arrays_lo",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "Decoder scratch (lo): $11 markers on disk; $CF42 rewrites to runtime pointers $5F00 + X*$0F. $1800..$1825 below LOAD dest_floor \u2014 those 38 bytes are no-ops on real LOAD. Not sidTAB data (which is at $5F00)."
+    },
+    {
+      "start": "$1900",
+      "end_excl": "$1A00",
+      "name": "song_position_arrays_hi",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "Decoder scratch (hi): paired with $1800; $CF42 transform target"
+    },
+    {
+      "start": "$1A00",
+      "end_excl": "$1A80",
+      "name": "pat_base_lo",
+      "element_size": 1,
+      "defined_units": 128,
+      "comment": "Pattern base address (lo byte) per pattern number; $80 bytes = 128 patterns"
+    },
+    {
+      "start": "$1A80",
+      "end_excl": "$1B00",
+      "name": "pat_base_hi",
+      "element_size": 1,
+      "defined_units": 128,
+      "comment": "Pattern base address (hi byte) per pattern number; pairs with pat_base_lo"
+    },
+    {
+      "start": "$1B00",
+      "end_excl": "$1C00",
+      "name": "arranger_v0_sid1",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#1 V0 arranger column: pat_num per song row (256 rows max)"
+    },
+    {
+      "start": "$1C00",
+      "end_excl": "$1D00",
+      "name": "arranger_v1_sid1",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#1 V1 arranger column"
+    },
+    {
+      "start": "$1D00",
+      "end_excl": "$1E00",
+      "name": "arranger_v2_sid1",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#1 V2 arranger column"
+    },
+    {
+      "start": "$1F00",
+      "end_excl": "$5F00",
+      "name": "pattern_bank",
+      "element_size": 4,
+      "defined_units": 1,
+      "comment": "Pattern data bank: per-pattern $80-byte block, indexed via pat_base_{lo,hi}; within a pattern, 4-byte step row = (flag, slot_a, slot_b, note). flag bits: 7=ALT, 6=GATE_A, 5=GATE_B, 4=GATE_N (must be set to play note), 3-0=duration",
+      "struct": {
+        "container": {
+          "name": "Pattern",
+          "size": 128,
+          "element_count": 128
+        },
+        "element": {
+          "name": "PatternStep",
+          "size": 4,
+          "count_per_container": 32,
+          "fields": [
+            {
+              "name": "flag",
+              "offset": 0,
+              "size": 1,
+              "comment": "bit 7=ALT, 6=GATE_A, 5=GATE_B, 4=GATE_N (must be set to play the note), 3..0=dur nibble fed to the row timer"
+            },
+            {
+              "name": "slot_a",
+              "offset": 1,
+              "size": 1,
+              "comment": "sidCALL1: row index into sidtab_data (env slot A)"
+            },
+            {
+              "name": "slot_b",
+              "offset": 2,
+              "size": 1,
+              "comment": "sidCALL2: row index into sidtab_data (env slot B)"
+            },
+            {
+              "name": "note",
+              "offset": 3,
+              "size": 1,
+              "comment": "note byte; pitch index into key_pitch_lut at $729A"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "start": "$5F00",
+      "end_excl": "$7167",
+      "name": "sidtab_data",
+      "element_size": 1,
+      "defined_units": 872,
+      "comment": "Real sidTAB row data: 15-byte rows ($0F stride) per sidcall index. Rows 0..255 occupy $5F00..$6DFF; rows 256..313 occupy $6E00..$7166 which also overlaps the SID#2 arrangers when stereo is enabled.",
+      "struct": {
+        "element": {
+          "name": "SidtabRow",
+          "size": 15,
+          "fields": [
+            {
+              "name": "low_bitmap",
+              "offset": 0,
+              "size": 1,
+              "comment": "bit 7=WGl, 6=WGh, 5=AD, 4=SR, 3=TR, 2=AF, 1=PW \u2014 present-bitmap for low-half columns; subsequent bytes 1..N decode in column-bit order. high_bitmap lives at byte 1+N (variable position)."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "start": "$6E00",
+      "end_excl": "$6F00",
+      "name": "arranger_v3_sid2",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#2 V3 arranger column (visible only when chip view = SID#2); overlays sidtab_data rows 192..207 \u2014 stereo tunes can't use both"
+    },
+    {
+      "start": "$6F00",
+      "end_excl": "$7000",
+      "name": "arranger_v4_sid2",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#2 V4 arranger column; overlays sidtab_data rows 208..223"
+    },
+    {
+      "start": "$7000",
+      "end_excl": "$7100",
+      "name": "arranger_v5_sid2",
+      "element_size": 1,
+      "defined_units": 256,
+      "comment": "SID#2 V5 arranger column; overlays sidtab_data rows 224..239"
+    },
+    {
+      "start": "$729A",
+      "end_excl": "$72BA",
+      "name": "key_pitch_lut",
+      "element_size": 1,
+      "defined_units": 32,
+      "comment": "Key-byte to base pitch LUT; reader at $AEB3 for note dispatch"
+    },
+    {
+      "start": "$D000",
+      "end_excl": "$E000",
+      "name": "ram_under_io",
+      "element_size": 1,
+      "defined_units": 2162,
+      "comment": "RAM under I/O: defMON runs with $01=$35 to access this RAM region; static image preserves the boot-time bytes"
+    }
+  ]
+}

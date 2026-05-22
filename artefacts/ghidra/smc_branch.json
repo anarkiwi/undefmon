@@ -1,0 +1,133 @@
+{
+  "$1183": {
+    "branch_pc": 4483,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53688
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$1191": {
+    "branch_pc": 4497,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53693
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$119F": {
+    "branch_pc": 4511,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53698
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$120B": {
+    "branch_pc": 4619,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53703
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$1219": {
+    "branch_pc": 4633,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53708
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$1227": {
+    "branch_pc": 4647,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53713
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$1293": {
+    "branch_pc": 4755,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53718
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$12A1": {
+    "branch_pc": 4769,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53723
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$12AF": {
+    "branch_pc": 4783,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      53728
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$D024": {
+    "branch_pc": 53284,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      43623
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$D409": {
+    "branch_pc": 54281,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4186
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$D413": {
+    "branch_pc": 54291,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      4256
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$D417": {
+    "branch_pc": 54295,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      3217,
+      4274
+    ],
+    "annotated": false,
+    "discovered": true
+  }
+}
