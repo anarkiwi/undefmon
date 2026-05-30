@@ -2172,6 +2172,17 @@ def _render_struct_diagram(struct_def: dict,
     return lines
 
 
+def _fmt_map_size(n: int) -> str:
+    """Format a byte count for the memory-map size column (7 chars wide).
+    Module-level so the map regression tests can assert displayed sizes
+    against re-derived band lengths without duplicating the rule."""
+    if n >= 1024 and n % 1024 == 0:
+        return f"{n // 1024:5d} K"
+    if n >= 1024:
+        return f"{n / 1024:5.1f} K"
+    return f"{n:5d} B"
+
+
 def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
                             total_end: int = 0x10000) -> list[str]:
     """Render the address-band map as a vertical ASCII grid.
@@ -2189,13 +2200,6 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
     KIND_GLYPH = {"code": "█", "data": "▒", "hw": "░", "sys": "·",
                   "unused": " "}
 
-    def _fmt_size(n: int) -> str:
-        if n >= 1024 and n % 1024 == 0:
-            return f"{n // 1024:5d} K"
-        if n >= 1024:
-            return f"{n / 1024:5.1f} K"
-        return f"{n:5d} B"
-
     lines: list[str] = []
     bar_w = 8
     range_start = rows[0][0] if rows else 0
@@ -2206,17 +2210,17 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
         if start > last_end:
             gap = start - last_end
             lines.append(
-                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_size(gap)}  — unused —")
+                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
         size = end - start
         glyph = KIND_GLYPH.get(kind, " ")
         bar = glyph * bar_w
         lines.append(
-            f"   ${start:04X}  {bar}  {_fmt_size(size)}  {label}")
+            f"   ${start:04X}  {bar}  {_fmt_map_size(size)}  {label}")
         last_end = end
     if last_end < total_end:
         gap = total_end - last_end
         lines.append(
-            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_size(gap)}  — unused —")
+            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
     lines.append("")
     lines.append("   Legend:  " + "  ".join(
         f"{KIND_GLYPH[k]} {desc}" for k, desc in [
