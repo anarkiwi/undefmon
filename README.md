@@ -65,13 +65,23 @@ Docker images cache aggressively against `type=gha`.
 
 ## Where the RE stands
 
-The static image is `$0800–$E786` (57,223 bytes):
+The static image is `$0800–$E786` (57,223 bytes). Run
+`python3 -m tools.re.data_region_coverage --profile` to reproduce:
 
-| bucket                    | bytes  | share |
-| ------------------------- | -----: | ----: |
-| instructions              | 11,500 | 20.1% |
-| declared data (regions)   | 29,114 | 50.9% |
-| uncategorised             | 16,609 | 29.0% |
+| bucket                              | bytes  | share |
+| ----------------------------------- | -----: | ----: |
+| instruction bytes                   | 26,610 | 46.5% |
+| data: zero-fill (buffers / init RAM)| 20,283 | 35.4% |
+| data: non-zero, with `notes`        |  9,926 | 17.3% |
+| data: non-zero, role-only residue   |    404 |  0.7% |
+
+The largest data spans (`$2180-$5EFF` pattern RAM ≈75% zero, `$5FFF-$6DFF`
+sidTAB and `$DD01-$DFFE` tail both 100% zero) are initialised working RAM,
+named at their boundaries — not reverse-engineering gaps. The genuinely
+undocumented residue is **404 non-zero bytes (0.7%)** across 25 small
+spans that already carry a `role` but no `notes`. (An earlier table here
+reported "29% uncategorised"; that figure presented an instruction
+*count*, 11,500, as a byte share and predated full region coverage.)
 
 Annotation catalogue (`tools/re/annotations.toml`):
 
@@ -79,7 +89,8 @@ Annotation catalogue (`tools/re/annotations.toml`):
   89 have explicit `callers`; 72 have explicit `inputs`)
 - 356 `[region.$XXXX]` entries
 - 89 per-branch condition overrides, 16 text spans, 6 SMC-dispatch
-  sites, 1 refuted-hypothesis entry
+  sites, 11 SMC-opcode-flip sites, 9 SMC-branch sites, 1
+  refuted-hypothesis entry
 
 Comparison-site dataflow (`build/cmp_facts.json`, 1,629 branches):
 
@@ -156,9 +167,12 @@ could surface as a failing test without an obvious cause.
 (These are about the disassembly's completeness, not about
 reproducing the build.)
 
-1. **~29% of the image is uncategorised** (16,609 bytes neither code
-   nor a declared `[region]`). Add `[region.$XXXX]` entries — newly
-   named bytes flow into the emitted disassembly on the next `make`.
+1. **Data residue is 404 non-zero bytes (0.7%).** Every data sub-span
+   already starts at a `[region]`/`[function]`, and 35% of the image is
+   zero-fill buffers (see the profile table above). The remaining gap is
+   25 small spans with a `role` but no `notes` — list them with
+   `python3 -m tools.re.data_region_coverage --profile`. Add `notes` to
+   close it; this is polish, not a structural hole.
 
 2. **92 branches have `unknown` lhs/rhs** in `cmp_facts.json`. Extend
    `tools/re/cmp_facts.py` with cross-call dataflow, or add manual
@@ -174,6 +188,23 @@ reproducing the build.)
 
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
+
+5. **3,234 of 11,500 code-starts are statically unreachable.** Run
+   `make unreachable-triage` to bucket them. ~96% sit inside a single
+   `paint_page_*` data span — screen data that decodes as instructions,
+   not dead code — so the headline number overstates the gap. The
+   actionable residue is the `isolated` starts outside data regions and
+   the `smc_io_band` bucket (reached via SMC / RAM-under-I/O banking).
+
+6. **SMC catalogue is curated** (dispatch + opcode + branch). 11
+   genuine `smc_opcode` flips and the 9 `smc_branch` gate sites at
+   `$1183-$12AF` (per-voice sidcall/note gates; BPL offsets set once at
+   load by the `$D1B6-$D1E0` decoder) carry `[smc_opcode]`/`[smc_branch]`
+   descriptions. The 24 VIC/SID register-aliased false positives (a
+   write to a hardware register that aliases RAM-under-I/O code) are
+   dropped at emit time (see `load_smc_opcode_catalogue`). Left as raw
+   discovery banners: a few opcode sites in data buffers (`$8D26`,
+   `$BDA4`) and the supercmd branch arms (`$C28D`, `$E29B`).
 
 ## See also
 

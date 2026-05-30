@@ -1,92 +1,110 @@
 {
   "$1183": {
     "branch_pc": 4483,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 0, sidcall-1). BPL offset set to $0A once at load by $D1B8; skips the sc1 row-index + counter latch when the sidcall-1 gate bit is clear.",
+    "patch_sources_annotated": [
+      53688
+    ],
     "patch_sources_discovered": [
       53688
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1191": {
     "branch_pc": 4497,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 0, sidcall-2). BPL offset set to $0A once at load by $D1BD; skips the sc2 row-index + counter latch when the sidcall-2 gate bit is clear.",
+    "patch_sources_annotated": [
+      53693
+    ],
     "patch_sources_discovered": [
       53693
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$119F": {
     "branch_pc": 4511,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 0, note / GATE_N). BPL offset set to $13 once at load by $D1C2; skips the NOTE read + transpose/slide reset when the note gate bit is clear.",
+    "patch_sources_annotated": [
+      53698
+    ],
     "patch_sources_discovered": [
       53698
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$120B": {
     "branch_pc": 4619,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 1, sidcall-1). BPL offset set to $0A once at load by $D1C7; v1 analogue of $1183.",
+    "patch_sources_annotated": [
+      53703
+    ],
     "patch_sources_discovered": [
       53703
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1219": {
     "branch_pc": 4633,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 1, sidcall-2). BPL offset set to $0A once at load by $D1CC; v1 analogue of $1191.",
+    "patch_sources_annotated": [
+      53708
+    ],
     "patch_sources_discovered": [
       53708
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1227": {
     "branch_pc": 4647,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 1, note / GATE_N). BPL offset set to $13 once at load by $D1D1; v1 analogue of $119F.",
+    "patch_sources_annotated": [
+      53713
+    ],
     "patch_sources_discovered": [
       53713
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1293": {
     "branch_pc": 4755,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 2, sidcall-1). BPL offset set to $0A once at load by $D1D6; v2 analogue of $1183.",
+    "patch_sources_annotated": [
+      53718
+    ],
     "patch_sources_discovered": [
       53718
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$12A1": {
     "branch_pc": 4769,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 2, sidcall-2). BPL offset set to $0A once at load by $D1DB; v2 analogue of $1191.",
+    "patch_sources_annotated": [
+      53723
+    ],
     "patch_sources_discovered": [
       53723
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$12AF": {
     "branch_pc": 4783,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "GATE branch (voice 2, note / GATE_N). BPL offset set to $13 once at load by $D1E0; v2 analogue of $119F.",
+    "patch_sources_annotated": [
+      53728
+    ],
     "patch_sources_discovered": [
       53728
     ],
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$D024": {

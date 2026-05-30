@@ -2172,6 +2172,17 @@ def _render_struct_diagram(struct_def: dict,
     return lines
 
 
+def _fmt_map_size(n: int) -> str:
+    """Format a byte count for the memory-map size column (7 chars wide).
+    Module-level so the map regression tests can assert displayed sizes
+    against re-derived band lengths without duplicating the rule."""
+    if n >= 1024 and n % 1024 == 0:
+        return f"{n // 1024:5d} K"
+    if n >= 1024:
+        return f"{n / 1024:5.1f} K"
+    return f"{n:5d} B"
+
+
 def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
                             total_end: int = 0x10000) -> list[str]:
     """Render the address-band map as a vertical ASCII grid.
@@ -2189,13 +2200,6 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
     KIND_GLYPH = {"code": "█", "data": "▒", "hw": "░", "sys": "·",
                   "unused": " "}
 
-    def _fmt_size(n: int) -> str:
-        if n >= 1024 and n % 1024 == 0:
-            return f"{n // 1024:5d} K"
-        if n >= 1024:
-            return f"{n / 1024:5.1f} K"
-        return f"{n:5d} B"
-
     lines: list[str] = []
     bar_w = 8
     range_start = rows[0][0] if rows else 0
@@ -2206,17 +2210,17 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
         if start > last_end:
             gap = start - last_end
             lines.append(
-                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_size(gap)}  — unused —")
+                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
         size = end - start
         glyph = KIND_GLYPH.get(kind, " ")
         bar = glyph * bar_w
         lines.append(
-            f"   ${start:04X}  {bar}  {_fmt_size(size)}  {label}")
+            f"   ${start:04X}  {bar}  {_fmt_map_size(size)}  {label}")
         last_end = end
     if last_end < total_end:
         gap = total_end - last_end
         lines.append(
-            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_size(gap)}  — unused —")
+            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
     lines.append("")
     lines.append("   Legend:  " + "  ".join(
         f"{KIND_GLYPH[k]} {desc}" for k, desc in [
@@ -2356,6 +2360,7 @@ HW_IMM_DECODERS: dict[int, Callable[[int], str]] = {
 
 
 def _emit_memory_map(fh,
+                     mem: bytes,
                      base: int,
                      end_excl: int,
                      segments: list[dict],
@@ -2411,6 +2416,21 @@ def _emit_memory_map(fh,
                 return labels[addr]
         return ""
 
+    def _emptiness(lo: int, hi: int) -> str:
+        """Tag a data band with its zero-fill share when it is mostly
+        empty. Large defMON data segments are initialised working RAM
+        (pattern_bank, sidtab_data, tail buffers) that ship zeroed or
+        with a trivial default — the byte count overstates how much is
+        actual content. Surfaced so the map matches the
+        `data_region_coverage --profile` breakdown."""
+        # mem is the full 64K image indexed by absolute address (classify
+        # does mem[pc]), so slice with absolute lo/hi — not lo-base.
+        span = mem[lo:hi]
+        if not span:
+            return ""
+        zero_pct = 100 * span.count(0) // len(span)
+        return f" (~{zero_pct}% zero)" if zero_pct >= 50 else ""
+
     image_bands: list[tuple[int, int, str, str]] = []
     cursor = base
     for start, end_excl_b, name in image_segs:
@@ -2421,7 +2441,8 @@ def _emit_memory_map(fh,
             image_bands.append((cursor, b_start,
                                 f"code (first: {hint})" if hint else "code",
                                 "code"))
-        image_bands.append((b_start, b_end, name, "data"))
+        image_bands.append((b_start, b_end, name + _emptiness(b_start, b_end),
+                            "data"))
         cursor = max(cursor, b_end)
     if cursor < end_excl:
         hint = _first_annotation_name(cursor, end_excl)
@@ -2908,18 +2929,18 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     def _emit_smc_branch_header(pc: int) -> str:
         """Render a short comment line above a SMC-patched branch.
 
-        Branch SMC sites have a 1-byte offset operand; the patcher
-        rewrites it at runtime to redirect the branch landing. We
-        cannot enumerate possible targets (a byte covers ±128 PCs), so
-        the comment just warns + lists patch sources + carries the
-        optional curator description.
+        Branch SMC sites have a 1-byte offset operand patched by another
+        site (at load or at runtime), so the static target shown in the
+        listing is the UNPATCHED default. We cannot enumerate possible
+        targets (a byte covers ±128 PCs), so the comment just warns +
+        lists patch sources + carries the optional curator description.
         """
         entry = smc_branch.get(pc)
         if not entry:
             return ""
         sources = entry.get("patch_sources") or []
         ps_text = ", ".join(f"${p:04X}" for p in sources) or "(unknown)"
-        lines = [f"; ──── SMC-patched branch (offset rewritten at runtime) ────\n",
+        lines = [f"; ──── SMC-patched branch — static target is the unpatched default ────\n",
                  f";   Patched at: {ps_text}\n"]
         desc = (entry.get("description") or "").strip()
         if desc:
@@ -3043,7 +3064,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     fh.write(";\n")
     _emit_architecture_overview(fh)
     fh.write("\n")
-    _emit_memory_map(fh, base, end_excl, segments, HW_ANCHOR_REGIONS,
+    _emit_memory_map(fh, mem, base, end_excl, segments, HW_ANCHOR_REGIONS,
                      annotations, labels)
     fh.write("\n")
 
@@ -5287,7 +5308,17 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
     Returns {host_pc: {description, patch_sources, current_mnem,
     candidate_opcodes, inconclusive}}. Curated `candidate_opcodes` wins
     over auto-discovered ones; if both are empty the entry is rendered
-    with an "inconclusive" marker."""
+    with an "inconclusive" marker.
+
+    Discovered (un-annotated) hosts that ARE hardware registers
+    (`HW_LABELS`) are dropped: a store to a VIC/SID register address is
+    an I/O write, but those addresses also alias RAM-under-I/O code, so
+    Ghidra records the I/O store as a write-ref to a code byte and
+    `_discover_smc_opcode_sites` reports a bogus opcode-flip whose
+    "candidate" is the traced register *data* value (e.g. $00 -> BRK).
+    The genuine SMC at those addresses is the per-voice operand/dispatch
+    patch, catalogued separately as `smc_dispatch`. An explicit
+    `[smc_opcode."$Dxxx"]` annotation overrides this and renders."""
     if not path.is_file():
         return {}
     raw = json.loads(path.read_text())
@@ -5298,6 +5329,8 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
         try:
             pc = int(key.lstrip("$"), 16)
         except (AttributeError, ValueError):
+            continue
+        if pc in HW_LABELS and not body.get("annotated"):
             continue
         sources = set(body.get("patch_sources_annotated") or [])
         sources.update(body.get("patch_sources_discovered") or [])
@@ -5321,6 +5354,11 @@ def load_smc_branch_catalogue(path: Path) -> dict[int, dict]:
     Returns {branch_pc: {description, patch_sources}}. The emitter
     renders a short comment above each branch noting that its offset
     byte is patched at runtime.
+
+    As in `load_smc_opcode_catalogue`, discovered (un-annotated) hosts
+    that are hardware registers (`HW_LABELS`) are dropped — the "branch
+    offset patch" is really a VIC/SID register store aliasing the
+    RAM-under-I/O code byte. An explicit annotation overrides.
     """
     if not path.is_file():
         return {}
@@ -5332,6 +5370,8 @@ def load_smc_branch_catalogue(path: Path) -> dict[int, dict]:
         try:
             pc = int(key.lstrip("$"), 16)
         except (AttributeError, ValueError):
+            continue
+        if pc in HW_LABELS and not body.get("annotated"):
             continue
         sources = set(body.get("patch_sources_annotated") or [])
         sources.update(body.get("patch_sources_discovered") or [])

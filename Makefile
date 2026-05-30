@@ -15,6 +15,9 @@
 #                         requires pip install defmon-driver vice-driver and
 #                         a docker daemon with headlessvice access. Never
 #                         invoked by CI.
+#   make unreachable-triage — bucket the unreachable code-starts in
+#                         callgraph.json and list the regions harbouring
+#                         the most (a worklist; read-only report)
 #   make probe-list     — list dynamic-evidence probes registered in tools/probe.py
 #   make probe-disasm   — run the disasm_evidence probe (regenerates
 #                         trace/disasm_evidence.json). Same defmon-driver /
@@ -52,7 +55,8 @@ TASS         ?= 64tass
 GHIDRA_FRESH := $(BUILD_DIR)/ghidra-fresh
 
 .PHONY: all defmon.s fetch-static roundtrip ghidra-export sweep \
-        probe-list probe-disasm lint callgraph verify clean distclean
+        probe-list probe-disasm lint callgraph unreachable-triage \
+        verify clean distclean
 
 all: $(OUT)
 
@@ -118,6 +122,13 @@ $(BUILD_DIR)/callgraph.json: $(STATIC_BIN) $(ANNOTATIONS) \
 	$(PYTHON) -m tools.re.callgraph --out $@
 
 callgraph: $(BUILD_DIR)/callgraph.json
+
+# Triage the unreachable code-starts in callgraph.json into buckets
+# (smc/io-band, data-xref-only, transitively-unreachable, isolated) and
+# list the regions harbouring the most — a worklist for tightening data
+# declarations and adding SMC/jump-table seeds. Read-only report.
+unreachable-triage: $(BUILD_DIR)/callgraph.json
+	$(PYTHON) -m tools.re.unreachable_triage
 
 # Annotation lint suite — guards against drift in tools/re/annotations.toml.
 # Each check must exit 0; CI runs `make lint` on every push.

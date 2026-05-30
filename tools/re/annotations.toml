@@ -6195,3 +6195,164 @@ execution to a runtime-computed target — emit_setup chooses where to \
 resume after the configurable emitter writes a row."""
 patch_sources = ["$D769", "$D76E"]
 targets = []  # register-sourced; not statically enumerable
+
+# ── SMC opcode-byte flips ─────────────────────────────────────────────
+# [smc_opcode."$XXXX"] curates a host whose OPCODE byte is rewritten at
+# runtime. `candidate_opcodes` overrides the auto-traced guess (which
+# matches the nearest LDA/LDX/LDY #imm regardless of store register, so
+# it is wrong whenever the writer's source register differs from the
+# adjacent load — as in the voice-skip sites below). `patch_sources`
+# merges with the discovered writers.
+
+# Per-voice "skip silenced voice" sites. When a voice's wave is turned
+# off (SID_Vn_CTRL := wave off just before each patch), the voice's
+# SID-write band entry is overwritten with a 3-byte `JMP` to the next
+# voice's band, so stale per-voice working-register values are not
+# pushed to the SID. The writer is `LDA #$4C (JMP); LDX #lo; LDY #hi;
+# STA <here>` — the auto-tracer reads the adjacent `LDY #hi` immediate
+# and mis-guesses the flip target, so curate candidate_opcodes = JMP.
+[smc_opcode."$1026"]
+description = """STX -> JMP: skip voice-0's SID writes. $C5A6 writes \
+`jmp $1053` here (jump to the V1 write band) when V0's wave is off. \
+Restored to STX when the voice plays again."""
+patch_sources = ["$C5A6"]
+candidate_opcodes = ["JMP"]
+
+[smc_opcode."$1057"]
+description = """STX -> JMP: skip voice-1's SID writes. $C5C8 writes \
+`jmp $1084` here (jump to the V2 write band) when V1's wave is off."""
+patch_sources = ["$C5C8"]
+candidate_opcodes = ["JMP"]
+
+[smc_opcode."$1088"]
+description = """STX -> JMP: skip voice-2's SID writes. $C5EA writes \
+`jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is \
+off."""
+patch_sources = ["$C5EA"]
+candidate_opcodes = ["JMP"]
+
+[smc_opcode."$C826"]
+description = """STX -> JMP: SID#2 analogue of $1026 — skip SID#2 \
+voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave \
+is off."""
+patch_sources = ["$C53D"]
+candidate_opcodes = ["JMP"]
+
+[smc_opcode."$C857"]
+description = """STX -> JMP: skip SID#2 voice-1's writes. $C55F writes \
+`jmp $C884` here when the voice's wave is off."""
+patch_sources = ["$C55F"]
+candidate_opcodes = ["JMP"]
+
+[smc_opcode."$C888"]
+description = """STX -> JMP: skip SID#2 voice-2's writes. $C581 writes \
+`jmp $C8A9` here when the voice's wave is off."""
+patch_sources = ["$C581"]
+candidate_opcodes = ["JMP"]
+
+# Filter cutoff-slide direction. The accumulator's ADC opcode is flipped
+# to SBC to ramp the cutoff down instead of up. Both the lo-byte step
+# and its hi-byte companion are patched together: $178D/$1799 load $69
+# (ADC) and $179E loads $E9 (SBC), each stored to both opcode bytes.
+[smc_opcode."$10B8"]
+description = """ADC <-> SBC: filter cutoff-slide direction (lo-byte \
+step). $178F stores $69 (ADC, ramp up); $17A0 stores $E9 (SBC, ramp \
+down). Bit 7 of the ACID-column byte selects the direction."""
+patch_sources = ["$178F", "$17A0"]
+candidate_opcodes = ["SBC"]
+
+[smc_opcode."$10BF"]
+description = """ADC <-> SBC: hi-byte companion of $10B8, patched in \
+the same pass ($1792 stores ADC, $17A3 stores SBC) so the 16-bit slide \
+adds or subtracts consistently across both bytes."""
+patch_sources = ["$1792", "$17A3"]
+candidate_opcodes = ["SBC"]
+
+# Filter output scaling — NOP passes the saturated accumulator straight
+# to SID_FC_HI; ASL doubles it. Set once at startup from V3-osc entropy.
+[smc_opcode."$10D4"]
+description = """ASL <-> NOP: filter cutoff output scaling (SID#1). \
+$151D stores $EA (NOP, pass-through, max cutoff $02) or leaves $0A \
+(ASL, doubles to max $04). Chosen at startup by raster_sync_random."""
+patch_sources = ["$151D"]
+candidate_opcodes = ["NOP"]
+
+[smc_opcode."$C8D4"]
+description = """ASL <-> NOP: SID#2 analogue of $10D4 — filter cutoff \
+output scaling. $CD1D stores $EA (NOP) or $0A (ASL)."""
+patch_sources = ["$CD1D"]
+candidate_opcodes = ["NOP"]
+
+# Sub-frame sentinel. Normally `LDA #$FF` so the following BPL falls
+# through and the row-advance band runs; patched to RTS for a sub-frame
+# tick so player_play returns early and skips row advance.
+[smc_opcode."$10D8"]
+description = """LDA -> RTS: sub-frame gate. player_sound_update writes \
+$60 (RTS) at $100C to bail out of player_play before the row-advance \
+band on a sub-frame tick, then restores $A9 (LDA-imm) at $1013."""
+patch_sources = ["$100C", "$1013"]
+candidate_opcodes = ["RTS"]
+
+# ── SMC branch-offset sites ───────────────────────────────────────────
+# [smc_branch."$XXXX"] curates a conditional branch whose 1-byte offset
+# operand is patched. The 9 per-voice gate branches in row_read_body_*
+# are GATE branches (`lda #mask; bpl skip`): the mask immediate is the
+# dynamic per-row gate selector (patched by the SAX writer), while the
+# BPL *offset* is initialised once at load by the post-LOAD decoder block
+# at $D1B6-$D1E0 (`lda #$0A/$13; sta row_read_body_vN + $05/$13/$21`).
+# The static listing shows the unpatched default offset, so the rendered
+# branch target is not the runtime landing. $0A = sidcall gates (skip the
+# 3-instruction sc1/sc2 row-index + counter latch when the gate is
+# clear); $13 = the note gate (skip the NOTE read + transpose/slide
+# reset). Three voices × {sc1, sc2, note} = 9 sites.
+
+# voice 0
+[smc_branch."$1183"]
+description = """GATE branch (voice 0, sidcall-1). BPL offset set to \
+$0A once at load by $D1B8; skips the sc1 row-index + counter latch when \
+the sidcall-1 gate bit is clear."""
+patch_sources = ["$D1B8"]
+
+[smc_branch."$1191"]
+description = """GATE branch (voice 0, sidcall-2). BPL offset set to \
+$0A once at load by $D1BD; skips the sc2 row-index + counter latch when \
+the sidcall-2 gate bit is clear."""
+patch_sources = ["$D1BD"]
+
+[smc_branch."$119F"]
+description = """GATE branch (voice 0, note / GATE_N). BPL offset set to \
+$13 once at load by $D1C2; skips the NOTE read + transpose/slide reset \
+when the note gate bit is clear."""
+patch_sources = ["$D1C2"]
+
+# voice 1
+[smc_branch."$120B"]
+description = """GATE branch (voice 1, sidcall-1). BPL offset set to \
+$0A once at load by $D1C7; v1 analogue of $1183."""
+patch_sources = ["$D1C7"]
+
+[smc_branch."$1219"]
+description = """GATE branch (voice 1, sidcall-2). BPL offset set to \
+$0A once at load by $D1CC; v1 analogue of $1191."""
+patch_sources = ["$D1CC"]
+
+[smc_branch."$1227"]
+description = """GATE branch (voice 1, note / GATE_N). BPL offset set to \
+$13 once at load by $D1D1; v1 analogue of $119F."""
+patch_sources = ["$D1D1"]
+
+# voice 2
+[smc_branch."$1293"]
+description = """GATE branch (voice 2, sidcall-1). BPL offset set to \
+$0A once at load by $D1D6; v2 analogue of $1183."""
+patch_sources = ["$D1D6"]
+
+[smc_branch."$12A1"]
+description = """GATE branch (voice 2, sidcall-2). BPL offset set to \
+$0A once at load by $D1DB; v2 analogue of $1191."""
+patch_sources = ["$D1DB"]
+
+[smc_branch."$12AF"]
+description = """GATE branch (voice 2, note / GATE_N). BPL offset set to \
+$13 once at load by $D1E0; v2 analogue of $119F."""
+patch_sources = ["$D1E0"]
