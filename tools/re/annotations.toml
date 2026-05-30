@@ -6292,3 +6292,67 @@ $60 (RTS) at $100C to bail out of player_play before the row-advance \
 band on a sub-frame tick, then restores $A9 (LDA-imm) at $1013."""
 patch_sources = ["$100C", "$1013"]
 candidate_opcodes = ["RTS"]
+
+# ── SMC branch-offset sites ───────────────────────────────────────────
+# [smc_branch."$XXXX"] curates a conditional branch whose 1-byte offset
+# operand is patched. The 9 per-voice gate branches in row_read_body_*
+# are GATE branches (`lda #mask; bpl skip`): the mask immediate is the
+# dynamic per-row gate selector (patched by the SAX writer), while the
+# BPL *offset* is initialised once at load by the post-LOAD decoder block
+# at $D1B6-$D1E0 (`lda #$0A/$13; sta row_read_body_vN + $05/$13/$21`).
+# The static listing shows the unpatched default offset, so the rendered
+# branch target is not the runtime landing. $0A = sidcall gates (skip the
+# 3-instruction sc1/sc2 row-index + counter latch when the gate is
+# clear); $13 = the note gate (skip the NOTE read + transpose/slide
+# reset). Three voices × {sc1, sc2, note} = 9 sites.
+
+# voice 0
+[smc_branch."$1183"]
+description = """GATE branch (voice 0, sidcall-1). BPL offset set to \
+$0A once at load by $D1B8; skips the sc1 row-index + counter latch when \
+the sidcall-1 gate bit is clear."""
+patch_sources = ["$D1B8"]
+
+[smc_branch."$1191"]
+description = """GATE branch (voice 0, sidcall-2). BPL offset set to \
+$0A once at load by $D1BD; skips the sc2 row-index + counter latch when \
+the sidcall-2 gate bit is clear."""
+patch_sources = ["$D1BD"]
+
+[smc_branch."$119F"]
+description = """GATE branch (voice 0, note / GATE_N). BPL offset set to \
+$13 once at load by $D1C2; skips the NOTE read + transpose/slide reset \
+when the note gate bit is clear."""
+patch_sources = ["$D1C2"]
+
+# voice 1
+[smc_branch."$120B"]
+description = """GATE branch (voice 1, sidcall-1). BPL offset set to \
+$0A once at load by $D1C7; v1 analogue of $1183."""
+patch_sources = ["$D1C7"]
+
+[smc_branch."$1219"]
+description = """GATE branch (voice 1, sidcall-2). BPL offset set to \
+$0A once at load by $D1CC; v1 analogue of $1191."""
+patch_sources = ["$D1CC"]
+
+[smc_branch."$1227"]
+description = """GATE branch (voice 1, note / GATE_N). BPL offset set to \
+$13 once at load by $D1D1; v1 analogue of $119F."""
+patch_sources = ["$D1D1"]
+
+# voice 2
+[smc_branch."$1293"]
+description = """GATE branch (voice 2, sidcall-1). BPL offset set to \
+$0A once at load by $D1D6; v2 analogue of $1183."""
+patch_sources = ["$D1D6"]
+
+[smc_branch."$12A1"]
+description = """GATE branch (voice 2, sidcall-2). BPL offset set to \
+$0A once at load by $D1DB; v2 analogue of $1191."""
+patch_sources = ["$D1DB"]
+
+[smc_branch."$12AF"]
+description = """GATE branch (voice 2, note / GATE_N). BPL offset set to \
+$13 once at load by $D1E0; v2 analogue of $119F."""
+patch_sources = ["$D1E0"]

@@ -2929,18 +2929,18 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     def _emit_smc_branch_header(pc: int) -> str:
         """Render a short comment line above a SMC-patched branch.
 
-        Branch SMC sites have a 1-byte offset operand; the patcher
-        rewrites it at runtime to redirect the branch landing. We
-        cannot enumerate possible targets (a byte covers ±128 PCs), so
-        the comment just warns + lists patch sources + carries the
-        optional curator description.
+        Branch SMC sites have a 1-byte offset operand patched by another
+        site (at load or at runtime), so the static target shown in the
+        listing is the UNPATCHED default. We cannot enumerate possible
+        targets (a byte covers ±128 PCs), so the comment just warns +
+        lists patch sources + carries the optional curator description.
         """
         entry = smc_branch.get(pc)
         if not entry:
             return ""
         sources = entry.get("patch_sources") or []
         ps_text = ", ".join(f"${p:04X}" for p in sources) or "(unknown)"
-        lines = [f"; ──── SMC-patched branch (offset rewritten at runtime) ────\n",
+        lines = [f"; ──── SMC-patched branch — static target is the unpatched default ────\n",
                  f";   Patched at: {ps_text}\n"]
         desc = (entry.get("description") or "").strip()
         if desc:

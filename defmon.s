@@ -3536,24 +3536,27 @@ v0_patch_to_v1_jmp .block
 row_read_body_v0 .block
                            ldy  #$01    ; $117F
                            lda  #$FF    ; $1181  ; ← (SMC operand at $1182, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1B8
+;   GATE branch (voice 0, sidcall-1). BPL offset set to $0A once at load by $D1B8; skips the sc1 row-index + counter latch when the sidcall-1 gate bit is clear.
                            bpl  l_1    ; $1183  row_read_body_v0_$3 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $1185
                            sta  v0_sc1_row_idx    ; $1188
                            stx  v0_sc1_counter    ; $118B
 l_1:                       iny    ; $118E
                            lda  #$FF    ; $118F  ; ← (SMC operand at $1190, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1BD
+;   GATE branch (voice 0, sidcall-2). BPL offset set to $0A once at load by $D1BD; skips the sc2 row-index + counter latch when the sidcall-2 gate bit is clear.
                            bpl  l_2    ; $1191  row_read_body_v0_$11 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $1193
                            sta  v0_sc2_row_idx    ; $1196
                            stx  v0_sc2_counter    ; $1199
 l_2:                       iny    ; $119C
                            lda  #$FF    ; $119D  ; ← (SMC operand at $119E, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1C2
+;   GATE branch (voice 0, note / GATE_N). BPL offset set to $13 once at load by $D1C2; skips the NOTE read + transpose/slide reset when the note gate bit is clear.
                            bpl  v0_gate_n_tail.l_1    ; $119F  row_read_body_v0_$1F had bit 7 clear?
 .bend
 
@@ -3656,24 +3659,27 @@ row_advance_band_v1 .block
 row_read_body_v1 .block
                            ldy  #$01    ; $1207
                            lda  #$FF    ; $1209  ; ← (SMC operand at $120A, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1C7
+;   GATE branch (voice 1, sidcall-1). BPL offset set to $0A once at load by $D1C7; v1 analogue of $1183.
                            bpl  l_1    ; $120B  row_read_body_v1_$3 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $120D
                            sta  v1_sc1_row_idx    ; $1210
                            stx  v1_sc1_counter    ; $1213
 l_1:                       iny    ; $1216
                            lda  #$FF    ; $1217  ; ← (SMC operand at $1218, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1CC
+;   GATE branch (voice 1, sidcall-2). BPL offset set to $0A once at load by $D1CC; v1 analogue of $1191.
                            bpl  l_2    ; $1219  row_read_body_v1_$11 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $121B
                            sta  v1_sc2_row_idx    ; $121E
                            stx  v1_sc2_counter    ; $1221
 l_2:                       iny    ; $1224
                            lda  #$FF    ; $1225  ; ← (SMC operand at $1226, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1D1
+;   GATE branch (voice 1, note / GATE_N). BPL offset set to $13 once at load by $D1D1; v1 analogue of $119F.
                            bpl  l_3    ; $1227  row_read_body_v1_$1F had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $1229
                            sta  v1_cascade_slot_triple + $02    ; $122C
@@ -3743,24 +3749,27 @@ row_advance_band_v2 .block
 row_read_body_v2 .block
                            ldy  #$01    ; $128F
                            lda  #$FF    ; $1291  ; ← (SMC operand at $1292, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1D6
+;   GATE branch (voice 2, sidcall-1). BPL offset set to $0A once at load by $D1D6; v2 analogue of $1183.
                            bpl  l_1    ; $1293  row_read_body_v2_$3 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $1295
                            sta  v2_sc1_row_idx    ; $1298
                            stx  v2_sc1_counter    ; $129B
 l_1:                       iny    ; $129E
                            lda  #$FF    ; $129F  ; ← (SMC operand at $12A0, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1DB
+;   GATE branch (voice 2, sidcall-2). BPL offset set to $0A once at load by $D1DB; v2 analogue of $1191.
                            bpl  l_2    ; $12A1  row_read_body_v2_$11 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $12A3
                            sta  v2_sc2_row_idx    ; $12A6
                            stx  v2_sc2_counter    ; $12A9
 l_2:                       iny    ; $12AC
                            lda  #$FF    ; $12AD  ; ← (SMC operand at $12AE, no name)
-; ──── SMC-patched branch (offset rewritten at runtime) ────
+; ──── SMC-patched branch — static target is the unpatched default ────
 ;   Patched at: $D1E0
+;   GATE branch (voice 2, note / GATE_N). BPL offset set to $13 once at load by $D1E0; v2 analogue of $119F.
                            bpl  l_3    ; $12AF  row_read_body_v2_$1F had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $12B1
                            sta  v2_cascade_slot_triple + $02    ; $12B4
