@@ -94,9 +94,9 @@ Annotation catalogue (`tools/re/annotations.toml`):
 
 Comparison-site dataflow (`build/cmp_facts.json`, 1,629 branches):
 
-- 1,488 resolved (91.3%) — operand-based, var-load, immediate,
-  transformed, or carried from the JSR caller
-- 92 unknown (5.6%)
+- 1,499 resolved (92.0%) — operand-based, var-load, indirect-load,
+  immediate, transformed, or carried from the JSR caller
+- 81 unknown (5.0%)
 - 39 with no flag-setter in range
 - 10 multi-source (flag-setter reachable from multiple lhs values)
 
@@ -174,9 +174,13 @@ reproducing the build.)
    `python3 -m tools.re.data_region_coverage --profile`. Add `notes` to
    close it; this is polish, not a structural hole.
 
-2. **92 branches have `unknown` lhs/rhs** in `cmp_facts.json`. Extend
-   `tools/re/cmp_facts.py` with cross-call dataflow, or add manual
-   `[branch."$XXXX"]` overrides. List them with:
+2. **81 branches have `unknown` lhs** in `cmp_facts.json` (down from 92
+   once the `izy` indirect-load setters were modelled). The remainder
+   need harder analysis — `unmodeled_jsr` (33, value is a JSR return),
+   `clobber_adc/sbc/ora` (33, value computed by arithmetic before a
+   `CMP #imm`), and `pla`-from-stack (15). Extend
+   `tools/re/cmp_facts.py` with cross-call/arithmetic dataflow, or add
+   manual `[branch."$XXXX"]` overrides. List them with:
 
         python3 -c "import json; cf=json.load(open('build/cmp_facts.json'));\
         print('\n'.join(pc for pc,f in cf['facts'].items() \
