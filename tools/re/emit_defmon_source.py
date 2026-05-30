@@ -912,6 +912,11 @@ END_ADDR_EXCL = 0xE787  # last body byte is $E786
 # present in the static disassembly maps (Editor input / Other-mode
 # dispatch tables sections).
 SEED_LANDMARKS = {
+    # NMI SID#2-silence self-mod counter block ($0AD9-$0AEC): `lda #imm;
+    # beq tail; DEC $0ADA (self-patches that imm); jsr $C51F; ...; rti`.
+    # Statically unreachable (entered via the post-NMI branch fan-out),
+    # so seed it explicitly to decode as code instead of a .byte run.
+    0x0AD9: "nmi_sid2_silence_count",
     # Player API (per docs:callingtheplayer)
     0x1000: "player_init",
     0x1003: "player_play",
