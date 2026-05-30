@@ -4434,7 +4434,7 @@ sidtab_row_apply .block
                            sta  zp_sidtab_row_lo    ; $16B0
                            ldy  #$00    ; $16B2
                            lda  (zp_sidtab_row_lo),y    ; $16B4
-                           beq  sidtab_row_apply_tr_tail.l_3    ; $16B6
+                           beq  sidtab_row_apply_tr_tail.l_3    ; $16B6  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $16B8
                            sta  zp_scratch_96    ; $16B9
                            bpl  l_1    ; $16BB  (zp_sidtab_row_lo),Y had bit 7 clear?
@@ -4472,7 +4472,7 @@ l_4:                       lda  zp_scratch_96    ; $16E1
 sidtab_row_apply_tr_handler .block
                            iny    ; $16E7
                            lda  (zp_sidtab_row_lo),y    ; $16E8
-                           bmi  l_1    ; $16EA
+                           bmi  l_1    ; $16EA  (zp_sidtab_row_lo),Y had bit 7 set?
                            clc    ; $16EC
                            adc  v0_transpose_buffer,x    ; $16ED
 l_1:                       and  #$7F    ; $16F0
@@ -4504,7 +4504,7 @@ l_2:                       lda  zp_scratch_96    ; $1701
                            sta  pw_lo_patch_v0,x    ; $170F
 l_3:                       iny    ; $1712
                            lda  (zp_sidtab_row_lo),y    ; $1713
-                           beq  l_11    ; $1715
+                           beq  l_11    ; $1715  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $1717
                            sta  zp_scratch_96    ; $1718
                            bcc  l_4    ; $171A  (zp_sidtab_row_lo),Y shifted-out bit was 0?
@@ -4517,7 +4517,7 @@ l_4:                       lda  zp_scratch_96    ; $1722
                            beq  pitch_lut_tail_smc    ; $1728  (zp_scratch_96 & $80) was zero?
                            iny    ; $172A
                            lda  (zp_sidtab_row_lo),y    ; $172B
-                           beq  l_5    ; $172D
+                           beq  l_5    ; $172D  (zp_sidtab_row_lo),Y was zero?
                            and  #$08    ; $172F
                            bne  l_6    ; $1731  ((zp_sidtab_row_lo),Y & $08) was non-zero?
                            lda  (zp_sidtab_row_lo),y    ; $1733
@@ -4550,7 +4550,7 @@ l_9:                       txa    ; $1767
                            lax  (zp_sidtab_row_lo),y    ; $176D
                            iny    ; $176F
                            lda  (zp_sidtab_row_lo),y    ; $1770
-                           bmi  l_10    ; $1772
+                           bmi  l_10    ; $1772  (zp_sidtab_row_lo),Y had bit 7 set?
                            stx  filter_cutoff_acc_lo    ; $1774
                            sta  filter_cutoff_slide_acc_hi    ; $1777
                            lda  #$00    ; $177A
@@ -17353,7 +17353,7 @@ sid2_sidtab_row_apply .block
                            sta  zp_sidtab_row_lo    ; $CD78
                            ldy  #$00    ; $CD7A
                            lda  (zp_sidtab_row_lo),y    ; $CD7C
-                           beq  l_8    ; $CD7E
+                           beq  l_8    ; $CD7E  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $CD80
                            sta  zp_scratch_96    ; $CD81
                            bpl  l_1    ; $CD83  (zp_sidtab_row_lo),Y had bit 7 clear?
@@ -17380,7 +17380,7 @@ l_4:                       lda  zp_scratch_96    ; $CDA9
                            beq  l_6    ; $CDAD  (zp_scratch_96 & $10) was zero?
                            iny    ; $CDAF
                            lda  (zp_sidtab_row_lo),y    ; $CDB0
-                           bmi  l_5    ; $CDB2
+                           bmi  l_5    ; $CDB2  (zp_sidtab_row_lo),Y had bit 7 set?
                            clc    ; $CDB4
                            adc  sid2_v2_sc2_step_counter,x    ; $CDB5
 l_5:                       and  #$7F    ; $CDB8
@@ -17401,7 +17401,7 @@ l_7:                       lda  zp_scratch_96    ; $CDC9
                            sta  sid2_v0_step_accumulator,x    ; $CDD7
 l_8:                       iny    ; $CDDA
                            lda  (zp_sidtab_row_lo),y    ; $CDDB
-                           beq  sid2_sidtab_row_apply_ctrl_write.l_1    ; $CDDD
+                           beq  sid2_sidtab_row_apply_ctrl_write.l_1    ; $CDDD  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $CDDF
                            sta  zp_scratch_96    ; $CDE0
                            bcc  l_9    ; $CDE2  (zp_sidtab_row_lo),Y shifted-out bit was 0?
@@ -17414,7 +17414,7 @@ l_9:                       lda  zp_scratch_96    ; $CDEA
                            beq  sid2_sidtab_ctrl_accumulator    ; $CDF0  (zp_scratch_96 & $80) was zero?
                            iny    ; $CDF2
                            lda  (zp_sidtab_row_lo),y    ; $CDF3
-                           beq  l_10    ; $CDF5
+                           beq  l_10    ; $CDF5  (zp_sidtab_row_lo),Y was zero?
                            and  #$08    ; $CDF7
                            bne  l_11    ; $CDF9  ((zp_sidtab_row_lo),Y & $08) was non-zero?
                            lda  (zp_sidtab_row_lo),y    ; $CDFB
@@ -18213,7 +18213,7 @@ l_2:                       lda  pat_base_lo,x    ; $D311
                            sta  zp_decoder_dest_hi    ; $D319
 l_3:                       ldy  #$00    ; $D31B
 l_4:                       lda  (zp_decoder_dest_lo),y    ; $D31D
-                           bmi  l_5    ; $D31F
+                           bmi  l_5    ; $D31F  (zp_decoder_dest_lo),Y had bit 7 set?
                            tya    ; $D321
                            clc    ; $D322
                            adc  #$04    ; $D323
@@ -19570,7 +19570,7 @@ l_2:                       inc  editor_row_delta    ; $E440
 writer_seqlist_row_insert .block
                            ldy  #$00    ; $E444
                            lda  (zp_ptr1_lo),y    ; $E446
-                           bmi  l_5    ; $E448
+                           bmi  l_5    ; $E448  (zp_ptr1_lo),Y had bit 7 set?
 l_1:                       ldy  #$00    ; $E44A
                            clc    ; $E44C
                            adc  #$01    ; $E44D

@@ -698,6 +698,8 @@ def collect_facts(mem: bytes,
             rhs = _rhs_zero_or_none(s_mnem)
             if lhs["kind"] in ("var", "imm"):
                 stats["operand_based"] += 1
+            elif lhs["kind"] == "var_indirect":
+                stats["resolved_var_indirect"] += 1
             else:
                 stats["unknown"] += 1
             facts[f"${pc:04X}"] = {
@@ -784,6 +786,16 @@ def _lhs_from_operand_setter(setter_pc: int, mnem: str, mode: str, n: int,
         if mnem in ("INC", "DEC"):
             out["post_op"] = mnem  # the test is on var AFTER inc/dec
         return out
+    if mode == "izy":
+        # `LDA/LAX (zp),Y` flag-setter: the tested value is the byte at
+        # the indirect pointer, same shape _resolve_lhs records when izy
+        # appears in a walk-back. The operand byte is the zp pointer.
+        ptr = mem[setter_pc + 1]
+        return {"kind": "var_indirect", "ptr_addr": f"${ptr:02X}", "index": "Y"}
+    if mnem == "PLA":
+        # A pulled from the stack — genuinely unwalkable, not an
+        # addressing-mode gap. Name the reason honestly.
+        return {"kind": "unknown", "reason": "pla_from_stack"}
     return {"kind": "unknown", "reason": f"setter_mode_{mode}"}
 
 
