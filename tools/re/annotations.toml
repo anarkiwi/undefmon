@@ -3385,6 +3385,7 @@ evidence = "tools/re/xref.py --target 0x0FA2 → 0 real callers; harness/probe_f
 [region."$0A0A"]
 name               = "pre_quiesce_sprite_data"
 role               = "Data region — sprite/screen template bytes inside the boot_init_nop_padding-pre_quiesce_sprite_data pre-vic_cia_quiesce-init scratch."
+notes              = "The $AA/$55 byte runs are a sprite bitmap staged during boot before the VIC/CIA quiesce; trailing zero bytes pad the 63-byte sprite block."
 evidence           = "tools/re/xref.py --target 0x0A0A → 0 callers; harness/probe_function_attribution.py 2026-05-15 never_hit."
 kbd_probe_excluded = true
 
@@ -3665,6 +3666,7 @@ role = "saved when entering sidTAB (sidTAB_handler) for restore on LEFTARROW exi
 [region."$7171"]
 name     = "sid_chip_view"
 role     = "selects which SID chip's arranger/pattern view the editor shows."
+notes    = "Holds the SID-model labels as screen codes (the digit runs spell 6581 and 8580) plus the chip-view layout the editor paints; the selector indexes into it."
 evidence = "harness/probe_sid2_state.py 2026-05-11"
 
 [region."$7171".values]
@@ -3749,10 +3751,12 @@ are consumed by the decoder and replaced by the LUT.
 [region."$1A00"]
 name = "pat_base_lo"
 role = "128-byte table mapping pat_num → pattern address low byte."
+notes = "Entries alternate $00/$80 — patterns are packed two per 256-byte page on a 128-byte stride, so an even pat_num maps to offset $00 within its page and an odd one to $80."
 
 [region."$1A80"]
 name = "pat_base_hi"
 role = "128-byte table mapping pat_num → pattern address high byte."
+notes = "High bytes repeat in pairs (one page holds two patterns) and increment once per page — the companion of pat_base_lo's $00/$80 low-byte alternation."
 
 [region."$1AFF"]
 name  = "pat_base_hi_end"
@@ -3767,10 +3771,12 @@ notes = "Tunes occasionally author JP-source bytes at sub-byte offsets within th
 [region."$1807"]
 name = "sidtab_jp_slot_1807"
 role = "Low-slot JP-source byte inside the pitch LUT region (companion of sidtab_jp_slot_1804)."
+notes = "Two more entries continuing the same $0F per-row stride as sidtab_jp_slot_1809."
 
 [region."$1809"]
 name = "sidtab_jp_slot_1809"
 role = "Low-slot JP-source byte inside the pitch LUT region (companion of sidtab_jp_slot_1804)."
+notes = "The bytes advance by $0F per entry — sidTAB row-pointer low bytes on the $0F-byte per-row stride."
 
 [region."$1B00"]
 name           = "arranger_v0_sid1"
@@ -5500,6 +5506,7 @@ notes = "Sentinel ($01 $00 $FF $FF $FF $FF) + 'TS:' marker + 16 bytes of name bu
 [region."$79BF"]
 name  = "save_name_loop_exit_smc"
 role  = "Self-mod operand pair ($38 $60), 2 bytes — set-carry + return operand bytes inside the SAVE-name input loop's exit path."
+notes = "Decodes as sec/rts but is not executed in place: the byte before is an unconditional jmp and no branch targets this address. Classified as the self-modifying operand source, not code."
 
 [region."$8355"]
 name               = "super_cmd_arg_prompt_template"
@@ -5569,6 +5576,7 @@ notes = "Self-mod target of an adjacent self-modifying sta."
 [region."$C403"]
 name               = "sid2_writer_tail_sentinel"
 role               = "return + sentinel byte ($60 $FF), 2 bytes — tail-return of a SID#2 writer arm + $FF marker for the next entry."
+notes              = "The $60 decodes as rts but is unreachable — it follows an rts and precedes another rts with no inbound branch. With the $FF it is table padding/sentinel, not executed code."
 kbd_probe_excluded = true
 
 [region."$C48F"]

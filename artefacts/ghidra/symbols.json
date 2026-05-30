@@ -4693,8 +4693,20 @@
       "is_primary": true
     },
     {
+      "addr": "$0AD9",
+      "name": "nmi_sid2_silence_count",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$0ADA",
-      "name": "DAT_0ada",
+      "name": "nmi_sid2_silence_count+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0AE3",
+      "name": "LAB_0ae3",
       "source": "DEFAULT",
       "is_primary": true
     },

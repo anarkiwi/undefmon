@@ -70,18 +70,20 @@ The static image is `$0800–$E786` (57,223 bytes). Run
 
 | bucket                              | bytes  | share |
 | ----------------------------------- | -----: | ----: |
-| instruction bytes                   | 26,610 | 46.5% |
-| data: zero-fill (buffers / init RAM)| 20,283 | 35.4% |
-| data: non-zero, with `notes`        |  9,926 | 17.3% |
-| data: non-zero, role-only residue   |    404 |  0.7% |
+| instruction bytes                   | 26,630 | 46.5% |
+| data: zero-fill (buffers / init RAM)| 20,279 | 35.4% |
+| data: non-zero, with `notes`        | 10,228 | 17.9% |
+| data: non-zero, role-only residue   |     86 |  0.2% |
 
 The largest data spans (`$2180-$5EFF` pattern RAM ≈75% zero, `$5FFF-$6DFF`
 sidTAB and `$DD01-$DFFE` tail both 100% zero) are initialised working RAM,
-named at their boundaries — not reverse-engineering gaps. The genuinely
-undocumented residue is **404 non-zero bytes (0.7%)** across 25 small
-spans that already carry a `role` but no `notes`. (An earlier table here
-reported "29% uncategorised"; that figure presented an instruction
-*count*, 11,500, as a byte share and predated full region coverage.)
+named at their boundaries — not reverse-engineering gaps. The remaining
+role-only residue is **86 non-zero bytes (0.2%)** across 15 small spans —
+SMC operand slots, 1-byte state vars, and one screen template — whose
+`role` already explains them; a `notes` line there would restate. (An
+earlier table here reported "29% uncategorised"; that figure presented an
+instruction *count*, 11,500, as a byte share and predated full region
+coverage.)
 
 Annotation catalogue (`tools/re/annotations.toml`):
 
@@ -167,12 +169,14 @@ could surface as a failing test without an obvious cause.
 (These are about the disassembly's completeness, not about
 reproducing the build.)
 
-1. **Data residue is 404 non-zero bytes (0.7%).** Every data sub-span
+1. **Data residue is 86 non-zero bytes (0.2%).** Every data sub-span
    already starts at a `[region]`/`[function]`, and 35% of the image is
-   zero-fill buffers (see the profile table above). The remaining gap is
-   25 small spans with a `role` but no `notes` — list them with
-   `python3 -m tools.re.data_region_coverage --profile`. Add `notes` to
-   close it; this is polish, not a structural hole.
+   zero-fill buffers (see the profile table above). The remaining 15
+   spans (SMC operand slots, 1-byte state vars, one screen template) all
+   carry a `role`; list them with
+   `python3 -m tools.re.data_region_coverage --profile`. This is the
+   floor — those `role`s already explain the bytes, so further `notes`
+   would restate rather than inform.
 
 2. **81 branches have `unknown` lhs** in `cmp_facts.json` (down from 92
    once the `izy` indirect-load setters were modelled). The remainder

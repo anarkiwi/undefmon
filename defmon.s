@@ -480,12 +480,7 @@ editor_frame_jmp_padding = $0917
 ;   apparent (from data): $7770 in disk_subtitle_template
 boot_init_nop_padding    = $09F8
 pre_quiesce_sprite_data  = $0A0A
-boot_init_band           = $0AD9
-;   notes: Mostly screen-init, IRQ vector install, ZP setup.
-;   code edges:          none
-;   apparent (from data): $0AF8 in playback_state, $0B88 in nmi_post_player_tail
-nmi_sid2_silence_branch  = $0ADD
-nmi_sid2_silence_cont    = $0AE0
+;   notes: The $AA/$55 byte runs are a sprite bitmap staged during boot before the VIC/CIA quiesce; trailing zero bytes pad the 63-byte sprite block.
 nmi_irq_entry            = $0AED
 ;   notes:
 ;     The NMI then either
@@ -864,7 +859,9 @@ sidtab_row_lo_byte1      = $1801
 sidtab_jp_slot_1804      = $1804
 ;   notes: Tunes occasionally author JP-source bytes at sub-byte offsets within the sidtab_row_lo-sidtab_jp_pointer_page_end JP-target table. The static image carries a $00 here, but a loaded song may overlay it with a JP source.
 sidtab_jp_slot_1807      = $1807
+;   notes: Two more entries continuing the same $0F per-row stride as sidtab_jp_slot_1809.
 sidtab_jp_slot_1809      = $1809
+;   notes: The bytes advance by $0F per entry — sidTAB row-pointer low bytes on the $0F-byte per-row stride.
 sidtab_jp_target_row24   = $1824
 ;   notes: JP-target slot for sidtab row $24.
 load_decoder_dest_floor_below = $1825
@@ -876,7 +873,9 @@ sidtab_row_hi_byte1      = $1901
 sidtab_decoder_buffer_end = $19FF
 ;   notes: pat_base_lo begins at pat_base_lo.
 pat_base_lo              = $1A00
+;   notes: Entries alternate $00/$80 — patterns are packed two per 256-byte page on a 128-byte stride, so an even pat_num maps to offset $00 within its page and an odd one to $80.
 pat_base_hi              = $1A80
+;   notes: High bytes repeat in pairs (one page holds two patterns) and increment once per page — the companion of pat_base_lo's $00/$80 low-byte alternation.
 pat_base_hi_end          = $1AFF
 ;   notes: Boundary marker — arranger_v0_sid1 begins the V0 arranger.
 arranger_v0_sid1         = $1B00
@@ -1012,6 +1011,7 @@ SID_VIEW_2               = $01
 ;   values:
 ;     $00 = SID#1 (arrangers arranger_v0_sid1/arranger_v1_sid1/arranger_v2_sid1)
 ;     $01 = SID#2 (arrangers arranger_v3_sid2/arranger_v4_sid2/arranger_v5_sid2)
+;   notes: Holds the SID-model labels as screen codes (the digit runs spell 6581 and 8580) plus the chip-view layout the editor paints; the selector indexes into it.
 sub_frame_phase          = $7172
 statusline_buffer        = $71A3
 statusline_buffer_end    = $71B0
@@ -1153,6 +1153,7 @@ save_name_buf_byte3      = $797B
 save_name_buf_marker     = $797F
 save_name_buf_len        = $798F
 save_name_loop_exit_smc  = $79BF
+;   notes: Decodes as sec/rts but is not executed in place: the byte before is an unconditional jmp and no branch targets this address. Classified as the self-modifying operand source, not code.
 no_op_slide_scratch      = $7A0A
 ;   notes: no_op_slide_scratch holds `60` (return) followed by ~245 bytes of `EA` (no-op) at no_op_slide_scratch. no callers. Reclaimable space or a self-modifying-code workspace defMON never actually uses on the corpus tunes.
 hex_digit_lo_lut         = $7B00
@@ -1254,6 +1255,7 @@ sidtab_c2d7_smc          = $C2D7
 ;   notes: The body proper begins at sidTAB_dispatch_body.
 sidtab_dispatch_end      = $C351
 sid2_writer_tail_sentinel = $C403
+;   notes: The $60 decodes as rts but is unreachable — it follows an rts and precedes another rts with no inbound branch. With the $FF it is table padding/sentinel, not executed code.
 secondary_disk_region_sentinel = $C48F
 ;   notes: The $FF marker is read by the dispatcher.
 secondary_disk_handler_band_end = $C4FF
@@ -2108,19 +2110,57 @@ raster_irq_trigger_setter .block
                            lda  #$C7    ; $0AD3
                            sta  CIA2_PRA    ; $0AD5
                            rts    ; $0AD8
-        .byte $A9, $00, $F0, $06, $CE, $DA, $0A, $20, $1F, $C5, $A9, $00, $A2, $00, $A0, $00    ; $0AD9
-        .byte $2C, $0D, $DD, $40, $8D, $E4, $0A, $8E, $E6, $0A, $8C, $E8, $0A, $A9, $00, $F0    ; $0AE9
-        .byte $DF, $A9, $02, $8D, $20, $D0, $AD, $72, $71, $F0, $13, $20, $06, $10, $AD, $5D    ; $0AF9
-        .byte $71, $F0, $08, $A9, $0B, $8D, $20, $D0, $20, $06, $C8, $4C, $50, $0B, $A9, $00    ; $0B09
-        .byte $10, $09, $EE, $18, $0B, $4C, $50, $0B, $CE, $18, $0B, $A9, $00, $F0, $06, $CE    ; $0B19
-        .byte $25, $0B, $4C, $33, $0B, $A9, $0C, $8D, $01, $DD, $20, $03, $10, $AD, $5D, $71    ; $0B29
-        .byte $F0, $09, $AD, $0D, $0B, $8D, $20, $D0, $20, $03, $C8, $A9, $04, $8D, $01, $DD    ; $0B39
-        .byte $AD, $18, $0B, $F0, $02, $10, $D1, $AD, $6B, $71, $8D, $20, $D0, $AD, $72, $71    ; $0B49
-        .byte $18, $69, $01, $CD, $5C, $71, $D0, $02, $A9, $00, $8D, $72, $71, $AD, $EB, $10    ; $0B59
-        .byte $C9, $FF, $F0, $0E, $AE, $4A, $11, $10, $09, $8D, $6A, $0B, $20, $4E, $7F, $EE    ; $0B69
-        .byte $FC, $08, $AD, $6E, $71, $F0, $08, $AD, $4A, $11, $D0, $03, $EE, $F5, $08, $4C    ; $0B79
-        .byte $D9, $0A, $8D, $9B, $0B, $8E, $9D, $0B, $8C, $9F, $0B, $EE, $AB, $08, $20, $08    ; $0B89
-        .byte $80, $A9, $00, $A2, $00, $A0, $00, $0E, $19, $D0, $40    ; $0B99
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0AD9  nmi_sid2_silence_count
+; ──────────────────────────────────────────────────────────────────────
+; Start of the secondary boot-init helper band (boot_init_band-boot_init_band_end, ~200 bytes).
+;
+;   code edges:          none
+;   apparent (from data): $0AF8 in playback_state, $0B88 in nmi_post_player_tail
+;
+;   Fired once at boot from the chain rooted at post_load_init_decoder / the main `jump post_load_init_decoder` after LOAD (disk_menu_return_handler chain). Mostly screen-init, IRQ vector install, ZP setup.
+nmi_sid2_silence_count .block
+                           lda  #$00    ; $0AD9
+                           beq  nmi_sid2_silence_cont.l_1    ; $0ADB  boot_init_band_$1 was zero?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0ADD  nmi_sid2_silence_branch
+; ──────────────────────────────────────────────────────────────────────
+; Post-NMI branch inside nmi_irq_entry's exit fragment: when stereo+SID#2 is active the player-tail conditionally branches here to fire the SID#2 silence-latch update at sid2_chipview_voice_mute_apply before restoring border + return-from-IRQ.
+;
+;   code edges:          fall-through from $0ADB in nmi_sid2_silence_count (2 bytes earlier)
+nmi_sid2_silence_branch .block
+                           dec  nmi_sid2_silence_count + $01    ; $0ADD
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0AE0  nmi_sid2_silence_cont
+; ──────────────────────────────────────────────────────────────────────
+; Continuation of the nmi_sid2_silence_branch post-NMI branch — fall-through into nmi_irq_entry's restore-A/X/Y + return-from-IRQ tail.
+;
+;   code edges:          fall-through from $0ADD nmi_sid2_silence_branch (3 bytes earlier)
+nmi_sid2_silence_cont .block
+                           jsr  sid2_chipview_voice_mute_apply    ; $0AE0
+l_1:                       lda  #$00    ; $0AE3
+                           ldx  #$00    ; $0AE5
+                           ldy  #$00    ; $0AE7
+                           bit  CIA2_ICR    ; $0AE9
+                           rti    ; $0AEC
+        .byte $8D, $E4, $0A, $8E, $E6, $0A, $8C, $E8, $0A, $A9, $00, $F0, $DF, $A9, $02, $8D    ; $0AED
+        .byte $20, $D0, $AD, $72, $71, $F0, $13, $20, $06, $10, $AD, $5D, $71, $F0, $08, $A9    ; $0AFD
+        .byte $0B, $8D, $20, $D0, $20, $06, $C8, $4C, $50, $0B, $A9, $00, $10, $09, $EE, $18    ; $0B0D
+        .byte $0B, $4C, $50, $0B, $CE, $18, $0B, $A9, $00, $F0, $06, $CE, $25, $0B, $4C, $33    ; $0B1D
+        .byte $0B, $A9, $0C, $8D, $01, $DD, $20, $03, $10, $AD, $5D, $71, $F0, $09, $AD, $0D    ; $0B2D
+        .byte $0B, $8D, $20, $D0, $20, $03, $C8, $A9, $04, $8D, $01, $DD, $AD, $18, $0B, $F0    ; $0B3D
+        .byte $02, $10, $D1, $AD, $6B, $71, $8D, $20, $D0, $AD, $72, $71, $18, $69, $01, $CD    ; $0B4D
+        .byte $5C, $71, $D0, $02, $A9, $00, $8D, $72, $71, $AD, $EB, $10, $C9, $FF, $F0, $0E    ; $0B5D
+        .byte $AE, $4A, $11, $10, $09, $8D, $6A, $0B, $20, $4E, $7F, $EE, $FC, $08, $AD, $6E    ; $0B6D
+        .byte $71, $F0, $08, $AD, $4A, $11, $D0, $03, $EE, $F5, $08, $4C, $D9, $0A, $8D, $9B    ; $0B7D
+        .byte $0B, $8E, $9D, $0B, $8C, $9F, $0B, $EE, $AB, $08, $20, $08, $80, $A9, $00, $A2    ; $0B8D
+        .byte $00, $A0, $00, $0E, $19, $D0, $40    ; $0B9D
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -2783,7 +2823,7 @@ l_1:                       lda  kbd_scan_modifier_operand_bytes,x    ; $0DF2
 ;   horizontal 4-cell row highlights, sidTAB/disk uses single-glyph cursor.
 paint_ui_selection_cell .block
                            pha    ; $0E0A
-                           inc  boot_init_band + $01    ; $0E0B
+                           inc  nmi_sid2_silence_count + $01    ; $0E0B
                            lda  ui_mode    ; $0E0E
                            cmp  #UI_MODE_SEQED    ; $0E11
                            beq  paint_selection_glyph_write.l_1    ; $0E13  ui_mode was UI_MODE_SEQED?
@@ -16330,7 +16370,7 @@ writer_disk_filename .block
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 chip-view voice-mute applier.
 ;
-;   callers:             2 code sites: $083B, $0843
+;   callers:             3 code sites: $083B, $0843, $0AE0 nmi_sid2_silence_cont
 ;
 ;   Reads sid_chip_view — if beq to sid2_chipview_voice_mute_apply (SID#1 view, no-op); else reads cursor_state_cluster (kbd voice-mute mask), if zero falls through to sid2_chipview_voice_mute_apply; else stages a SID#2 register write (A=$8E, X=$02, Y=$D5) before walking the voice-mute fan-out. Called from 3 sites around nmi_sid2_silence_branch-nmi_sid2_silence_cont (post-NMI exit branch).
 sid2_chipview_voice_mute_apply .block
