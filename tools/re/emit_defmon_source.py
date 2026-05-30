@@ -5287,7 +5287,17 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
     Returns {host_pc: {description, patch_sources, current_mnem,
     candidate_opcodes, inconclusive}}. Curated `candidate_opcodes` wins
     over auto-discovered ones; if both are empty the entry is rendered
-    with an "inconclusive" marker."""
+    with an "inconclusive" marker.
+
+    Discovered (un-annotated) hosts that ARE hardware registers
+    (`HW_LABELS`) are dropped: a store to a VIC/SID register address is
+    an I/O write, but those addresses also alias RAM-under-I/O code, so
+    Ghidra records the I/O store as a write-ref to a code byte and
+    `_discover_smc_opcode_sites` reports a bogus opcode-flip whose
+    "candidate" is the traced register *data* value (e.g. $00 -> BRK).
+    The genuine SMC at those addresses is the per-voice operand/dispatch
+    patch, catalogued separately as `smc_dispatch`. An explicit
+    `[smc_opcode."$Dxxx"]` annotation overrides this and renders."""
     if not path.is_file():
         return {}
     raw = json.loads(path.read_text())
@@ -5298,6 +5308,8 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
         try:
             pc = int(key.lstrip("$"), 16)
         except (AttributeError, ValueError):
+            continue
+        if pc in HW_LABELS and not body.get("annotated"):
             continue
         sources = set(body.get("patch_sources_annotated") or [])
         sources.update(body.get("patch_sources_discovered") or [])
@@ -5321,6 +5333,11 @@ def load_smc_branch_catalogue(path: Path) -> dict[int, dict]:
     Returns {branch_pc: {description, patch_sources}}. The emitter
     renders a short comment above each branch noting that its offset
     byte is patched at runtime.
+
+    As in `load_smc_opcode_catalogue`, discovered (un-annotated) hosts
+    that are hardware registers (`HW_LABELS`) are dropped — the "branch
+    offset patch" is really a VIC/SID register store aliasing the
+    RAM-under-I/O code byte. An explicit annotation overrides.
     """
     if not path.is_file():
         return {}
@@ -5332,6 +5349,8 @@ def load_smc_branch_catalogue(path: Path) -> dict[int, dict]:
         try:
             pc = int(key.lstrip("$"), 16)
         except (AttributeError, ValueError):
+            continue
+        if pc in HW_LABELS and not body.get("annotated"):
             continue
         sources = set(body.get("patch_sources_annotated") or [])
         sources.update(body.get("patch_sources_discovered") or [])

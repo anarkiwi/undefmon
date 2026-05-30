@@ -79,7 +79,7 @@ Annotation catalogue (`tools/re/annotations.toml`):
   89 have explicit `callers`; 72 have explicit `inputs`)
 - 356 `[region.$XXXX]` entries
 - 89 per-branch condition overrides, 16 text spans, 6 SMC-dispatch
-  sites, 1 refuted-hypothesis entry
+  sites, 11 SMC-opcode-flip sites, 1 refuted-hypothesis entry
 
 Comparison-site dataflow (`build/cmp_facts.json`, 1,629 branches):
 
@@ -174,6 +174,22 @@ reproducing the build.)
 
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
+
+5. **3,234 of 11,500 code-starts are statically unreachable.** Run
+   `make unreachable-triage` to bucket them. ~96% sit inside a single
+   `paint_page_*` data span — screen data that decodes as instructions,
+   not dead code — so the headline number overstates the gap. The
+   actionable residue is the `isolated` starts outside data regions and
+   the `smc_io_band` bucket (reached via SMC / RAM-under-I/O banking).
+
+6. **SMC opcode/branch sites are partly curated.** 11 of the genuine
+   `smc_opcode` flips carry `[smc_opcode."$XXXX"]` descriptions; the
+   24 VIC/SID register-aliased false positives (a write to a hardware
+   register that aliases RAM-under-I/O code) are dropped at emit time
+   (see `load_smc_opcode_catalogue`). Still uncurated: the 9
+   `[smc_branch]` gate sites at `$1183-$12AF` (offsets patched by the
+   `$D1xx` decoder) and a few opcode sites in data buffers
+   (`$8D26`, `$BDA4`).
 
 ## See also
 

@@ -1,115 +1,146 @@
 {
   "$1026": {
     "host_pc": 4134,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: skip voice-0's SID writes. $C5A6 writes `jmp $1053` here (jump to the V1 write band) when V0's wave is off. Restored to STX when the voice plays again.",
+    "patch_sources_annotated": [
+      50598
+    ],
     "patch_sources_discovered": [
       50598
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "BPL"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1057": {
     "host_pc": 4183,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: skip voice-1's SID writes. $C5C8 writes `jmp $1084` here (jump to the V2 write band) when V1's wave is off.",
+    "patch_sources_annotated": [
+      50632
+    ],
     "patch_sources_discovered": [
       50632
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "BPL"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$1088": {
     "host_pc": 4232,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: skip voice-2's SID writes. $C5EA writes `jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is off.",
+    "patch_sources_annotated": [
+      50666
+    ],
     "patch_sources_discovered": [
       50666
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "BPL"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$10B8": {
     "host_pc": 4280,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "ADC <-> SBC: filter cutoff-slide direction (lo-byte step). $178F stores $69 (ADC, ramp up); $17A0 stores $E9 (SBC, ramp down). Bit 7 of the ACID-column byte selects the direction.",
+    "patch_sources_annotated": [
+      6031,
+      6048
+    ],
     "patch_sources_discovered": [
       6031,
       6048
     ],
     "current_mnem": "ADC",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "SBC"
+    ],
     "candidate_opcodes_discovered": [
       "SBC"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$10BF": {
     "host_pc": 4287,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "ADC <-> SBC: hi-byte companion of $10B8, patched in the same pass ($1792 stores ADC, $17A3 stores SBC) so the 16-bit slide adds or subtracts consistently across both bytes.",
+    "patch_sources_annotated": [
+      6034,
+      6051
+    ],
     "patch_sources_discovered": [
       6034,
       6051
     ],
     "current_mnem": "ADC",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "SBC"
+    ],
     "candidate_opcodes_discovered": [],
     "inconclusive": true,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$10D4": {
     "host_pc": 4308,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "ASL <-> NOP: filter cutoff output scaling (SID#1). $151D stores $EA (NOP, pass-through, max cutoff $02) or leaves $0A (ASL, doubles to max $04). Chosen at startup by raster_sync_random.",
+    "patch_sources_annotated": [
+      5405
+    ],
     "patch_sources_discovered": [
       5405
     ],
     "current_mnem": "ASL",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "NOP"
+    ],
     "candidate_opcodes_discovered": [
       "NOP"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$10D8": {
     "host_pc": 4312,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "LDA -> RTS: sub-frame gate. player_sound_update writes $60 (RTS) at $100C to bail out of player_play before the row-advance band on a sub-frame tick, then restores $A9 (LDA-imm) at $1013.",
+    "patch_sources_annotated": [
+      4108,
+      4115
+    ],
     "patch_sources_discovered": [
       4108,
       4115
     ],
     "current_mnem": "LDA",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "RTS"
+    ],
     "candidate_opcodes_discovered": [
       "RTS"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$8D26": {
@@ -162,66 +193,82 @@
   },
   "$C826": {
     "host_pc": 51238,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: SID#2 analogue of $1026 \u2014 skip SID#2 voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave is off.",
+    "patch_sources_annotated": [
+      50493
+    ],
     "patch_sources_discovered": [
       50493
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "INY"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$C857": {
     "host_pc": 51287,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: skip SID#2 voice-1's writes. $C55F writes `jmp $C884` here when the voice's wave is off.",
+    "patch_sources_annotated": [
+      50527
+    ],
     "patch_sources_discovered": [
       50527
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "INY"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$C888": {
     "host_pc": 51336,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "STX -> JMP: skip SID#2 voice-2's writes. $C581 writes `jmp $C8A9` here when the voice's wave is off.",
+    "patch_sources_annotated": [
+      50561
+    ],
     "patch_sources_discovered": [
       50561
     ],
     "current_mnem": "STX",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "JMP"
+    ],
     "candidate_opcodes_discovered": [
       "INY"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$C8D4": {
     "host_pc": 51412,
-    "description": "",
-    "patch_sources_annotated": [],
+    "description": "ASL <-> NOP: SID#2 analogue of $10D4 \u2014 filter cutoff output scaling. $CD1D stores $EA (NOP) or $0A (ASL).",
+    "patch_sources_annotated": [
+      52509
+    ],
     "patch_sources_discovered": [
       52509
     ],
     "current_mnem": "ASL",
-    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_annotated": [
+      "NOP"
+    ],
     "candidate_opcodes_discovered": [
       "NOP"
     ],
     "inconclusive": false,
-    "annotated": false,
+    "annotated": true,
     "discovered": true
   },
   "$D000": {
