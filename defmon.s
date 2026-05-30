@@ -240,17 +240,17 @@
 ;    $0800  ████████      4 K  code (first: cold_boot_origin)
 ;    $1800  ▒▒▒▒▒▒▒▒    256 B  song_position_arrays_lo
 ;    $1900  ▒▒▒▒▒▒▒▒    256 B  song_position_arrays_hi
-;    $1A00  ▒▒▒▒▒▒▒▒    128 B  pat_base_lo
+;    $1A00  ▒▒▒▒▒▒▒▒    128 B  pat_base_lo (~50% zero)
 ;    $1A80  ▒▒▒▒▒▒▒▒    128 B  pat_base_hi
-;    $1B00  ▒▒▒▒▒▒▒▒    256 B  arranger_v0_sid1
-;    $1C00  ▒▒▒▒▒▒▒▒    256 B  arranger_v1_sid1
-;    $1D00  ▒▒▒▒▒▒▒▒    256 B  arranger_v2_sid1
+;    $1B00  ▒▒▒▒▒▒▒▒    256 B  arranger_v0_sid1 (~99% zero)
+;    $1C00  ▒▒▒▒▒▒▒▒    256 B  arranger_v1_sid1 (~100% zero)
+;    $1D00  ▒▒▒▒▒▒▒▒    256 B  arranger_v2_sid1 (~100% zero)
 ;    $1E00  ████████    256 B  code (first: dl_per_step_counters)
-;    $1F00  ▒▒▒▒▒▒▒▒     16 K  pattern_bank
-;    $5F00  ▒▒▒▒▒▒▒▒    4.6 K  sidtab_data
-;    $6E00  ▒▒▒▒▒▒▒▒    256 B  arranger_v3_sid2
-;    $6F00  ▒▒▒▒▒▒▒▒    256 B  arranger_v4_sid2
-;    $7000  ▒▒▒▒▒▒▒▒    256 B  arranger_v5_sid2
+;    $1F00  ▒▒▒▒▒▒▒▒     16 K  pattern_bank (~75% zero)
+;    $5F00  ▒▒▒▒▒▒▒▒    4.6 K  sidtab_data (~99% zero)
+;    $6E00  ▒▒▒▒▒▒▒▒    256 B  arranger_v3_sid2 (~100% zero)
+;    $6F00  ▒▒▒▒▒▒▒▒    256 B  arranger_v4_sid2 (~100% zero)
+;    $7000  ▒▒▒▒▒▒▒▒    256 B  arranger_v5_sid2 (~100% zero)
 ;    $7100              103 B  — unused —
 ;    $7167  ████████    307 B  code (first: ui_mode)
 ;    $729A  ▒▒▒▒▒▒▒▒     32 B  key_pitch_lut

@@ -2356,6 +2356,7 @@ HW_IMM_DECODERS: dict[int, Callable[[int], str]] = {
 
 
 def _emit_memory_map(fh,
+                     mem: bytes,
                      base: int,
                      end_excl: int,
                      segments: list[dict],
@@ -2411,6 +2412,21 @@ def _emit_memory_map(fh,
                 return labels[addr]
         return ""
 
+    def _emptiness(lo: int, hi: int) -> str:
+        """Tag a data band with its zero-fill share when it is mostly
+        empty. Large defMON data segments are initialised working RAM
+        (pattern_bank, sidtab_data, tail buffers) that ship zeroed or
+        with a trivial default — the byte count overstates how much is
+        actual content. Surfaced so the map matches the
+        `data_region_coverage --profile` breakdown."""
+        # mem is the full 64K image indexed by absolute address (classify
+        # does mem[pc]), so slice with absolute lo/hi — not lo-base.
+        span = mem[lo:hi]
+        if not span:
+            return ""
+        zero_pct = 100 * span.count(0) // len(span)
+        return f" (~{zero_pct}% zero)" if zero_pct >= 50 else ""
+
     image_bands: list[tuple[int, int, str, str]] = []
     cursor = base
     for start, end_excl_b, name in image_segs:
@@ -2421,7 +2437,8 @@ def _emit_memory_map(fh,
             image_bands.append((cursor, b_start,
                                 f"code (first: {hint})" if hint else "code",
                                 "code"))
-        image_bands.append((b_start, b_end, name, "data"))
+        image_bands.append((b_start, b_end, name + _emptiness(b_start, b_end),
+                            "data"))
         cursor = max(cursor, b_end)
     if cursor < end_excl:
         hint = _first_annotation_name(cursor, end_excl)
@@ -3043,7 +3060,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     fh.write(";\n")
     _emit_architecture_overview(fh)
     fh.write("\n")
-    _emit_memory_map(fh, base, end_excl, segments, HW_ANCHOR_REGIONS,
+    _emit_memory_map(fh, mem, base, end_excl, segments, HW_ANCHOR_REGIONS,
                      annotations, labels)
     fh.write("\n")
 
