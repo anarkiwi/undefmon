@@ -39,19 +39,21 @@ from tools.re.dasm6502 import (
     emit_64tass_instruction,
 )
 
-
 # ── Branch condition rendering ──────────────────────────────────────────
 # Whether a given instruction is a conditional branch — used both at
 # emit time (to decide whether to look for a cmp_facts entry) and
 # inside the rendering helpers below.
 
 _BRANCH_FLAG = {
-    "beq": "Z", "bne": "Z",
-    "bmi": "N", "bpl": "N",
-    "bcs": "C", "bcc": "C",
-    "bvs": "V", "bvc": "V",
+    "beq": "Z",
+    "bne": "Z",
+    "bmi": "N",
+    "bpl": "N",
+    "bcs": "C",
+    "bcc": "C",
+    "bvs": "V",
+    "bvc": "V",
 }
-
 
 
 # ── Fact-driven condition rendering ────────────────────────────────────
@@ -147,10 +149,14 @@ def _parse_hex_addr(text: str) -> int | None:
 # purposes of the value tested by the branch the round-trip is a no-op.
 # Reported by the 2026-05-17 awful-label survey: 43 of 113 long labels
 # are `_minus_1_plus_1` instances of this exact pattern.
-_INVERSE_OP_PAIRS = frozenset({
-    ("DEX", "INX"), ("INX", "DEX"),
-    ("DEY", "INY"), ("INY", "DEY"),
-})
+_INVERSE_OP_PAIRS = frozenset(
+    {
+        ("DEX", "INX"),
+        ("INX", "DEX"),
+        ("DEY", "INY"),
+        ("INY", "DEY"),
+    }
+)
 
 
 def _fold_transform_chain(transform: list[dict]) -> list[dict]:
@@ -162,17 +168,18 @@ def _fold_transform_chain(transform: list[dict]) -> list[dict]:
         for i in range(len(out) - 1):
             pair = (out[i].get("op", ""), out[i + 1].get("op", ""))
             if pair in _INVERSE_OP_PAIRS:
-                del out[i:i + 2]
+                del out[i : i + 2]
                 break
         else:
             return out
 
 
-def _name_for_address(addr: int,
-                      labels: dict[int, str],
-                      block_pcs_sorted: list[int] | None,
-                      block_name_by_pc: dict[int, str] | None,
-                      ) -> str:
+def _name_for_address(
+    addr: int,
+    labels: dict[int, str],
+    block_pcs_sorted: list[int] | None,
+    block_name_by_pc: dict[int, str] | None,
+) -> str:
     """Render an address for inclusion in a condition string.
 
     Preference order:
@@ -192,12 +199,13 @@ def _name_for_address(addr: int,
     return f"${addr:04X}"
 
 
-def _render_lhs_expr(lhs: dict,
-                     labels: dict[int, str],
-                     block_pcs_sorted: list[int] | None = None,
-                     block_name_by_pc: dict[int, str] | None = None,
-                     apply_transforms: bool = True,
-                     ) -> str | None:
+def _render_lhs_expr(
+    lhs: dict,
+    labels: dict[int, str],
+    block_pcs_sorted: list[int] | None = None,
+    block_name_by_pc: dict[int, str] | None = None,
+    apply_transforms: bool = True,
+) -> str | None:
     """Render the lhs side of a fact-derived condition.
 
     Returns the expression (with any transform chain + setter post-op
@@ -214,16 +222,14 @@ def _render_lhs_expr(lhs: dict,
         addr = _parse_hex_addr(lhs.get("var_addr", ""))
         if addr is None:
             return None
-        expr = _name_for_address(addr, labels, block_pcs_sorted,
-                                 block_name_by_pc)
+        expr = _name_for_address(addr, labels, block_pcs_sorted, block_name_by_pc)
         if lhs.get("index"):
             expr = f"{expr},{lhs['index']}"
     elif kind == "var_indirect":
         addr = _parse_hex_addr(lhs.get("ptr_addr", ""))
         if addr is None:
             return None
-        ptr_name = _name_for_address(addr, labels, block_pcs_sorted,
-                                     block_name_by_pc)
+        ptr_name = _name_for_address(addr, labels, block_pcs_sorted, block_name_by_pc)
         expr = f"({ptr_name}),{lhs.get('index', 'Y')}"
     elif kind == "imm":
         # Constant lhs — usually SMC patch slots (`lda #$FF` before
@@ -278,16 +284,26 @@ _STEP_DOWN_OPS = frozenset({"DEX", "DEY", "DEC"})
 # has an exact label gets `← <slot_name>` appended (the operand is
 # patched at runtime by an SMC writer elsewhere in the image, so the
 # static `#$XX` value is only the initial state).
-_IMM_2BYTE_OPS = frozenset({
-    "lda", "ldx", "ldy",
-    "cmp", "cpx", "cpy",
-    "adc", "sbc",
-    "and", "ora", "eor",
-})
+_IMM_2BYTE_OPS = frozenset(
+    {
+        "lda",
+        "ldx",
+        "ldy",
+        "cmp",
+        "cpx",
+        "cpy",
+        "adc",
+        "sbc",
+        "and",
+        "ora",
+        "eor",
+    }
+)
 
 
-def _detect_step_idiom(lhs: dict, branch: str, rhs: dict
-                       ) -> tuple[int, str, str] | None:
+def _detect_step_idiom(
+    lhs: dict, branch: str, rhs: dict
+) -> tuple[int, str, str] | None:
     """Recognise the `(INX/INY/INC)×N + BPL/BMI on lhs-zero` pattern
     (and its symmetric DEX/DEY/DEC sibling) as a single compound idiom.
 
@@ -315,13 +331,17 @@ def _detect_step_idiom(lhs: dict, branch: str, rhs: dict
     if not ops:
         return None
     if all(o in _STEP_UP_OPS for o in ops):
-        return (len(ops),
-                "stepped",
-                "had bit 7 clear?" if branch == "BPL" else "had bit 7 set?")
+        return (
+            len(ops),
+            "stepped",
+            "had bit 7 clear?" if branch == "BPL" else "had bit 7 set?",
+        )
     if all(o in _STEP_DOWN_OPS for o in ops):
-        return (len(ops),
-                "walked back",
-                "had bit 7 clear?" if branch == "BPL" else "had bit 7 set?")
+        return (
+            len(ops),
+            "walked back",
+            "had bit 7 clear?" if branch == "BPL" else "had bit 7 set?",
+        )
     return None
 
 
@@ -348,14 +368,20 @@ def _emit_step_idiom_comment(
     lhs = fact.get("lhs") or {}
     branch = fact.get("branch", "")
     rhs = fact.get("rhs") or {}
-    source = _render_lhs_expr(lhs, labels, block_pcs_sorted,
-                              block_name_by_pc,
-                              apply_transforms=False) or "?"
+    source = (
+        _render_lhs_expr(
+            lhs, labels, block_pcs_sorted, block_name_by_pc, apply_transforms=False
+        )
+        or "?"
+    )
     # Cite the raw $XXXX only when the rendered source isn't already
     # one (i.e. when we used the block_name+offset path or a label) —
     # avoids redundant "(= $891A)" after `${891A}` already showed.
-    addr = _parse_hex_addr(lhs.get("var_addr") or lhs.get("ptr_addr", "")) \
-        if lhs.get("kind") in ("var", "var_indirect") else None
+    addr = (
+        _parse_hex_addr(lhs.get("var_addr") or lhs.get("ptr_addr", ""))
+        if lhs.get("kind") in ("var", "var_indirect")
+        else None
+    )
     addr_suffix = ""
     if addr is not None and f"${addr:04X}" not in source:
         addr_suffix = f"  (= ${addr:04X})"
@@ -363,11 +389,11 @@ def _emit_step_idiom_comment(
     direction_verb = "advanced" if direction == "step" else "decremented"
     setter = fact.get("flag_setter") or {}
     last_step_pc = _parse_hex_addr(setter.get("pc") or "")
-    last_step_text = (f"; final step @ ${last_step_pc:04X}"
-                      if last_step_pc is not None else "")
+    last_step_text = (
+        f"; final step @ ${last_step_pc:04X}" if last_step_pc is not None else ""
+    )
     predicate_key = (branch, _predicate)
-    semantic = _STEP_IDIOM_SEMANTICS.get(
-        predicate_key, f'{branch} "{_predicate}"')
+    semantic = _STEP_IDIOM_SEMANTICS.get(predicate_key, f'{branch} "{_predicate}"')
     rhs_note = ""
     if rhs.get("kind") != "zero":
         rhs_note = f" (rhs={rhs.get('kind')})"
@@ -379,20 +405,21 @@ def _emit_step_idiom_comment(
     )
 
 
-def _render_rhs_text(rhs: dict, lhs: dict,
-                     value_names_per_var: dict[int, dict[int, str]],
-                     labels: dict[int, str],
-                     block_pcs_sorted: list[int] | None = None,
-                     block_name_by_pc: dict[int, str] | None = None,
-                     ) -> str | None:
+def _render_rhs_text(
+    rhs: dict,
+    lhs: dict,
+    value_names_per_var: dict[int, dict[int, str]],
+    labels: dict[int, str],
+    block_pcs_sorted: list[int] | None = None,
+    block_name_by_pc: dict[int, str] | None = None,
+) -> str | None:
     """Render the rhs of a fact-derived condition. Looks up the
     immediate against the lhs variable's `value_names` so a literal
     `$01` becomes `UI_MODE_SEQED` when comparing `ui_mode`."""
     kind = rhs.get("kind")
     if kind == "imm":
         value = _parse_hex_addr(rhs.get("value", ""))
-        if (value is not None and lhs.get("kind") == "var"
-                and not lhs.get("transform")):
+        if value is not None and lhs.get("kind") == "var" and not lhs.get("transform"):
             lhs_addr = _parse_hex_addr(lhs.get("var_addr", ""))
             if lhs_addr is not None:
                 names = value_names_per_var.get(lhs_addr, {})
@@ -403,8 +430,7 @@ def _render_rhs_text(rhs: dict, lhs: dict,
         addr = _parse_hex_addr(rhs.get("var_addr", ""))
         if addr is None:
             return rhs.get("var_addr", "?")
-        expr = _name_for_address(addr, labels, block_pcs_sorted,
-                                 block_name_by_pc)
+        expr = _name_for_address(addr, labels, block_pcs_sorted, block_name_by_pc)
         if rhs.get("index"):
             expr = f"{expr},{rhs['index']}"
         return expr
@@ -460,9 +486,9 @@ def _render_setter_centric_condition(
     return template.format(var=var)
 
 
-def _render_setter_operand(setter: dict,
-                           labels: dict[int, str],
-                           imm_subs: dict[int, str] | None = None) -> str | None:
+def _render_setter_operand(
+    setter: dict, labels: dict[int, str], imm_subs: dict[int, str] | None = None
+) -> str | None:
     """For register-consuming arithmetic/bitwise setters
     (AND/ORA/EOR/ADC/SBC), render the setter's own operand so the
     condition can read `(lhs OP setter_operand) <pred>`.
@@ -530,9 +556,11 @@ def render_condition_from_fact(
     # to a synthetic var pointing at the operand-byte address so the
     # predicate reads as "<region + $offset> was zero?" instead of
     # the meaningless "$00 was zero?".
-    if (lhs.get("kind") == "imm"
-            and setter.get("mnem") in ("LDA", "LDX", "LDY")
-            and setter.get("imm") is not None):
+    if (
+        lhs.get("kind") == "imm"
+        and setter.get("mnem") in ("LDA", "LDX", "LDY")
+        and setter.get("imm") is not None
+    ):
         setter_pc = _parse_hex_addr(setter.get("pc", ""))
         if setter_pc is not None:
             lhs = {"kind": "var", "var_addr": f"${setter_pc + 1:04X}"}
@@ -545,8 +573,7 @@ def render_condition_from_fact(
     # `kbd_decoded_key was not KEY_LEFTARROW?` instead of
     # `Y was not $1F?` — the rhs gets value_names substitution and
     # the lhs reads as the source variable rather than the register.
-    if (lhs.get("kind") == "from_caller"
-            and reg_inputs_per_fn is not None):
+    if lhs.get("kind") == "from_caller" and reg_inputs_per_fn is not None:
         reg_key = (lhs.get("reg") or "").lower()
         block = fact.get("containing_block") or {}
         block_pc = _parse_hex_addr(block.get("pc", ""))
@@ -564,8 +591,8 @@ def render_condition_from_fact(
     if step_info is not None:
         count, direction, predicate = step_info
         source_expr = _render_lhs_expr(
-            lhs, labels, block_pcs_sorted, block_name_by_pc,
-            apply_transforms=False)
+            lhs, labels, block_pcs_sorted, block_name_by_pc, apply_transforms=False
+        )
         if source_expr is not None:
             return f"{source_expr} {direction} {count} and {predicate}"
 
@@ -592,8 +619,9 @@ def render_condition_from_fact(
 
     # CMP/CPX/CPY → compare against rhs
     if rhs.get("kind") in ("imm", "var") and s_mnem in ("CMP", "CPX", "CPY"):
-        rhs_text = _render_rhs_text(rhs, lhs, value_names_per_var, labels,
-                                     block_pcs_sorted, block_name_by_pc)
+        rhs_text = _render_rhs_text(
+            rhs, lhs, value_names_per_var, labels, block_pcs_sorted, block_name_by_pc
+        )
         if rhs_text is None:
             return None
         template = _CMP_PREDICATE.get(branch)
@@ -622,10 +650,16 @@ def render_condition_from_fact(
         lhs_addr = _parse_hex_addr(lhs.get("var_addr", ""))
         if lhs_addr is not None:
             zero_name = (value_names_per_var.get(lhs_addr, {}) or {}).get(0)
-            if zero_name is not None and not lhs.get("transform") \
-                    and not lhs.get("post_op"):
-                phrase = (f"{expr} was {zero_name}?" if branch == "BEQ"
-                          else f"{expr} was not {zero_name}?")
+            if (
+                zero_name is not None
+                and not lhs.get("transform")
+                and not lhs.get("post_op")
+            ):
+                phrase = (
+                    f"{expr} was {zero_name}?"
+                    if branch == "BEQ"
+                    else f"{expr} was not {zero_name}?"
+                )
                 return phrase
     template = _ZERO_PREDICATE.get(branch)
     if template is None:
@@ -694,10 +728,12 @@ def detect_switch_dispatchers(
         lhs_i = f_i.get("lhs") or {}
         rhs_i = f_i.get("rhs") or {}
         branch_i = f_i.get("branch", "")
-        if (branch_i not in ("BEQ", "BNE")
-                or lhs_i.get("kind") != "var"
-                or lhs_i.get("transform")
-                or rhs_i.get("kind") != "imm"):
+        if (
+            branch_i not in ("BEQ", "BNE")
+            or lhs_i.get("kind") != "var"
+            or lhs_i.get("transform")
+            or rhs_i.get("kind") != "imm"
+        ):
             i += 1
             continue
         var_addr = _parse_hex_addr(lhs_i.get("var_addr", ""))
@@ -713,11 +749,13 @@ def detect_switch_dispatchers(
             lhs_j = f_j.get("lhs") or {}
             rhs_j = f_j.get("rhs") or {}
             br_j = f_j.get("branch", "")
-            if (br_j != branch_i
-                    or lhs_j.get("kind") != "var"
-                    or lhs_j.get("transform")
-                    or _parse_hex_addr(lhs_j.get("var_addr", "")) != var_addr
-                    or rhs_j.get("kind") != "imm"):
+            if (
+                br_j != branch_i
+                or lhs_j.get("kind") != "var"
+                or lhs_j.get("transform")
+                or _parse_hex_addr(lhs_j.get("var_addr", "")) != var_addr
+                or rhs_j.get("kind") != "imm"
+            ):
                 break
             val = _parse_hex_addr(rhs_j.get("value", ""))
             if val is None or val in seen_values:
@@ -728,12 +766,16 @@ def detect_switch_dispatchers(
             #   BEQ cascade: case match TAKES the branch → handler is `taken`.
             #   BNE cascade: case match FALLS THROUGH    → handler is `fall`.
             handler_pc = taken if branch_i == "BEQ" else fall
-            cases.append({
-                "value": val,
-                "branch_pc": pc_j,
-                "handler_pc": handler_pc,
-                "handler_label": labels.get(handler_pc) if handler_pc is not None else None,
-            })
+            cases.append(
+                {
+                    "value": val,
+                    "branch_pc": pc_j,
+                    "handler_pc": handler_pc,
+                    "handler_label": (
+                        labels.get(handler_pc) if handler_pc is not None else None
+                    ),
+                }
+            )
             seen_values.add(val)
             j += 1
         if len(cases) >= _SWITCH_MIN_CASES:
@@ -750,9 +792,9 @@ def detect_switch_dispatchers(
             default_pc = _parse_hex_addr(
                 last_f.get("taken_target", "")
                 if branch_i == "BNE"
-                else last_f.get("fall_through", ""))
-            default_label = (labels.get(default_pc)
-                             if default_pc is not None else None)
+                else last_f.get("fall_through", "")
+            )
+            default_label = labels.get(default_pc) if default_pc is not None else None
             anchor_pc = first_setter_pc if first_setter_pc is not None else pc_i
             out[anchor_pc] = {
                 "var_addr": var_addr,
@@ -841,8 +883,7 @@ def _parse_enum_list(text: str) -> tuple[str, list[tuple[str, str]]] | None:
     return prefix, entries
 
 
-def _render_enum_lines(prefix: str,
-                       entries: list[tuple[str, str]]) -> list[str]:
+def _render_enum_lines(prefix: str, entries: list[tuple[str, str]]) -> list[str]:
     """Return the body lines of an enum table (no ``;`` comment prefix).
 
     Includes a leading ``prefix:`` line when the parser extracted one;
@@ -918,8 +959,7 @@ def _format_notes_with_enums(notes: str) -> list[str]:
 # reverse-engineering process (probe evidence, prior versions of an
 # annotation, classification snapshots, mining provenance) belongs in
 # these never-emitted fields rather than in `notes`.
-NEVER_EMIT_FIELDS = frozenset({"evidence", "internal_notes",
-                               "inline_comments"})
+NEVER_EMIT_FIELDS = frozenset({"evidence", "internal_notes", "inline_comments"})
 
 
 LOAD_ADDR = 0x0800
@@ -1004,7 +1044,7 @@ SEED_LANDMARKS = {
     # disk-menu chord (at $8244 → $7423 → $75DB nested input loop).
     0x80C4: "global_pre_dispatch",
     0x8234: "global_shift_modifier_arm",
-    0x8244: "shift_x_disk_menu_chord",   # LSHIFT+X handler entry
+    0x8244: "shift_x_disk_menu_chord",  # LSHIFT+X handler entry
     # Visible disk menu — the nested UI loop the harness drives.
     # $7423 is the save-UI / menu entry helper called from $8244.
     # $75DB is the input loop proper: paints the menu, scans keys at
@@ -1017,125 +1057,119 @@ SEED_LANDMARKS = {
     0x7618: "disk_menu_kbd_scan",
     0x7629: "disk_menu_prev_drive_arm",  # bare COMMA → DEC $BA (also dispatch entry)
     0x763A: "disk_menu_next_drive_arm",  # bare PERIOD → INC $BA
-    0x7643: "disk_menu_refresh_arm",     # bare SPACE → JMP $75DB
-    0x76B6: "disk_menu_exit_arm",        # bare LEFTARROW
-    0x76E4: "disk_menu_save_arm",        # bare 'S'
+    0x7643: "disk_menu_refresh_arm",  # bare SPACE → JMP $75DB
+    0x76B6: "disk_menu_exit_arm",  # bare LEFTARROW
+    0x76E4: "disk_menu_save_arm",  # bare 'S'
     # Secondary disk mode entry (CTRL+/ in sidTAB → mode = $20)
     0xBD5D: "sidTAB_ctrl_slash_arm",
-    0xBD6A: "mode_disk_set",             # sole LDA #$20; STA $7167
+    0xBD6A: "mode_disk_set",  # sole LDA #$20; STA $7167
     # Post-LOAD decoder (RAM-under-I/O at $D6xx/$D7xx; banked-in by
     # $0A78 setting $01=#$35). Static-disasm coverage missed these
     # without seeds — trace_runner never drives a real LOAD.
     # Verified via harness/probe_decoder_catch.py 2026-05-12.
-    0xD6B8: "decoder_emit_byte_inc",     # STA ($FD),Y + INC $FD + count
-    0xD6C9: "decoder_block_helper",      # 2× JSR $D74C wrappers
-    0xD709: "decoder_loop_entry",        # LDX #$00 / loop top (probe-confirmed)
-    0xD712: "decoder_fill_jump",         # JMP $D732 (fall-into fill-loop)
-    0xD732: "decoder_emit_byte_dec",     # downward-fill writer
-    0xD74C: "decoder_src_decr",          # decrement source pointer ($02/$03) by 1
+    0xD6B8: "decoder_emit_byte_inc",  # STA ($FD),Y + INC $FD + count
+    0xD6C9: "decoder_block_helper",  # 2× JSR $D74C wrappers
+    0xD709: "decoder_loop_entry",  # LDX #$00 / loop top (probe-confirmed)
+    0xD712: "decoder_fill_jump",  # JMP $D732 (fall-into fill-loop)
+    0xD732: "decoder_emit_byte_dec",  # downward-fill writer
+    0xD74C: "decoder_src_decr",  # decrement source pointer ($02/$03) by 1
     # Save-encoder chain (per AGENTS Step 4). Not in entrypoints.json
     # because the trace_runner moved the save earlier in the sweep
     # (gotcha #9 fix) — these get executed only when a real defMON SAVE
     # runs. SEEDed here so the emitter disassembles them; annotations
     # in tools/re/annotations.toml describe each routine.
-    0xCE81: "save_prep_orchestrator",    # JSR $CF2A / $CF6A / $CFEF
-    0xCEB2: "decoder_load_setup",        # patches $D60D/$D60E from $AE/$AF-3
-    0xCF2A: "save_prep_markers",         # fill empty song-position slots with $11
-    0xCFEF: "save_prep_zero_pat_base",   # zero $1A00..$1AFF
-    0xCF6A: "save_prep_arranger_scan",   # arranger pat-num search
+    0xCE81: "save_prep_orchestrator",  # JSR $CF2A / $CF6A / $CFEF
+    0xCEB2: "decoder_load_setup",  # patches $D60D/$D60E from $AE/$AF-3
+    0xCF2A: "save_prep_markers",  # fill empty song-position slots with $11
+    0xCFEF: "save_prep_zero_pat_base",  # zero $1A00..$1AFF
+    0xCF6A: "save_prep_arranger_scan",  # arranger pat-num search
     # Code reachable only via indirect JSR / self-mod (no direct
     # JSR/JMP-abs caller). The dynamic sweep doesn't exercise these
     # paths so they're missing from trace/entrypoints.json; SEEDed
     # here so the emitter disassembles them as instructions instead
     # of `.byte` data.
-    0xB21A: "seqED_auto_advance_via_b2c3",       # variant of $B20D, writer=$B2C3
-    0xB3C8: "writer_seqED_speed_or_value",       # CBM/CTRL writer-arm dispatch
-    0xB5A1: "writer_seqED_pat_base_resolve",     # pat_base resolver
-    0xB5B0: "writer_seqED_kbd_xy_preload",       # kbd_modifiers → X/Y stride preload
-    0xB5C0: "writer_seqED_jmp_to_paint",         # 1-byte JMP $B5EB trampoline
-    0xB5C3: "writer_seqED_pattern_to_screen",    # copy ($02),Y pattern row to screen
-    0xB5EB: "writer_seqED_screen_to_pattern",    # inverse: copy ($02),Y → ($FD),Y
-    0xB607: "writer_seqED_pattern_copy_v3",      # adjacent variant
-    0xB623: "writer_seqED_jmp_screen_to_pat",    # 3-byte JMP $B5EB trampoline
-    0xB626: "writer_seqED_flag_byte_merge",      # merge flag-byte high/low nibbles
-    0xB660: "writer_seqED_pat_base_high",        # alt pat_base resolver
-    0xC2D8: "sidTAB_C2D8_dispatch_body",         # $C2D7 is the self-mod operand byte
-    0xCC9D: "sid2_pitch_pw_clamp_commit",        # SID#2 PS sweep clamp + commit
-    0xCE16: "sid2_sidtab_ctrl_accumulator",      # SID#2 sidtab CTRL accumulator
-    0xCEFE: "sid2_jp_marker_walker",             # SID#2 JP-marker mirror walker
-    0xD02C: "load_decoder_setup_chain",          # JSR D0CC/D1E4/D3DF/D51E/D365
-    0xD28C: "load_decoder_continuation_d28c",    # past the $D289 infinite loop
-    0xD30F: "load_decoder_pat_base_walk",        # walk $1A00/$1A80 → ($FD/$FE)
-
+    0xB21A: "seqED_auto_advance_via_b2c3",  # variant of $B20D, writer=$B2C3
+    0xB3C8: "writer_seqED_speed_or_value",  # CBM/CTRL writer-arm dispatch
+    0xB5A1: "writer_seqED_pat_base_resolve",  # pat_base resolver
+    0xB5B0: "writer_seqED_kbd_xy_preload",  # kbd_modifiers → X/Y stride preload
+    0xB5C0: "writer_seqED_jmp_to_paint",  # 1-byte JMP $B5EB trampoline
+    0xB5C3: "writer_seqED_pattern_to_screen",  # copy ($02),Y pattern row to screen
+    0xB5EB: "writer_seqED_screen_to_pattern",  # inverse: copy ($02),Y → ($FD),Y
+    0xB607: "writer_seqED_pattern_copy_v3",  # adjacent variant
+    0xB623: "writer_seqED_jmp_screen_to_pat",  # 3-byte JMP $B5EB trampoline
+    0xB626: "writer_seqED_flag_byte_merge",  # merge flag-byte high/low nibbles
+    0xB660: "writer_seqED_pat_base_high",  # alt pat_base resolver
+    0xC2D8: "sidTAB_C2D8_dispatch_body",  # $C2D7 is the self-mod operand byte
+    0xCC9D: "sid2_pitch_pw_clamp_commit",  # SID#2 PS sweep clamp + commit
+    0xCE16: "sid2_sidtab_ctrl_accumulator",  # SID#2 sidtab CTRL accumulator
+    0xCEFE: "sid2_jp_marker_walker",  # SID#2 JP-marker mirror walker
+    0xD02C: "load_decoder_setup_chain",  # JSR D0CC/D1E4/D3DF/D51E/D365
+    0xD28C: "load_decoder_continuation_d28c",  # past the $D289 infinite loop
+    0xD30F: "load_decoder_pat_base_walk",  # walk $1A00/$1A80 → ($FD/$FE)
     # ── Super-cmd parser ($8641 state machine, pinned 2026-05-16 sub-F RE).
     # Prefix phase: CTRL+letter sets $71C0 (super_cmd_flags) to a bitmask.
     # Digit phase: $868B reads $71C0 and dispatches to lo/hi-nibble arms.
     # Names use SCREEN-CODE letter (the actual decoded key per $0F90 LUT),
     # not the wiki's user-facing letter (which is shifted by one in some
     # places). See annotations.toml [function.$8641] for the full table.
-    0x8604: "hex_digit_validate",                # decoded-key → 0..F nibble
-    0x861D: "super_flag_or",                     # ORA $71C1 (super-cmd extra mask)
-    0x8624: "super_arg_buffer_init",             # paint typed-arg prompt
-    0x85D5: "super_init_full",                   # full super-cmd state reset
-    0x85F8: "super_set_active",                  # mark super-cmd mode active
-    0x85FE: "super_enter_status",                # 'enter super mode' init
-    0x8641: "super_cmd_dispatch",                # parser entry (called from main_loop)
-    0x86BE: "super_cmd_s_lo_nibble",             # $71C0==$01: S 1st digit
-    0x86DB: "super_cmd_s_hi_nibble",             # $71C0==$02: S 2nd digit
-    0x86F5: "super_cmd_terminate",               # shared exit (lo committed/abort)
-    0x86FB: "super_cmd_w_lo_nibble",             # $71C0==$04: W 1st digit
-    0x8717: "super_cmd_r_lo_nibble",             # $71C0==$10: R 1st digit
-    0x8734: "super_cmd_wr_hi_nibble",            # $71C0==$20: shared W/R 2nd digit
-    0x8751: "super_cmd_q_lo_nibble",             # $71C0==$40: Q 1st digit
-    0x876E: "super_cmd_q_hi_nibble",             # $71C0==$80: Q 2nd digit
-    0x878B: "super_cmd_z_arm",                   # $71C0==$08: Z (single-digit)
-
+    0x8604: "hex_digit_validate",  # decoded-key → 0..F nibble
+    0x861D: "super_flag_or",  # ORA $71C1 (super-cmd extra mask)
+    0x8624: "super_arg_buffer_init",  # paint typed-arg prompt
+    0x85D5: "super_init_full",  # full super-cmd state reset
+    0x85F8: "super_set_active",  # mark super-cmd mode active
+    0x85FE: "super_enter_status",  # 'enter super mode' init
+    0x8641: "super_cmd_dispatch",  # parser entry (called from main_loop)
+    0x86BE: "super_cmd_s_lo_nibble",  # $71C0==$01: S 1st digit
+    0x86DB: "super_cmd_s_hi_nibble",  # $71C0==$02: S 2nd digit
+    0x86F5: "super_cmd_terminate",  # shared exit (lo committed/abort)
+    0x86FB: "super_cmd_w_lo_nibble",  # $71C0==$04: W 1st digit
+    0x8717: "super_cmd_r_lo_nibble",  # $71C0==$10: R 1st digit
+    0x8734: "super_cmd_wr_hi_nibble",  # $71C0==$20: shared W/R 2nd digit
+    0x8751: "super_cmd_q_lo_nibble",  # $71C0==$40: Q 1st digit
+    0x876E: "super_cmd_q_hi_nibble",  # $71C0==$80: Q 2nd digit
+    0x878B: "super_cmd_z_arm",  # $71C0==$08: Z (single-digit)
     # ── $82xx CBM+F-key dispatch arms (pinned 2026-05-16 sub-F deep-RE).
     # Reached from $80C4 global_pre_dispatch → $8234 modifier cascade.
     # CMP arms below all JMP to per-action handlers in $0Dxx.
-    0x8282: "cbm_only_modifier_arm",             # CPX #$20 entry
-    0x82A9: "cbm_shift_modifier_arm",            # CPX #$30 entry
-    0x82D0: "ctrl_only_modifier_arm",            # CPX #$04 entry
-    0x828C: "speedadj_cbm_f1_bumpup",            # JMP $0D3C with A=$01
-    0x8295: "speedadj_cbm_f3_bumpup_inv",        # JMP $0D3C with A=$80
-    0x829C: "speedadj_cbm_f5_subframe_up",       # JMP $0DD6
-    0x82A3: "speedadj_cbm_f7_shiftleft",         # JMP $0D5F
-    0x82B3: "speedadj_cbmshift_f1_bumpdown",     # JMP $0D4B with A=$01
-    0x82BC: "speedadj_cbmshift_f3_bumpdown_inv", # JMP $0D4B with A=$80
+    0x8282: "cbm_only_modifier_arm",  # CPX #$20 entry
+    0x82A9: "cbm_shift_modifier_arm",  # CPX #$30 entry
+    0x82D0: "ctrl_only_modifier_arm",  # CPX #$04 entry
+    0x828C: "speedadj_cbm_f1_bumpup",  # JMP $0D3C with A=$01
+    0x8295: "speedadj_cbm_f3_bumpup_inv",  # JMP $0D3C with A=$80
+    0x829C: "speedadj_cbm_f5_subframe_up",  # JMP $0DD6
+    0x82A3: "speedadj_cbm_f7_shiftleft",  # JMP $0D5F
+    0x82B3: "speedadj_cbmshift_f1_bumpdown",  # JMP $0D4B with A=$01
+    0x82BC: "speedadj_cbmshift_f3_bumpdown_inv",  # JMP $0D4B with A=$80
     0x82C3: "speedadj_cbmshift_f5_subframe_dn",  # JMP $0DE3
-    0x82CA: "speedadj_cbmshift_f7_shiftright",   # JMP $0D69
-
+    0x82CA: "speedadj_cbmshift_f7_shiftright",  # JMP $0D69
     # ── Speed-adjust sub-arms ($0Dxx). All share the $0DAC write-back tail
     # (Timer-A → CIA1 $DD04/$DD05). Dispatched by the $82xx parser arms above.
-    0x0D3C: "speedadj_bump_up",                  # ADC Timer-A
-    0x0D4B: "speedadj_bump_down",                # SBC Timer-A
-    0x0D5F: "speedadj_shift_left",               # ROL Timer-A (×2)
-    0x0D69: "speedadj_shift_right",              # LSR Timer-A (÷2 with $0800 floor)
-    0x0D79: "speedadj_preset_loader",            # LSHIFT+F1/F3/F5/F7 presets
-    0x0DAC: "speedadj_writeback_tail",           # Timer-A → DD04/DD05 + status repaint
-    0x0DD6: "speedadj_subframe_up",              # CBM+F5: $715C += 1 (clamp 8)
-    0x0DE3: "speedadj_subframe_down",            # CBM+SHIFT+F5: $715C -= 1 (clamp 1)
-    0x0DED: "speedadj_status_repaint",           # shared tail of $0DD6/$0DE3
-
+    0x0D3C: "speedadj_bump_up",  # ADC Timer-A
+    0x0D4B: "speedadj_bump_down",  # SBC Timer-A
+    0x0D5F: "speedadj_shift_left",  # ROL Timer-A (×2)
+    0x0D69: "speedadj_shift_right",  # LSR Timer-A (÷2 with $0800 floor)
+    0x0D79: "speedadj_preset_loader",  # LSHIFT+F1/F3/F5/F7 presets
+    0x0DAC: "speedadj_writeback_tail",  # Timer-A → DD04/DD05 + status repaint
+    0x0DD6: "speedadj_subframe_up",  # CBM+F5: $715C += 1 (clamp 8)
+    0x0DE3: "speedadj_subframe_down",  # CBM+SHIFT+F5: $715C -= 1 (clamp 1)
+    0x0DED: "speedadj_status_repaint",  # shared tail of $0DD6/$0DE3
     # ── IEC encoder/save band ($7F0x, pinned 2026-05-16 Step B RE).
     # Custom bit-bang IEC primitives — NOT KERNAL.
-    0x7F02: "iec_tx_byte",                       # send 1 byte with ATN handshake
-    0x7F4E: "iec_clk_pulse",                     # pulse CLK line (sync from player)
-    0x7F6F: "vic_display_on",                    # $D011 bit 4 SET (24-row display)
-    0x7F78: "vic_display_off",                   # $D011 bit 4 CLEAR (blank)
-    0x7F81: "iec_bus_quiesce",                   # 256-iter bit-bang IEC reset
-
+    0x7F02: "iec_tx_byte",  # send 1 byte with ATN handshake
+    0x7F4E: "iec_clk_pulse",  # pulse CLK line (sync from player)
+    0x7F6F: "vic_display_on",  # $D011 bit 4 SET (24-row display)
+    0x7F78: "vic_display_off",  # $D011 bit 4 CLEAR (blank)
+    0x7F81: "iec_bus_quiesce",  # 256-iter bit-bang IEC reset
     # ── Status-line print family ($83xx). Used by super-cmd arms +
     # disk-menu paint + Timer-A status display.
-    0x838C: "statusline_clear",                  # clear status line buffer
-    0x83B6: "statusline_print_char",             # A = char to print
-    0x83D5: "statusline_print_hex_byte",         # X = byte → two hex digits
-    0x83E2: "statusline_print_zstring",          # X/Y = pointer to zstring
-    0x83F9: "statusline_scroll_left",            # scroll status line left
-
+    0x838C: "statusline_clear",  # clear status line buffer
+    0x83B6: "statusline_print_char",  # A = char to print
+    0x83D5: "statusline_print_hex_byte",  # X = byte → two hex digits
+    0x83E2: "statusline_print_zstring",  # X/Y = pointer to zstring
+    0x83F9: "statusline_scroll_left",  # scroll status line left
     # ── Kbd-scan code-start label (LUT — non-executable, but the
     # bytes at $0F90 onward aren't BRK opcodes so safe to seed).
-    0x0F90: "kbd_scancode_lut",                  # 64-byte scancode→screen-code
+    0x0F90: "kbd_scancode_lut",  # 64-byte scancode→screen-code
 }
 
 # Equate-only labels — emitted as `name = $XXXX` equates but NOT added
@@ -1152,125 +1186,169 @@ SEED_LANDMARKS = {
 HW_LABELS = {
     # ── VIC-II ($D000-$D02E) ────────────────────────────────────────────
     # Sprite X/Y pairs $D000-$D00F (8 sprites, 2 bytes each).
-    0xD000: "VIC_SP0_X",  0xD001: "VIC_SP0_Y",
-    0xD002: "VIC_SP1_X",  0xD003: "VIC_SP1_Y",
-    0xD004: "VIC_SP2_X",  0xD005: "VIC_SP2_Y",
-    0xD006: "VIC_SP3_X",  0xD007: "VIC_SP3_Y",
-    0xD008: "VIC_SP4_X",  0xD009: "VIC_SP4_Y",
-    0xD00A: "VIC_SP5_X",  0xD00B: "VIC_SP5_Y",
-    0xD00C: "VIC_SP6_X",  0xD00D: "VIC_SP6_Y",
-    0xD00E: "VIC_SP7_X",  0xD00F: "VIC_SP7_Y",
-    0xD010: "VIC_SPRITES_X_MSB",       # sprite-X bit 8 (bitmask, 1/sprite)
-    0xD011: "VIC_CR1",                 # control reg 1 (RST8/ECM/BMM/DEN/RSEL/YSCROLL)
-    0xD012: "VIC_RASTER",              # raster line lo (R/W: r=current, w=compare)
-    0xD013: "VIC_LP_X",                # light-pen X
-    0xD014: "VIC_LP_Y",                # light-pen Y
+    0xD000: "VIC_SP0_X",
+    0xD001: "VIC_SP0_Y",
+    0xD002: "VIC_SP1_X",
+    0xD003: "VIC_SP1_Y",
+    0xD004: "VIC_SP2_X",
+    0xD005: "VIC_SP2_Y",
+    0xD006: "VIC_SP3_X",
+    0xD007: "VIC_SP3_Y",
+    0xD008: "VIC_SP4_X",
+    0xD009: "VIC_SP4_Y",
+    0xD00A: "VIC_SP5_X",
+    0xD00B: "VIC_SP5_Y",
+    0xD00C: "VIC_SP6_X",
+    0xD00D: "VIC_SP6_Y",
+    0xD00E: "VIC_SP7_X",
+    0xD00F: "VIC_SP7_Y",
+    0xD010: "VIC_SPRITES_X_MSB",  # sprite-X bit 8 (bitmask, 1/sprite)
+    0xD011: "VIC_CR1",  # control reg 1 (RST8/ECM/BMM/DEN/RSEL/YSCROLL)
+    0xD012: "VIC_RASTER",  # raster line lo (R/W: r=current, w=compare)
+    0xD013: "VIC_LP_X",  # light-pen X
+    0xD014: "VIC_LP_Y",  # light-pen Y
     0xD015: "VIC_SPRITE_ENABLE",
-    0xD016: "VIC_CR2",                 # control reg 2 (RES/MCM/CSEL/XSCROLL)
+    0xD016: "VIC_CR2",  # control reg 2 (RES/MCM/CSEL/XSCROLL)
     0xD017: "VIC_SPRITE_Y_EXPAND",
-    0xD018: "VIC_MEM_PTR",             # video matrix + char-base pointers
-    0xD019: "VIC_IRQ_STATUS",          # latched IRQ source bits
-    0xD01A: "VIC_IRQ_MASK",            # IRQ enable
-    0xD01B: "VIC_SPRITE_BG_PRIO",      # sprite-to-bg priority
-    0xD01C: "VIC_SPRITE_MC",           # sprite multicolor enable
+    0xD018: "VIC_MEM_PTR",  # video matrix + char-base pointers
+    0xD019: "VIC_IRQ_STATUS",  # latched IRQ source bits
+    0xD01A: "VIC_IRQ_MASK",  # IRQ enable
+    0xD01B: "VIC_SPRITE_BG_PRIO",  # sprite-to-bg priority
+    0xD01C: "VIC_SPRITE_MC",  # sprite multicolor enable
     0xD01D: "VIC_SPRITE_X_EXPAND",
-    0xD01E: "VIC_SPRITE_SS_COLL",      # sprite-sprite collision (read-clears)
-    0xD01F: "VIC_SPRITE_SB_COLL",      # sprite-background collision
+    0xD01E: "VIC_SPRITE_SS_COLL",  # sprite-sprite collision (read-clears)
+    0xD01F: "VIC_SPRITE_SB_COLL",  # sprite-background collision
     0xD020: "VIC_BORDER",
-    0xD021: "VIC_BG0",                 # bg color 0
+    0xD021: "VIC_BG0",  # bg color 0
     0xD022: "VIC_BG1",
     0xD023: "VIC_BG2",
     0xD024: "VIC_BG3",
-    0xD025: "VIC_SPRITE_MC0",          # shared sprite multicolor 0
+    0xD025: "VIC_SPRITE_MC0",  # shared sprite multicolor 0
     0xD026: "VIC_SPRITE_MC1",
-    0xD027: "VIC_SP0_COL",  0xD028: "VIC_SP1_COL",
-    0xD029: "VIC_SP2_COL",  0xD02A: "VIC_SP3_COL",
-    0xD02B: "VIC_SP4_COL",  0xD02C: "VIC_SP5_COL",
-    0xD02D: "VIC_SP6_COL",  0xD02E: "VIC_SP7_COL",
-
+    0xD027: "VIC_SP0_COL",
+    0xD028: "VIC_SP1_COL",
+    0xD029: "VIC_SP2_COL",
+    0xD02A: "VIC_SP3_COL",
+    0xD02B: "VIC_SP4_COL",
+    0xD02C: "VIC_SP5_COL",
+    0xD02D: "VIC_SP6_COL",
+    0xD02E: "VIC_SP7_COL",
     # ── SID#1 ($D400-$D41C) ─────────────────────────────────────────────
-    0xD400: "SID_V1_FREQ_LO", 0xD401: "SID_V1_FREQ_HI",
-    0xD402: "SID_V1_PW_LO",   0xD403: "SID_V1_PW_HI",
-    0xD404: "SID_V1_CTRL",    0xD405: "SID_V1_AD",  0xD406: "SID_V1_SR",
-    0xD407: "SID_V2_FREQ_LO", 0xD408: "SID_V2_FREQ_HI",
-    0xD409: "SID_V2_PW_LO",   0xD40A: "SID_V2_PW_HI",
-    0xD40B: "SID_V2_CTRL",    0xD40C: "SID_V2_AD",  0xD40D: "SID_V2_SR",
-    0xD40E: "SID_V3_FREQ_LO", 0xD40F: "SID_V3_FREQ_HI",
-    0xD410: "SID_V3_PW_LO",   0xD411: "SID_V3_PW_HI",
-    0xD412: "SID_V3_CTRL",    0xD413: "SID_V3_AD",  0xD414: "SID_V3_SR",
-    0xD415: "SID_FC_LO",      0xD416: "SID_FC_HI",
-    0xD417: "SID_FILTER_RES",          # resonance hi-nibble + routing lo-nibble
-    0xD418: "SID_VOL_FILTER",          # volume lo-nibble + filter-mode hi-nibble
-    0xD419: "SID_POT_X",  0xD41A: "SID_POT_Y",
-    0xD41B: "SID_OSC3",                # voice-3 oscillator readback
-    0xD41C: "SID_ENV3",                # voice-3 envelope readback
-
+    0xD400: "SID_V1_FREQ_LO",
+    0xD401: "SID_V1_FREQ_HI",
+    0xD402: "SID_V1_PW_LO",
+    0xD403: "SID_V1_PW_HI",
+    0xD404: "SID_V1_CTRL",
+    0xD405: "SID_V1_AD",
+    0xD406: "SID_V1_SR",
+    0xD407: "SID_V2_FREQ_LO",
+    0xD408: "SID_V2_FREQ_HI",
+    0xD409: "SID_V2_PW_LO",
+    0xD40A: "SID_V2_PW_HI",
+    0xD40B: "SID_V2_CTRL",
+    0xD40C: "SID_V2_AD",
+    0xD40D: "SID_V2_SR",
+    0xD40E: "SID_V3_FREQ_LO",
+    0xD40F: "SID_V3_FREQ_HI",
+    0xD410: "SID_V3_PW_LO",
+    0xD411: "SID_V3_PW_HI",
+    0xD412: "SID_V3_CTRL",
+    0xD413: "SID_V3_AD",
+    0xD414: "SID_V3_SR",
+    0xD415: "SID_FC_LO",
+    0xD416: "SID_FC_HI",
+    0xD417: "SID_FILTER_RES",  # resonance hi-nibble + routing lo-nibble
+    0xD418: "SID_VOL_FILTER",  # volume lo-nibble + filter-mode hi-nibble
+    0xD419: "SID_POT_X",
+    0xD41A: "SID_POT_Y",
+    0xD41B: "SID_OSC3",  # voice-3 oscillator readback
+    0xD41C: "SID_ENV3",  # voice-3 envelope readback
     # ── SID#2 ($D500 default mapping; the SMC operand bytes hold $D5
     # by default but get rewritten by `sid2_register_write_body` arms
     # ($C8xx) based on `sid2_base_hi` ($7165). The labels document the
     # register layout — same as SID#1, mirrored 256 bytes up). ────────
-    0xD500: "SID2_V1_FREQ_LO", 0xD501: "SID2_V1_FREQ_HI",
-    0xD502: "SID2_V1_PW_LO",   0xD503: "SID2_V1_PW_HI",
-    0xD504: "SID2_V1_CTRL",    0xD505: "SID2_V1_AD",  0xD506: "SID2_V1_SR",
-    0xD507: "SID2_V2_FREQ_LO", 0xD508: "SID2_V2_FREQ_HI",
-    0xD509: "SID2_V2_PW_LO",   0xD50A: "SID2_V2_PW_HI",
-    0xD50B: "SID2_V2_CTRL",    0xD50C: "SID2_V2_AD",  0xD50D: "SID2_V2_SR",
-    0xD50E: "SID2_V3_FREQ_LO", 0xD50F: "SID2_V3_FREQ_HI",
-    0xD510: "SID2_V3_PW_LO",   0xD511: "SID2_V3_PW_HI",
-    0xD512: "SID2_V3_CTRL",    0xD513: "SID2_V3_AD",  0xD514: "SID2_V3_SR",
-    0xD515: "SID2_FC_LO",      0xD516: "SID2_FC_HI",
+    0xD500: "SID2_V1_FREQ_LO",
+    0xD501: "SID2_V1_FREQ_HI",
+    0xD502: "SID2_V1_PW_LO",
+    0xD503: "SID2_V1_PW_HI",
+    0xD504: "SID2_V1_CTRL",
+    0xD505: "SID2_V1_AD",
+    0xD506: "SID2_V1_SR",
+    0xD507: "SID2_V2_FREQ_LO",
+    0xD508: "SID2_V2_FREQ_HI",
+    0xD509: "SID2_V2_PW_LO",
+    0xD50A: "SID2_V2_PW_HI",
+    0xD50B: "SID2_V2_CTRL",
+    0xD50C: "SID2_V2_AD",
+    0xD50D: "SID2_V2_SR",
+    0xD50E: "SID2_V3_FREQ_LO",
+    0xD50F: "SID2_V3_FREQ_HI",
+    0xD510: "SID2_V3_PW_LO",
+    0xD511: "SID2_V3_PW_HI",
+    0xD512: "SID2_V3_CTRL",
+    0xD513: "SID2_V3_AD",
+    0xD514: "SID2_V3_SR",
+    0xD515: "SID2_FC_LO",
+    0xD516: "SID2_FC_HI",
     0xD517: "SID2_FILTER_RES",
     0xD518: "SID2_VOL_FILTER",
-
     # ── CIA#1 ($DC00-$DC0F) — keyboard, joystick port 1, timers ────────
-    0xDC00: "CIA1_PRA",                # port A (keyboard cols out / joy2)
-    0xDC01: "CIA1_PRB",                # port B (keyboard rows in / joy1)
+    0xDC00: "CIA1_PRA",  # port A (keyboard cols out / joy2)
+    0xDC01: "CIA1_PRB",  # port B (keyboard rows in / joy1)
     0xDC02: "CIA1_DDRA",
     0xDC03: "CIA1_DDRB",
-    0xDC04: "CIA1_TA_LO", 0xDC05: "CIA1_TA_HI",
-    0xDC06: "CIA1_TB_LO", 0xDC07: "CIA1_TB_HI",
-    0xDC08: "CIA1_TOD_TS",             # tenths-of-second BCD
-    0xDC09: "CIA1_TOD_SEC", 0xDC0A: "CIA1_TOD_MIN", 0xDC0B: "CIA1_TOD_HR",
-    0xDC0C: "CIA1_SDR",                # serial data
-    0xDC0D: "CIA1_ICR",                # IRQ control (latched on read)
-    0xDC0E: "CIA1_CRA",  0xDC0F: "CIA1_CRB",
-
+    0xDC04: "CIA1_TA_LO",
+    0xDC05: "CIA1_TA_HI",
+    0xDC06: "CIA1_TB_LO",
+    0xDC07: "CIA1_TB_HI",
+    0xDC08: "CIA1_TOD_TS",  # tenths-of-second BCD
+    0xDC09: "CIA1_TOD_SEC",
+    0xDC0A: "CIA1_TOD_MIN",
+    0xDC0B: "CIA1_TOD_HR",
+    0xDC0C: "CIA1_SDR",  # serial data
+    0xDC0D: "CIA1_ICR",  # IRQ control (latched on read)
+    0xDC0E: "CIA1_CRA",
+    0xDC0F: "CIA1_CRB",
     # ── CIA#2 ($DD00-$DD0F) — VIC bank, serial bus, NMI timer ──────────
-    0xDD00: "CIA2_PRA",                # port A: VIC bank (bits 0-1) + serial
+    0xDD00: "CIA2_PRA",  # port A: VIC bank (bits 0-1) + serial
     0xDD01: "CIA2_PRB",
     0xDD02: "CIA2_DDRA",
     0xDD03: "CIA2_DDRB",
-    0xDD04: "CIA2_TA_LO", 0xDD05: "CIA2_TA_HI",  # defMON NMI rate timer
-    0xDD06: "CIA2_TB_LO", 0xDD07: "CIA2_TB_HI",
+    0xDD04: "CIA2_TA_LO",
+    0xDD05: "CIA2_TA_HI",  # defMON NMI rate timer
+    0xDD06: "CIA2_TB_LO",
+    0xDD07: "CIA2_TB_HI",
     0xDD08: "CIA2_TOD_TS",
-    0xDD09: "CIA2_TOD_SEC", 0xDD0A: "CIA2_TOD_MIN", 0xDD0B: "CIA2_TOD_HR",
+    0xDD09: "CIA2_TOD_SEC",
+    0xDD0A: "CIA2_TOD_MIN",
+    0xDD0B: "CIA2_TOD_HR",
     0xDD0C: "CIA2_SDR",
-    0xDD0D: "CIA2_ICR",                # NMI control (latched on read)
-    0xDD0E: "CIA2_CRA",  0xDD0F: "CIA2_CRB",
-
+    0xDD0D: "CIA2_ICR",  # NMI control (latched on read)
+    0xDD0E: "CIA2_CRA",
+    0xDD0F: "CIA2_CRB",
     # ── KERNAL jumptable ($FF81-$FFF3) ─────────────────────────────────
     # Each entry is JMP to the actual KERNAL routine. Stable across all
     # C64 KERNAL revisions.
-    0xFF81: "KERNAL_CINT",             # init editor / VIC / screen
-    0xFF84: "KERNAL_IOINIT",           # init I/O devices
-    0xFF87: "KERNAL_RAMTAS",           # init RAM, allocate tape buffer
-    0xFF8A: "KERNAL_RESTOR",           # restore default I/O vectors
-    0xFF8D: "KERNAL_VECTOR",           # read/set vector table
-    0xFF90: "KERNAL_SETMSG",           # kernal message control
-    0xFF93: "KERNAL_LSTNSA",           # send secondary after listen
-    0xFF96: "KERNAL_TALKSA",           # send secondary after talk
-    0xFF99: "KERNAL_MEMTOP",           # read/set top of memory
-    0xFF9C: "KERNAL_MEMBOT",           # read/set bottom
-    0xFF9F: "KERNAL_SCNKEY",           # scan keyboard
-    0xFFA2: "KERNAL_SETTMO",           # IEEE timeout
-    0xFFA5: "KERNAL_IECIN",            # serial: input byte (ACPTR)
-    0xFFA8: "KERNAL_IECOUT",           # serial: output byte (CIOUT)
+    0xFF81: "KERNAL_CINT",  # init editor / VIC / screen
+    0xFF84: "KERNAL_IOINIT",  # init I/O devices
+    0xFF87: "KERNAL_RAMTAS",  # init RAM, allocate tape buffer
+    0xFF8A: "KERNAL_RESTOR",  # restore default I/O vectors
+    0xFF8D: "KERNAL_VECTOR",  # read/set vector table
+    0xFF90: "KERNAL_SETMSG",  # kernal message control
+    0xFF93: "KERNAL_LSTNSA",  # send secondary after listen
+    0xFF96: "KERNAL_TALKSA",  # send secondary after talk
+    0xFF99: "KERNAL_MEMTOP",  # read/set top of memory
+    0xFF9C: "KERNAL_MEMBOT",  # read/set bottom
+    0xFF9F: "KERNAL_SCNKEY",  # scan keyboard
+    0xFFA2: "KERNAL_SETTMO",  # IEEE timeout
+    0xFFA5: "KERNAL_IECIN",  # serial: input byte (ACPTR)
+    0xFFA8: "KERNAL_IECOUT",  # serial: output byte (CIOUT)
     0xFFAB: "KERNAL_UNTLK",
     0xFFAE: "KERNAL_UNLSN",
     0xFFB1: "KERNAL_LISTEN",
     0xFFB4: "KERNAL_TALK",
-    0xFFB7: "KERNAL_READST",           # read I/O status word
-    0xFFBA: "KERNAL_SETLFS",           # set logical file / device / sa
+    0xFFB7: "KERNAL_READST",  # read I/O status word
+    0xFFBA: "KERNAL_SETLFS",  # set logical file / device / sa
     0xFFBD: "KERNAL_SETNAM",
     0xFFC0: "KERNAL_OPEN",
     0xFFC3: "KERNAL_CLOSE",
@@ -1283,44 +1361,42 @@ HW_LABELS = {
     0xFFD8: "KERNAL_SAVE",
     0xFFDB: "KERNAL_SETTIM",
     0xFFDE: "KERNAL_RDTIM",
-    0xFFE1: "KERNAL_STOP",             # test STOP key
+    0xFFE1: "KERNAL_STOP",  # test STOP key
     0xFFE4: "KERNAL_GETIN",
     0xFFE7: "KERNAL_CLALL",
-    0xFFEA: "KERNAL_UDTIM",            # update jiffy clock
+    0xFFEA: "KERNAL_UDTIM",  # update jiffy clock
     0xFFED: "KERNAL_SCREEN",
     0xFFF0: "KERNAL_PLOT",
     0xFFF3: "KERNAL_IOBASE",
-
     # ── Hardware vector table ($FFFA-$FFFF) ────────────────────────────
-    0xFFFA: "VEC_NMI_LO",   0xFFFB: "VEC_NMI_HI",
-    0xFFFC: "VEC_RESET_LO", 0xFFFD: "VEC_RESET_HI",
-    0xFFFE: "VEC_IRQ_LO",   0xFFFF: "VEC_IRQ_HI",
-
+    0xFFFA: "VEC_NMI_LO",
+    0xFFFB: "VEC_NMI_HI",
+    0xFFFC: "VEC_RESET_LO",
+    0xFFFD: "VEC_RESET_HI",
+    0xFFFE: "VEC_IRQ_LO",
+    0xFFFF: "VEC_IRQ_HI",
     # ── Indirect vectors in low RAM ($0314-$0333) ──────────────────────
     # Patched by KERNAL init + by defMON ($0A3F quiesce). The IRQ/NMI
     # vectors are the most commonly retargeted.
-    0x0314: "VEC_CINV_LO",  0x0315: "VEC_CINV_HI",   # IRQ vector
-    0x0316: "VEC_CBINV_LO", 0x0317: "VEC_CBINV_HI",  # BRK vector
-    0x0318: "VEC_NMINV_LO", 0x0319: "VEC_NMINV_HI",  # NMI vector
-
+    0x0314: "VEC_CINV_LO",
+    0x0315: "VEC_CINV_HI",  # IRQ vector
+    0x0316: "VEC_CBINV_LO",
+    0x0317: "VEC_CBINV_HI",  # BRK vector
+    0x0318: "VEC_NMINV_LO",
+    0x0319: "VEC_NMINV_HI",  # NMI vector
     # ── Color RAM ($D800-$DBFF, 1000 visible + 24 pad bytes) ───────────
     0xD800: "COLOR_RAM",
-
     # ── 6510 CPU on-chip I/O port ──────────────────────────────────────
-    0x0000: "CPU_DDR",                 # data-direction register
-    0x0001: "CPU_PORT",                # bank-select + tape control
-
+    0x0000: "CPU_DDR",  # data-direction register
+    0x0001: "CPU_PORT",  # bank-select + tape control
     # ── KERNAL ZP — LOAD end pointer (top-of-program after LOAD) ────────
     0x00AE: "KERNAL_LOAD_END_LO",
     0x00AF: "KERNAL_LOAD_END_HI",
-
     # ── KERNAL keyboard buffer (10-byte FIFO at $0277-$0280); $04F0 is
     # an adjacent scratch area defMON reuses during save (non-interactive).
     0x04F0: "KERNAL_KEYBUF_SCRATCH",
-
     # ── KERNAL ZP — cursor text colour (foreground colour for next CHROUT).
     0x0286: "TEXT_COLOR",
-
     # ── Screen RAM page boundaries (defMON uses 4-page layout for the
     # 25×40 grid: $0400+$0500+$0600+$0700, 1024 bytes total). The
     # SCREEN_RAM anchor at $0400 is also an HW_ANCHOR_REGION so the
@@ -1350,65 +1426,55 @@ HW_LABELS = {
 # overlay at $D800+ never matches a static-image annotation, and
 # screen RAM at $0400-$07FF sits below the annotated $0800-$E786 image.
 HW_ANCHOR_REGIONS: list[tuple[int, int, str]] = [
-    (0x0400, 0x0800, "SCREEN_RAM"),    # default 25x40 video matrix (4 pages)
-    (0xD800, 0xDC00, "COLOR_RAM"),     # 1000 visible cells + 24-byte pad
+    (0x0400, 0x0800, "SCREEN_RAM"),  # default 25x40 video matrix (4 pages)
+    (0xD800, 0xDC00, "COLOR_RAM"),  # 1000 visible cells + 24-byte pad
 ]
 
 
 EQUATE_LABELS = {
     # Kbd-scan state vars ($0E43-$0E46). $00/$02 byte values would
     # otherwise be classified as BRK code-starts.
-    0x0E43: "kbd_modifiers_prev",                # prev-frame modifier mask
-    0x0E45: "kbd_decoded_key_prev",              # prev-frame decoded key
-    0x0E46: "kbd_debounce_counter",              # decremented per frame
-
+    0x0E43: "kbd_modifiers_prev",  # prev-frame modifier mask
+    0x0E45: "kbd_decoded_key_prev",  # prev-frame decoded key
+    0x0E46: "kbd_debounce_counter",  # decremented per frame
     # Super-cmd slot vars ($71Cx) — typed-arg accumulators per prefix.
     # Each lo-nibble arm writes its slot; the hi-nibble arm ASL-shifts
     # the prior digit into the high nibble then ORs with the new digit.
-    0x71C2: "super_arg_slot_r",                  # R lo: $8717 STA $71C2
-    0x71C3: "super_arg_slot_q",                  # Q lo: $8751 STA $71C3 + Q hi shifts
-    0x71C4: "super_arg_slot_swr_hi",             # shared S/W/R hi target (shifted)
-    0x71C5: "super_arg_slot_w",                  # W lo: $86FB STA $71C5
-    0x71C6: "super_arg_slot_z",                  # Z (single-digit): $878B STA $71C6
-    0x7166: "super_cmd_staged",                  # currently-staged super-cmd opcode
-
+    0x71C2: "super_arg_slot_r",  # R lo: $8717 STA $71C2
+    0x71C3: "super_arg_slot_q",  # Q lo: $8751 STA $71C3 + Q hi shifts
+    0x71C4: "super_arg_slot_swr_hi",  # shared S/W/R hi target (shifted)
+    0x71C5: "super_arg_slot_w",  # W lo: $86FB STA $71C5
+    0x71C6: "super_arg_slot_z",  # Z (single-digit): $878B STA $71C6
+    0x7166: "super_cmd_staged",  # currently-staged super-cmd opcode
     # Save-UI state byte (referenced by $7423 prologue + $7448 cleanup).
     0x9EC5: "save_ui_saved_state",
-
     # ── Player runtime state — per-voice records ($1019/$104A/$107B).
     # These slots are also the immediate-operand bytes of instructions in
     # player_play_body, hence not code-starts. Indexed by X = $00 / $31 /
     # $62 (V0 / V1 / V2 stride).
-    0x1019: "voice_record_v0",            # V0 working-record base
-    0x101B: "slide_mode_v0",               # neg=down, pos=up, 0=hold
-    0x101E: "ps_depth_v0",                 # pulse-sweep / vibrato depth
-    0x101F: "pitch_base_v0",               # per-voice pitch detune
-    0x1023: "pw_lo_patch_v0",              # PW LO immediate of `ldx #$XX`
-    0x1025: "pw_hi_patch_v0",              # PW HI immediate of `lda #$XX`
+    0x1019: "voice_record_v0",  # V0 working-record base
+    0x101B: "slide_mode_v0",  # neg=down, pos=up, 0=hold
+    0x101E: "ps_depth_v0",  # pulse-sweep / vibrato depth
+    0x101F: "pitch_base_v0",  # per-voice pitch detune
+    0x1023: "pw_lo_patch_v0",  # PW LO immediate of `ldx #$XX`
+    0x1025: "pw_hi_patch_v0",  # PW HI immediate of `lda #$XX`
     0x104A: "voice_record_v1",
     0x107B: "voice_record_v2",
-
     # ── Row timers (immediate operand of `ldy #$XX` self-mod cell).
     0x114A: "v0_row_timer",
     0x11D2: "v1_row_timer",
     0x125A: "v2_row_timer",
-
     # ── Sub-frame sentinel opcode at the row-advance gate.
     0x10D8: "subframe_sentinel_opcode",
-
     # ── Filter-cutoff slide accumulator + threshold (16-bit).
-    0x10B6: "filter_cutoff_acc_lo",        # paired with $10BE acc-hi (already labeled)
-
+    0x10B6: "filter_cutoff_acc_lo",  # paired with $10BE acc-hi (already labeled)
     # ── Playback gate flag.
-    0x0AF7: "playback_state",              # 0 = paused, !=0 = playing
-
+    0x0AF7: "playback_state",  # 0 = paused, !=0 = playing
     # ── Sub-frame phase counter (player ratchet).
     0x7172: "sub_frame_phase",
-
     # ── Super-command arg state.
-    0x71C7: "super_arg_count",             # how many hex digits left to consume
-    0x71C8: "super_arg",                   # resolved super-cmd argument
-
+    0x71C7: "super_arg_count",  # how many hex digits left to consume
+    0x71C8: "super_arg",  # resolved super-cmd argument
     # ── Sidcall step counters + row-index slots (V0/V1/V2 × sc1/sc2).
     0x12E0: "v0_sc1_counter",
     0x1311: "v1_sc1_counter",
@@ -1422,169 +1488,137 @@ EQUATE_LABELS = {
     0x1382: "v0_sc2_row_idx",
     0x13B3: "v1_sc2_row_idx",
     0x13E4: "v2_sc2_row_idx",
-
     # ── Groove timer ($1B00 V0-arranger JUMP-COMMAND mechanism).
-    0x14EB: "groove_song_position",        # Y at time of jump
-    0x14ED: "groove_repeat_counter",       # V2's per-row count
-
+    0x14EB: "groove_song_position",  # Y at time of jump
+    0x14ED: "groove_repeat_counter",  # V2's per-row count
     # ── Per-voice current note (indexed $137F,X).
     0x137F: "current_note_v0",
-
     # ── Hex-digit screen-code LUTs (256-byte each).
-    0x7B00: "hex_digit_lo_lut",            # cycles 30..39 01..06 indexed by lo nibble
-    0x7C00: "hex_digit_hi_lut",            # 16 copies, indexed by hi nibble (X>>4)
-
+    0x7B00: "hex_digit_lo_lut",  # cycles 30..39 01..06 indexed by lo nibble
+    0x7C00: "hex_digit_hi_lut",  # 16 copies, indexed by hi nibble (X>>4)
     # ── Pitch-LUT band sub-tables ($1578-$163F).
-    0x14F8: "slide_dec_lut_lo",            # 576-byte backing region
-    0x1578: "pitch_lut_band",              # paired-LUT band start
-    0x1583: "interval_lut_lo_a",           # adjacent-semitone interval lo, table A
-    0x1584: "interval_lut_lo_b",           # adjacent-semitone interval lo, table B
+    0x14F8: "slide_dec_lut_lo",  # 576-byte backing region
+    0x1578: "pitch_lut_band",  # paired-LUT band start
+    0x1583: "interval_lut_lo_a",  # adjacent-semitone interval lo, table A
+    0x1584: "interval_lut_lo_b",  # adjacent-semitone interval lo, table B
     0x1594: "slide_dec_lut_hi",
     0x159C: "note_pitch_lut_lo",
     0x1614: "slide_inc_lut_hi",
     0x161F: "interval_lut_hi_a",
     0x1620: "interval_lut_hi_b",
     0x1638: "note_pitch_lut_hi",
-
     # ── High-frequency unlabeled variable slots (≥4 refs in defmon.s).
     # Editor / runtime state.
-    0x08AB: "editor_busy_wait_counter",    # self-mod immediate at editor_frame_barrier+1
-    0x08DA: "editor_other_delta",          # per-frame delta accumulator, parallel to editor_row_delta/_col_delta
-    0x0912: "editor_aux_counter",          # editor super-cmd page-commit aux counter
-    0x716A: "cursor_redraw_flag",          # set to $04 by cursor_redraw_request to request a paint
-    0x716B: "border_color_state_a",        # written by border_set_a
-    0x716C: "border_color_state_b",        # written by border_set_b
-    0x716E: "ui_state_716e",               # editor-paint state byte
-    0x71BB: "kbd_voice_mute_mirror",       # 2nd kbd voice-mute slot (mirror of $7180?)
-    0x71CF: "super_cmd_state_71cf",        # super-cmd internal state
-
+    0x08AB: "editor_busy_wait_counter",  # self-mod immediate at editor_frame_barrier+1
+    0x08DA: "editor_other_delta",  # per-frame delta accumulator, parallel to editor_row_delta/_col_delta
+    0x0912: "editor_aux_counter",  # editor super-cmd page-commit aux counter
+    0x716A: "cursor_redraw_flag",  # set to $04 by cursor_redraw_request to request a paint
+    0x716B: "border_color_state_a",  # written by border_set_a
+    0x716C: "border_color_state_b",  # written by border_set_b
+    0x716E: "ui_state_716e",  # editor-paint state byte
+    0x71BB: "kbd_voice_mute_mirror",  # 2nd kbd voice-mute slot (mirror of $7180?)
+    0x71CF: "super_cmd_state_71cf",  # super-cmd internal state
     # Save / disk / cursor state.
     0x7296: "seqlist_cursor_aux1",
     0x7298: "seqlist_cursor_aux2",
     0x7299: "seqlist_cursor_aux3",
-    0x797F: "save_name_buf_marker",        # '.' marker check in filename buffer
+    0x797F: "save_name_buf_marker",  # '.' marker check in filename buffer
     0x7978: "save_name_buf_byte0",
     0x7979: "save_name_buf_byte1",
-    0x798F: "save_name_buf_len",           # filename buffer length (non-zero check)
-
+    0x798F: "save_name_buf_len",  # filename buffer length (non-zero check)
     # sidTAB staging buffer slots (referenced by all writer arms).
     0xBDA1: "sidtab_staging_field1",
     0xBDA2: "sidtab_staging_field2",
     0xBDA3: "sidtab_staging_field3",
     0xBDD5: "sidtab_staging_dispatch_smc",
-
     # SID#2 mirror state.
     0xC81A: "sid2_v0_voice_record_slot_a",
     0xC81E: "sid2_v0_voice_record_slot_b",
     0xC8EB: "sid2_frame_state_slot",
     0xCB7F: "sid2_cascade_inner_counter",  # SID#2 mirror of cascade gate counter
-
     # LOAD-decoder / save-encoder state.
-    0xCE7E: "song_end_pointer_hi",         # hi byte paired with song_end_pointer lo
+    0xCE7E: "song_end_pointer_hi",  # hi byte paired with song_end_pointer lo
     0xD11C: "decoder_main_state_d11c",
     0xD309: "pat_num_occupancy_table_d309",
     0xD512: "decoder_state_d512",
-    0xD51D: "decoder_xy_smc_d51d",         # paired with decoder_xy_smc_pair
-    0xD77E: "selfmod_emitter_target_lo",   # operand lo of self_modifying_byte_emitter's STA
+    0xD51D: "decoder_xy_smc_d51d",  # paired with decoder_xy_smc_pair
+    0xD77E: "selfmod_emitter_target_lo",  # operand lo of self_modifying_byte_emitter's STA
     0xD77F: "selfmod_emitter_target_hi",
-
     # Player / V0 row-read state.
     0x120E: "player_state_120e",
     0x1296: "v0_player_state_1296",
-
     # Per-voice slide accumulator commit slots (X-indexed: V0=$00,
     # V1=$31, V2=$62; sta $102D,X / $102F,X by pitch-slide oscillator).
     0x102D: "slide_acc_commit_lo",
     0x102F: "slide_acc_commit_hi",
-
     # Filter-cutoff slide ADC-imm operand slots (patched at runtime by
     # sidtab_row_apply's filter-slide handler).
     0x10B9: "filter_cutoff_slide_step_lo_smc",
     0x10C0: "filter_cutoff_slide_step_hi_smc",
-
     # Save / disk: overwrite state byte.
     0x792B: "save_overwrite_state",
-
     # Super-cmd state cluster ($71B9-$71BD).
     0x71B9: "super_cmd_state_71b9",
     0x71BA: "super_cmd_state_71ba",
     0x71BC: "super_cmd_state_71bc",
     0x71BD: "super_cmd_state_71bd",
-
     # SID#2 stereo-sync byte at $0B18.
     0x0B18: "sid2_stereo_sync_byte",
-
     # Chip-view step body local cursor save slots.
     0xC05F: "chipview_cursor_x_save",
     0xC060: "chipview_cursor_y_save",
-
     # Decoder running byte-count operand bytes (16-bit at $D60D/$D60E).
     0xD60D: "decoder_byte_count_lo_smc",
     0xD60E: "decoder_byte_count_hi_smc",
-
     # Pat-num occupancy table low byte (paired with pat_num_occupancy_table_d309).
     0xD308: "pat_num_occupancy_d308",
-
     # seqED writer state at $B696.
     0xB696: "seqED_writer_state_b696",
-
     # SID#2 voice records — V0 step state + per-voice slots.
-    0xC81B: "sid2_v0_voice_record_slot_c",   # paired with sid2_v0_voice_record_slot_a/_b
-    0xC823: "sid2_v0_step_accumulator",      # cascade step-accumulator slot
+    0xC81B: "sid2_v0_voice_record_slot_c",  # paired with sid2_v0_voice_record_slot_a/_b
+    0xC823: "sid2_v0_step_accumulator",  # cascade step-accumulator slot
     0xC8CE: "sid2_v1_voice_record_slot_a",
     0xC8D9: "sid2_v1_voice_record_slot_b",
     0xC986: "sid2_filter_slot_c986",
     0xCA0E: "sid2_filter_slot_ca0e",
     0xCA96: "sid2_filter_slot_ca96",
     0xCAE0: "sid2_filter_slot_cae0",
-    0xCB73: "sid2_cascade_inner_gate_counter",   # self-mod counter at sid2_cascade_inner_gate
-
+    0xCB73: "sid2_cascade_inner_gate_counter",  # self-mod counter at sid2_cascade_inner_gate
     # SID#2 base alias + ZP-style pat-num table.
     0xD504: "sid2_alias_d504",
     0xD50B: "sid2_alias_d50b",
-
     # Kbd matrix row 1 (in matrix mirror).
     0x0E3A: "kbd_matrix_row1",
-
     # Player V0 state continuations.
     0x120F: "v0_player_state_120f",
     0x1297: "v0_player_state_1297",
-
     # Save filename buffer additional slots.
     0x7977: "save_name_buf_pre",
     0x797A: "save_name_buf_byte2",
     0x797B: "save_name_buf_byte3",
-
     # Super-cmd state additional slots.
     0x71C9: "super_cmd_state_71c9",
     0x71D0: "super_cmd_state_71d0",
-
     # Super-cmd writer self-mod.
     0x858A: "super_cmd_writer_step_byte_smc",
-
     # SID#2 frame state companions.
     0xC8B6: "sid2_frame_state_c8b6",
     0xC8BE: "sid2_frame_state_c8be",
     0xC987: "sid2_filter_slot_c987",
     0xCA0F: "sid2_filter_slot_ca0f",
     0xCA97: "sid2_filter_slot_ca97",
-    0xCAEF: "sid2_cascade_step_counter",   # ($CAEF self-mod counter)
-
+    0xCAEF: "sid2_cascade_step_counter",  # ($CAEF self-mod counter)
     # seqED paint band tail.
     0xAACE: "seqED_paint_end_byte_a",
     0xAACF: "seqED_paint_end_byte_b",
-
     # Color RAM offset in disk-menu paint.
     0xDAF8: "color_ram_disk_menu_offset",
-
     # sidTAB staging buffer additional slot.
     0xBDE4: "sidtab_staging_field4",
-
     # SID#2 cascade slot counters (mirror series for V0/V1/V2 × sc1/sc2).
     0xCB11: "sid2_v0_sc1_counter",
     0xCB42: "sid2_v1_sc1_counter",
     # ($CB73 already labelled as sid2_cascade_inner_gate_counter above)
-
     # SID#2 mirror sidcall step counters (siblings of v0/v1/v2_sc1/sc2_counter
     # at $12E0/$1311/$1342/$1373/$13A4/$13D5 in SID#1).
     0xC8CA: "sid2_cascade_pre_counter",
@@ -1593,15 +1627,12 @@ EQUATE_LABELS = {
     0xCA5A: "sid2_v0_sc2_step_counter",
     0xCAED: "sid2_v2_sc2_step_counter",
     0xCCED: "sid2_player_init_stride_counter",
-
     # Decoder save chain state operand bytes ($D64B / $D65C).
     0xD64B: "decoder_save_state_d64b",
     0xD65C: "decoder_save_state_d65c",
-
     # save_prep state continuation.
     0xCFCC: "save_prep_state_cfcc",
     0xCFD1: "save_prep_state_cfd1",
-
     # Save-chain band 5 byte cluster ($CE7A-$CE80, around song_end_pointer).
     0xCE70: "save_chain_state_ce70",
     0xCE7A: "save_chain_state_ce7a",
@@ -1611,29 +1642,22 @@ EQUATE_LABELS = {
     0xCBA4: "sid2_v0_sc2_counter",
     0xCBD5: "sid2_v1_sc2_counter",
     0xCB82: "sid2_v2_sc2_counter",
-
     # SID#2 V0 voice-record additional slots ($C825/$C82D/$C82F).
     0xC825: "sid2_v0_voice_record_pw_slot",
     0xC82D: "sid2_v0_voice_record_slide_lo",
     0xC82F: "sid2_v0_voice_record_slide_hi",
-
     # Decoder pointer init operand bytes ($D60D/$D60E/$D60F/$D610).
     0xD60F: "decoder_dest_init_lo_smc",
     0xD610: "decoder_dest_init_hi_smc",
-
     # save_prep / decoder save chain state.
     0xCFCB: "save_prep_state_cfcb",
-
     # Pat-num occupancy table continuation slots.
     0xD30A: "pat_num_occupancy_d30a",
     0xD30B: "pat_num_occupancy_d30b",
-
     # song_end_pointer cluster (lo/hi already labelled; mid byte here).
     0xCE7C: "song_end_pointer_pre",
-
     # Cursor state cluster — 728D companion to seqED_cursor_band ($7280-$729F).
     0x728D: "cursor_state_728d",
-
     # ── ZP slots heavily used by editor + decoder ──────────────────────
     # ZP_PTR1: ($02),Y → screen-row address for editor paint code.
     # Set by screen_row_addr_resolver.
@@ -1655,7 +1679,6 @@ EQUATE_LABELS = {
     0x0096: "zp_scratch_96",
     0x009E: "zp_scratch_9e",
     0x009F: "zp_scratch_9f",
-
     # V0 SID-write patch slots ($1037/$1039/$103B/$103D — operand bytes
     # of LDX/LDY/LDA/EOR immediates inside the V0 SID-write band; zeroed
     # by player_init_body, patched per-frame by sidtab_row_apply).
@@ -1663,84 +1686,67 @@ EQUATE_LABELS = {
     0x1039: "v0_sid_patch_b",
     0x103B: "v0_sid_patch_c",
     0x103D: "v0_sid_patch_d",
-
     # SID#2 V0 SID-write patch slots (mirror of v0_sid_patch_a..d).
     0xC837: "sid2_v0_sid_patch_a",
     0xC839: "sid2_v0_sid_patch_b",
     0xC83B: "sid2_v0_sid_patch_c",
     0xC83D: "sid2_v0_sid_patch_d",
-
     # Cursor cluster aux + voice-selector LUT extension.
     0x728A: "cursor_state_728a",
     0x71E4: "voice_selector_lut_modifier_class",  # per-modifier value class lookup
-
     # Arranger byte 1 entries (second byte of arranger arrays).
     0x1B01: "arranger_v0_sid1_byte1",
     0x6E01: "arranger_v3_sid2_byte1",
-
     # SMC opcode slots inside filter-cutoff slide accumulator
     # (`adc #$00` opcode byte at $10B8 / $10BF gets patched per-call to
     # swap between A+= and A-= mode).
     0x10B8: "filter_cutoff_slide_adc_opcode_smc",
     0x10BF: "filter_cutoff_slide_adc_opcode_smc2",
-
     # NMI playback gate self-mod slot (paired with playback_state).
     0x0AFB: "nmi_playback_gate_smc",
-
     # SID#2 master volume register slot.
     0xD518: "sid2_master_volume",
-
     # Save UI: error/state byte after R/W abort.
     0x7723: "save_overwrite_state_byte",
-
     # SID#2 cascade self-mod target ($CB20 = SID#2 mirror of cascade
     # silence-latch counter; written by both STA and STY paths).
     0xCB20: "sid2_cascade_silence_latch_counter",
-
     # SID#2 mirror cascade slots — siblings of sid2_cascade_*_counter.
     0xCB51: "sid2_cascade_v1_silence_counter",
     0xCBB3: "sid2_cascade_v0_sc2_silence_counter",
     0xCBE4: "sid2_cascade_v1_sc2_silence_counter",
     0xCCEC: "sid2_player_init_stride",
-
     # save_prep area state.
     0xCFD0: "save_prep_state_cfd0",
     0xD50E: "sid2_alias_d50e",
     0xD50F: "sid2_alias_d50f",
-
     # secondary disk mode internal slot.
     0xC246: "secondary_disk_state_c246",
-
     # status-line print scratch ($83B7).
     0x83B7: "statusline_print_state_83b7",
-
     # State-page extras ($716F, $7288, $7297, $71BF, $71D4).
     0x716F: "editor_state_716f",
-    0x71BF: "super_cmd_current_step",         # written by super_cmd_write_iter
-    0x71D4: "super_cmd_writer_arm_state",     # written by writer_seqED_speed_or_value
+    0x71BF: "super_cmd_current_step",  # written by super_cmd_write_iter
+    0x71D4: "super_cmd_writer_arm_state",  # written by writer_seqED_speed_or_value
     0x7288: "seqlist_state_7288",
     0x7297: "cursor_state_7297",
-
     # Save-side state ($CE7C-$CE7F cluster, paired with song_end_pointer).
-    0xCE75: "save_chain_counter",          # SAVE/LOAD chain counter (5 refs)
+    0xCE75: "save_chain_counter",  # SAVE/LOAD chain counter (5 refs)
     0xCE78: "save_chain_state_lo",
     0xCE79: "save_chain_state_hi",
-
     # Voice bit-masks at the V0/V1/V2 voice records ($1020 = $01 for V0,
     # $1051 = $02 for V1, $1082 = $04 for V2; complement at +1).
-    0x1020: "v0_voice_bit_mask",        # $01 = V0 SID-bit
+    0x1020: "v0_voice_bit_mask",  # $01 = V0 SID-bit
     0x1021: "v0_voice_bit_complement",  # $FE = ~V0
-    0x1051: "v1_voice_bit_mask",        # $02
+    0x1051: "v1_voice_bit_mask",  # $02
     0x1052: "v1_voice_bit_complement",  # $FD
-    0x1082: "v2_voice_bit_mask",        # $04
+    0x1082: "v2_voice_bit_mask",  # $04
     0x1083: "v2_voice_bit_complement",  # $FB
-
     # sidtab base byte 1 (sidtab_row_lo / _hi byte 1 — these are the FF
     # marker bytes inside the per-row JP table band).
     0x1801: "sidtab_row_lo_byte1",
     0x1901: "sidtab_row_hi_byte1",
     0x1E01: "dl_per_step_counters_byte1",
-
     # Cursor cluster + LUTs in $72xx that index by X via the sidtab
     # dispatcher (LDA $72D8,X / $7300,X / $7328,X / $7350,X / $7378,X /
     # $73A0,X / $73C8,X — 7 parallel tables at stride $28).
@@ -1751,141 +1757,134 @@ EQUATE_LABELS = {
     0x7378: "sidtab_dispatch_lut4",
     0x73A0: "sidtab_dispatch_lut5",
     0x73C8: "sidtab_dispatch_lut6",
-
     # Color RAM per-row paint anchors (COLOR_RAM + row*$28; LDA/STA $XXXX,X
     # targets in the unrolled seqED paint pages). Rows 1..23; row 0 = COLOR_RAM
     # and row 24 = COLOR_RAM_ROW24 below (incomplete in some pages).
-    0xD828: "color_ram_row01",  0xD850: "color_ram_row02",
-    0xD878: "color_ram_row03",  0xD8A0: "color_ram_row04",
-    0xD8C8: "color_ram_row05",  0xD8F0: "color_ram_row06",
-    0xD918: "color_ram_row07",  0xD940: "color_ram_row08",
-    0xD968: "color_ram_row09",  0xD990: "color_ram_row10",
-    0xD9B8: "color_ram_row11",  0xD9E0: "color_ram_row12",
-    0xDA08: "color_ram_row13",  0xDA30: "color_ram_row14",
-    0xDA58: "color_ram_row15",  0xDA80: "color_ram_row16",
-    0xDAA8: "color_ram_row17",  0xDAD0: "color_ram_row18",
+    0xD828: "color_ram_row01",
+    0xD850: "color_ram_row02",
+    0xD878: "color_ram_row03",
+    0xD8A0: "color_ram_row04",
+    0xD8C8: "color_ram_row05",
+    0xD8F0: "color_ram_row06",
+    0xD918: "color_ram_row07",
+    0xD940: "color_ram_row08",
+    0xD968: "color_ram_row09",
+    0xD990: "color_ram_row10",
+    0xD9B8: "color_ram_row11",
+    0xD9E0: "color_ram_row12",
+    0xDA08: "color_ram_row13",
+    0xDA30: "color_ram_row14",
+    0xDA58: "color_ram_row15",
+    0xDA80: "color_ram_row16",
+    0xDAA8: "color_ram_row17",
+    0xDAD0: "color_ram_row18",
     # ($DAF8 already labelled as color_ram_disk_menu_offset = row19)
-    0xDB20: "color_ram_row20",  0xDB48: "color_ram_row21",
-    0xDB70: "color_ram_row22",  0xDB98: "color_ram_row23",
+    0xDB20: "color_ram_row20",
+    0xDB48: "color_ram_row21",
+    0xDB70: "color_ram_row22",
+    0xDB98: "color_ram_row23",
     0xDBC0: "color_ram_row24",
-
     # Screen RAM per-row paint anchors (SCREEN_RAM + row*$28; mirrors
     # of color_ram_rowNN at $D8xx). Row 0 = SCREEN_RAM ($0400).
     0x0428: "screen_ram_row01",  # ($0450 already labelled SCREEN_RAM_ROW2_COL16)
-    0x0478: "screen_ram_row03",  0x04A0: "screen_ram_row04",
+    0x0478: "screen_ram_row03",
+    0x04A0: "screen_ram_row04",
     0x04C8: "screen_ram_row05",  # ($04F0 = KERNAL_KEYBUF_SCRATCH — row6 alias skipped)
-    0x0518: "screen_ram_row07",  0x0540: "screen_ram_row08",
-    0x0568: "screen_ram_row09",  0x0590: "screen_ram_row10",
-    0x05B8: "screen_ram_row11",  0x05E0: "screen_ram_row12",
-    0x0608: "screen_ram_row13",  0x0630: "screen_ram_row14",
-    0x0658: "screen_ram_row15",  0x0680: "screen_ram_row16",
-    0x06A8: "screen_ram_row17",  0x06D0: "screen_ram_row18",
-    0x06F8: "screen_ram_row19",  0x0720: "screen_ram_row20",
+    0x0518: "screen_ram_row07",
+    0x0540: "screen_ram_row08",
+    0x0568: "screen_ram_row09",
+    0x0590: "screen_ram_row10",
+    0x05B8: "screen_ram_row11",
+    0x05E0: "screen_ram_row12",
+    0x0608: "screen_ram_row13",
+    0x0630: "screen_ram_row14",
+    0x0658: "screen_ram_row15",
+    0x0680: "screen_ram_row16",
+    0x06A8: "screen_ram_row17",
+    0x06D0: "screen_ram_row18",
+    0x06F8: "screen_ram_row19",
+    0x0720: "screen_ram_row20",
     # ($0748 already labelled as SCREEN_RAM_SIDTAB_GLYPH = row21)
-    0x0770: "screen_ram_row22",  0x0798: "screen_ram_row23",
+    0x0770: "screen_ram_row22",
+    0x0798: "screen_ram_row23",
     0x07C0: "screen_ram_row24",
-
     # Paint-page template anchor (indexed via Y).
     0xAD82: "seqED_status_template_base",  # the LDA $AD82,Y target
-
     # ── Misc operand-byte / data-byte slots.
-    0x12DE: "row_advance_band_end",        # tail SAX operand of V2 row-advance band
-    0xD6D9: "decoder_term_lo_smc",         # SBC-imm operand (= src_floor lo)
-    0xD6E0: "decoder_term_hi_smc",         # SBC-imm operand (= src_floor hi)
-
+    0x12DE: "row_advance_band_end",  # tail SAX operand of V2 row-advance band
+    0xD6D9: "decoder_term_lo_smc",  # SBC-imm operand (= src_floor lo)
+    0xD6E0: "decoder_term_hi_smc",  # SBC-imm operand (= src_floor hi)
     # ── Auto-advance loop slots (count + repeat).
     0xB20B: "auto_advance_count",
     0xB20C: "auto_advance_repeat",
-
     # ── Editor frame counters (per-frame delta accumulators).
     0x08F5: "editor_row_delta",
     0x08FC: "editor_col_delta",
-
     # ── Per-mode super-cmd state save table ($0C7D-$0C8C, 16 bytes).
     0x0C7D: "super_cmd_save_table",
     0x0C8C: "super_cmd_save_table_end",
-
     # ── Screen RAM (top-left of the 25×40 grid).
     0x0400: "screen_ram",
-    0x0413: "screen_ram_row0_col19",       # disk menu "blocks" column anchor
-
+    0x0413: "screen_ram_row0_col19",  # disk menu "blocks" column anchor
     # ── seqLIST cursor-step self-mod slots.
     0xE1A8: "seqlist_step_row_smc",
     0xE1A9: "seqlist_step_col_smc",
     0xE1AA: "seqlist_step_dx_smc",
     0xE1AB: "seqlist_step_dy_smc",
-
     # ── Row-advance branch landing pads (BMI target inside row_advance_band_vX).
     0x114B: "v0_row_advance_bmi",
-
     # ── SID#2 mirror state vars (parallel to SID#1 working records).
     0xC8AA: "sid2_silence_latch_acc",
-
     # ── Default SID#2 base address (stereo mode).
     0xD500: "sid2_base_default",
-
     # ── Status-line buffer ($71A3-$71B0 visible + scratch through $71B6).
     0x71A3: "statusline_buffer",
     0x71B0: "statusline_buffer_end",
     0x71B6: "statusline_scratch",
-
     # ── sidTAB cursor descriptor LUT (chip-view editable-cell map).
     0xBDB3: "sidtab_cell_descriptor_lut",
-
     # ── Per-voice slide-mode + freq-lookup operand slots inside the
     # row-read body (`row_read_body_v0`).
-    0x101A: "v0_slide_acc",                # slide accumulator hi (within voice_record_v0)
-    0x1186: "v0_freq_lookup_smc",          # self-mod operand of LDA in row_read_body_v0
-
+    0x101A: "v0_slide_acc",  # slide accumulator hi (within voice_record_v0)
+    0x1186: "v0_freq_lookup_smc",  # self-mod operand of LDA in row_read_body_v0
     # ── SID#2 voice record (mirror of voice_record_v0 at $1019).
     0xC819: "sid2_voice_record_v0",
-
     # ── V1 sidcall1 refetch target landing (mid-cascade).
     0x131F: "v1_sc1_refetch",
-
     # ── Speed-adjust documentary block header (NOT a code-start; mid-instruction).
     0x0D24: "speedadj_block_header",
-
     # ── Auto-advance writer self-mod slots ($B252/$B253) — patched by
     # the seqED_auto_advance / seqED_auto_advance_octave dispatchers
     # to redirect JSR at $B251 to note_arm_auto_writer or $B380.
     0xB252: "auto_advance_writer_smc_lo",
     0xB253: "auto_advance_writer_smc_hi",
-
     # ── Cursor-walk self-mod slots inside seqED_cursor_walk_dispatcher.
     0xB347: "cursor_walk_x_offset_smc",
     0xB348: "cursor_walk_y_delta_smc",
-
     # ── Super-cmd writer step counter SMC operand.
     0x84F4: "super_cmd_writer_step_smc",
-
     # ── Directory-paint self-mod operand high bytes (paired with the
     # function-labelled low bytes at $75C8 / $75CF).
     0x75C9: "dir_paint_blocks_col_smc_hi",
     0x75D0: "dir_paint_name_col_smc_hi",
-
     # ── Kbd matrix mirror (8 bytes at $0E39-$0E40).
     0x0E39: "kbd_matrix_mirror",
     0x0E40: "kbd_matrix_mirror_end",
-
     # ── Voice-selector LUT band ($71D5/$71D8/$71DB/$71DE/$71E1, stride 3).
     0x71D5: "voice_selector_lut_v0",
     0x71D8: "voice_selector_lut_v1",
     0x71DB: "voice_selector_lut_v2",
     0x71DE: "voice_selector_lut_v3",
     0x71E1: "voice_selector_lut_v4",
-
     # ── Status-line / UI mode mirrors.
     0x7170: "ui_mode_mirror",
     0x71B7: "statusline_color_mirror",
     0x71BE: "super_cmd_status_mirror",
-
     # ── seqED per-mode slot offsets (filled by super_cmd_state_load).
     0x0C80: "super_cmd_save_slot_b",
     0x0C83: "super_cmd_save_slot_c",
     0x0C86: "super_cmd_save_slot_d",
     0x0C89: "super_cmd_save_slot_e",
-
     # ── Player-tick + row-read landmarks (immediate operands of
     # self-modifying instructions inside row_advance_band / row_read_body).
     0x1149: "v0_row_ldy_smc",
@@ -1893,7 +1892,6 @@ EQUATE_LABELS = {
     0x11B4: "v0_row_dur_sax_smc",
     0x104C: "v1_voice_record_pad",
     0x149C: "ps_sweep_add_path_smc",
-
 }
 
 # Opcodes that don't fall through to PC + n.
@@ -1918,8 +1916,9 @@ def load_code_starts(entrypoints_path: Path) -> set[int]:
     return pcs
 
 
-def expand_code_starts(mem: bytes, seeds: set[int],
-                       start: int, end_excl: int) -> set[int]:
+def expand_code_starts(
+    mem: bytes, seeds: set[int], start: int, end_excl: int
+) -> set[int]:
     """Fixed-point expand seed code PCs via linear fallthrough + abs targets.
 
     For every accepted code PC, add:
@@ -1965,8 +1964,9 @@ def expand_code_starts(mem: bytes, seeds: set[int],
     return code
 
 
-def classify(mem: bytes, code_starts: set[int],
-             start: int, end_excl: int) -> tuple[dict[int, tuple[str, str, int]], set[int]]:
+def classify(
+    mem: bytes, code_starts: set[int], start: int, end_excl: int
+) -> tuple[dict[int, tuple[str, str, int]], set[int]]:
     """Walk the image and decide which addresses are instruction starts.
 
     Returns (instr_at, consumed) where:
@@ -2059,14 +2059,14 @@ def _render_bit_layout(bit_layout: list[dict]) -> list[str]:
     spans.sort(key=lambda s: -s[0])
 
     per_bit = max((len(n) for _h, _l, n in spans), default=2) + 2
-    per_bit = max(per_bit, 4)   # always at least "+-N-+"
+    per_bit = max(per_bit, 4)  # always at least "+-N-+"
 
     bit_row = "  "
     border = "  "
     name_row = "  "
     for hi, lo, name in spans:
         n_bits = hi - lo + 1
-        cell_w = per_bit * n_bits + (n_bits - 1)   # share inner borders
+        cell_w = per_bit * n_bits + (n_bits - 1)  # share inner borders
         bit_nums = " ".join(str(b) for b in range(hi, lo - 1, -1))
         bit_row += " " + bit_nums.center(cell_w - 1)
         border += "+" + "-" * (cell_w - 1)
@@ -2095,10 +2095,12 @@ def _render_bit_layout_legend(bit_layout: list[dict]) -> list[str]:
     return out
 
 
-def _render_struct_diagram(struct_def: dict,
-                           instances: list[tuple[str, int]] | None = None,
-                           cell_w: int = 8,
-                           cols: int = 8) -> list[str]:
+def _render_struct_diagram(
+    struct_def: dict,
+    instances: list[tuple[str, int]] | None = None,
+    cell_w: int = 8,
+    cols: int = 8,
+) -> list[str]:
     """Render an RFC-style byte-cell grid for a fixed-size struct.
 
     ``struct_def`` shape (matches segments.json / VIRTUAL_STRUCT_SEGMENTS):
@@ -2116,12 +2118,13 @@ def _render_struct_diagram(struct_def: dict,
     fields = struct_def.get("fields", [])
     field_by_off: dict[int, dict] = {f["offset"]: f for f in fields if "offset" in f}
 
-    inner = cell_w - 1   # printable chars inside each cell (excludes the `|`)
+    inner = cell_w - 1  # printable chars inside each cell (excludes the `|`)
     addr_col = " ${:02X}   "
     addr_pad = " " * len(addr_col.format(0))
     border = addr_pad + "+" + ("-" * inner + "+") * cols
-    col_hdr = addr_pad + " " + "".join(f"+{i}".ljust(cell_w)[:cell_w]
-                                       for i in range(cols))
+    col_hdr = (
+        addr_pad + " " + "".join(f"+{i}".ljust(cell_w)[:cell_w] for i in range(cols))
+    )
 
     lines: list[str] = []
     lines.append(f"{name}  (size = ${size:02X} bytes = {size} B)")
@@ -2142,11 +2145,15 @@ def _render_struct_diagram(struct_def: dict,
         if pending_empty >= 2:
             first = (upto_row - pending_empty) * cols
             last = min(upto_row * cols, size) - 1
-            lines.append(addr_pad + f"  ...   (no named fields, "
-                                    f"+${first:02X}..+${last:02X})")
+            lines.append(
+                addr_pad + f"  ...   (no named fields, " f"+${first:02X}..+${last:02X})"
+            )
         elif pending_empty == 1:
-            empty_row = addr_col.format((upto_row - 1) * cols) + (
-                "|" + " " * inner) * cols + "|"
+            empty_row = (
+                addr_col.format((upto_row - 1) * cols)
+                + ("|" + " " * inner) * cols
+                + "|"
+            )
             lines.append(border)
             lines.append(empty_row)
         pending_empty = 0
@@ -2186,8 +2193,10 @@ def _render_struct_diagram(struct_def: dict,
         if not bl:
             continue
         lines.append("")
-        lines.append(f"  {name}.{f.get('name')}  "
-                     f"(bit layout, byte +${f.get('offset', 0):02X})")
+        lines.append(
+            f"  {name}.{f.get('name')}  "
+            f"(bit layout, byte +${f.get('offset', 0):02X})"
+        )
         lines.extend(_render_bit_layout(bl))
         legend = _render_bit_layout_legend(bl)
         if legend:
@@ -2207,8 +2216,9 @@ def _fmt_map_size(n: int) -> str:
     return f"{n:5d} B"
 
 
-def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
-                            total_end: int = 0x10000) -> list[str]:
+def _render_memory_map_grid(
+    rows: list[tuple[int, int, str, str]], total_end: int = 0x10000
+) -> list[str]:
     """Render the address-band map as a vertical ASCII grid.
 
     ``rows`` = sorted list of ``(start, end_excl, label, kind)``.
@@ -2221,8 +2231,7 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
     column is "label  size". Gaps between consecutive rows render as
     an explicit `— unused —` band so dead space is never invisible.
     """
-    KIND_GLYPH = {"code": "█", "data": "▒", "hw": "░", "sys": "·",
-                  "unused": " "}
+    KIND_GLYPH = {"code": "█", "data": "▒", "hw": "░", "sys": "·", "unused": " "}
 
     lines: list[str] = []
     bar_w = 8
@@ -2234,23 +2243,31 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
         if start > last_end:
             gap = start - last_end
             lines.append(
-                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
+                f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —"
+            )
         size = end - start
         glyph = KIND_GLYPH.get(kind, " ")
         bar = glyph * bar_w
-        lines.append(
-            f"   ${start:04X}  {bar}  {_fmt_map_size(size)}  {label}")
+        lines.append(f"   ${start:04X}  {bar}  {_fmt_map_size(size)}  {label}")
         last_end = end
     if last_end < total_end:
         gap = total_end - last_end
         lines.append(
-            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —")
+            f"   ${last_end:04X}  {' ' * bar_w}  {_fmt_map_size(gap)}  — unused —"
+        )
     lines.append("")
-    lines.append("   Legend:  " + "  ".join(
-        f"{KIND_GLYPH[k]} {desc}" for k, desc in [
-            ("code", "code"), ("data", "data segment"),
-            ("hw", "HW overlay"), ("sys", "system / KERNAL"),
-        ]))
+    lines.append(
+        "   Legend:  "
+        + "  ".join(
+            f"{KIND_GLYPH[k]} {desc}"
+            for k, desc in [
+                ("code", "code"),
+                ("data", "data segment"),
+                ("hw", "HW overlay"),
+                ("sys", "system / KERNAL"),
+            ]
+        )
+    )
     return lines
 
 
@@ -2264,6 +2281,7 @@ def _render_memory_map_grid(rows: list[tuple[int, int, str, str]],
 # raster`, `BASIC off, KERNAL+I/O in`) without restating the full
 # register's bit layout, which lives in the C64 reference docs.
 
+
 def _decode_cpu_port(v: int) -> str:
     parts = []
     parts.append("BASIC " + ("in" if v & 0x01 else "out"))
@@ -2272,6 +2290,7 @@ def _decode_cpu_port(v: int) -> str:
     if v & 0x20:
         parts.append("cas motor off")
     return ", ".join(parts)
+
 
 def _decode_vic_cr1(v: int) -> str:
     parts = []
@@ -2285,6 +2304,7 @@ def _decode_vic_cr1(v: int) -> str:
     parts.append(f"yscroll={yscroll}")
     return ", ".join(parts)
 
+
 def _decode_vic_cr2(v: int) -> str:
     parts = []
     if v & 0x20:
@@ -2294,76 +2314,113 @@ def _decode_vic_cr2(v: int) -> str:
     parts.append(f"xscroll={v & 0x07}")
     return ", ".join(parts)
 
+
 def _decode_vic_mem_ptr(v: int) -> str:
     matrix_base = ((v >> 4) & 0x0F) * 0x0400
     char_base = ((v >> 1) & 0x07) * 0x0800
     return f"matrix=${matrix_base:04X}, char=${char_base:04X}"
 
+
 def _decode_vic_irq_mask(v: int) -> str:
     parts = []
-    if v & 0x01: parts.append("raster")
-    if v & 0x02: parts.append("sprite-bg coll")
-    if v & 0x04: parts.append("sprite-sprite coll")
-    if v & 0x08: parts.append("light pen")
+    if v & 0x01:
+        parts.append("raster")
+    if v & 0x02:
+        parts.append("sprite-bg coll")
+    if v & 0x04:
+        parts.append("sprite-sprite coll")
+    if v & 0x08:
+        parts.append("light pen")
     return "enable " + ("/".join(parts) if parts else "none")
+
 
 def _decode_vic_sprite_enable(v: int) -> str:
     on = [str(i) for i in range(8) if v & (1 << i)]
     return f"sprites on: {'/'.join(on) if on else 'none'}"
 
+
 def _decode_sid_ctrl(v: int) -> str:
     waves = []
-    if v & 0x10: waves.append("TRI")
-    if v & 0x20: waves.append("SAW")
-    if v & 0x40: waves.append("PUL")
-    if v & 0x80: waves.append("NOI")
+    if v & 0x10:
+        waves.append("TRI")
+    if v & 0x20:
+        waves.append("SAW")
+    if v & 0x40:
+        waves.append("PUL")
+    if v & 0x80:
+        waves.append("NOI")
     parts = ["+".join(waves) or "wave off"]
-    if v & 0x01: parts.append("GATE")
-    if v & 0x02: parts.append("SYNC")
-    if v & 0x04: parts.append("RING")
-    if v & 0x08: parts.append("TEST")
+    if v & 0x01:
+        parts.append("GATE")
+    if v & 0x02:
+        parts.append("SYNC")
+    if v & 0x04:
+        parts.append("RING")
+    if v & 0x08:
+        parts.append("TEST")
     return " ".join(parts)
+
 
 def _decode_sid_vol_filter(v: int) -> str:
     parts = [f"vol={v & 0x0F}"]
-    if v & 0x10: parts.append("LP")
-    if v & 0x20: parts.append("BP")
-    if v & 0x40: parts.append("HP")
-    if v & 0x80: parts.append("V3 mute")
+    if v & 0x10:
+        parts.append("LP")
+    if v & 0x20:
+        parts.append("BP")
+    if v & 0x40:
+        parts.append("HP")
+    if v & 0x80:
+        parts.append("V3 mute")
     return ", ".join(parts)
+
 
 def _decode_cia_icr(v: int) -> str:
     action = "enable" if v & 0x80 else "disable"
     sources = []
-    if v & 0x01: sources.append("TA")
-    if v & 0x02: sources.append("TB")
-    if v & 0x04: sources.append("TOD")
-    if v & 0x08: sources.append("SP")
-    if v & 0x10: sources.append("FLAG")
+    if v & 0x01:
+        sources.append("TA")
+    if v & 0x02:
+        sources.append("TB")
+    if v & 0x04:
+        sources.append("TOD")
+    if v & 0x08:
+        sources.append("SP")
+    if v & 0x10:
+        sources.append("FLAG")
     return f"{action} " + ("/".join(sources) if sources else "(no sources)")
+
 
 def _decode_cia_cra(v: int) -> str:
     parts = []
     parts.append("start TA" if v & 0x01 else "stop TA")
-    if v & 0x02: parts.append("PB6 out")
+    if v & 0x02:
+        parts.append("PB6 out")
     parts.append("one-shot" if v & 0x08 else "continuous")
-    if v & 0x10: parts.append("force load")
+    if v & 0x10:
+        parts.append("force load")
     parts.append("count CNT" if v & 0x20 else "count φ2")
-    if v & 0x40: parts.append("SP out")
+    if v & 0x40:
+        parts.append("SP out")
     parts.append("TOD 50Hz" if v & 0x80 else "TOD 60Hz")
     return ", ".join(parts)
+
 
 def _decode_cia_crb(v: int) -> str:
     parts = []
     parts.append("start TB" if v & 0x01 else "stop TB")
-    if v & 0x02: parts.append("PB7 out")
+    if v & 0x02:
+        parts.append("PB7 out")
     parts.append("one-shot" if v & 0x08 else "continuous")
-    if v & 0x10: parts.append("force load")
+    if v & 0x10:
+        parts.append("force load")
     src = (v >> 5) & 0x03
-    parts.append(["count φ2", "count CNT", "count TA underflow",
-                  "count TA underflow & CNT"][src])
-    if v & 0x80: parts.append("TOD-alarm-set mode")
+    parts.append(
+        ["count φ2", "count CNT", "count TA underflow", "count TA underflow & CNT"][src]
+    )
+    if v & 0x80:
+        parts.append("TOD-alarm-set mode")
     return ", ".join(parts)
+
 
 HW_IMM_DECODERS: dict[int, Callable[[int], str]] = {
     0x0001: _decode_cpu_port,
@@ -2371,26 +2428,35 @@ HW_IMM_DECODERS: dict[int, Callable[[int], str]] = {
     0xD015: _decode_vic_sprite_enable,
     0xD016: _decode_vic_cr2,
     0xD018: _decode_vic_mem_ptr,
-    0xD019: _decode_vic_irq_mask,    # write-1-to-clear; same bit layout
+    0xD019: _decode_vic_irq_mask,  # write-1-to-clear; same bit layout
     0xD01A: _decode_vic_irq_mask,
-    0xD404: _decode_sid_ctrl, 0xD40B: _decode_sid_ctrl, 0xD412: _decode_sid_ctrl,
-    0xD504: _decode_sid_ctrl, 0xD50B: _decode_sid_ctrl, 0xD512: _decode_sid_ctrl,
+    0xD404: _decode_sid_ctrl,
+    0xD40B: _decode_sid_ctrl,
+    0xD412: _decode_sid_ctrl,
+    0xD504: _decode_sid_ctrl,
+    0xD50B: _decode_sid_ctrl,
+    0xD512: _decode_sid_ctrl,
     0xD418: _decode_sid_vol_filter,
     0xD518: _decode_sid_vol_filter,
-    0xDC0D: _decode_cia_icr, 0xDD0D: _decode_cia_icr,
-    0xDC0E: _decode_cia_cra, 0xDD0E: _decode_cia_cra,
-    0xDC0F: _decode_cia_crb, 0xDD0F: _decode_cia_crb,
+    0xDC0D: _decode_cia_icr,
+    0xDD0D: _decode_cia_icr,
+    0xDC0E: _decode_cia_cra,
+    0xDD0E: _decode_cia_cra,
+    0xDC0F: _decode_cia_crb,
+    0xDD0F: _decode_cia_crb,
 }
 
 
-def _emit_memory_map(fh,
-                     mem: bytes,
-                     base: int,
-                     end_excl: int,
-                     segments: list[dict],
-                     hw_anchors: list[tuple[int, int, str]],
-                     annotations: dict[int, dict],
-                     labels: dict[int, str]) -> None:
+def _emit_memory_map(
+    fh,
+    mem: bytes,
+    base: int,
+    end_excl: int,
+    segments: list[dict],
+    hw_anchors: list[tuple[int, int, str]],
+    annotations: dict[int, dict],
+    labels: dict[int, str],
+) -> None:
     """Emit an auto-generated ASCII memory map of $0000-$FFFF.
 
     The map is data-driven, not hand-maintained: every band is sourced
@@ -2407,8 +2473,7 @@ def _emit_memory_map(fh,
     # The system layout is invariant across all C64 software; only the
     # SCREEN_RAM entry is sourced from hw_anchors (so renaming the
     # anchor in HW_ANCHOR_REGIONS flows here automatically).
-    screen_ram_name = next(
-        (n for s, _e, n in hw_anchors if s == 0x0400), "SCREEN_RAM")
+    screen_ram_name = next((n for s, _e, n in hw_anchors if s == 0x0400), "SCREEN_RAM")
     BELOW_IMAGE = [
         (0x0000, 0x0002, "CPU on-chip I/O (CPU_DDR, CPU_PORT)"),
         (0x0002, 0x0100, "zero page (system + defMON state vars)"),
@@ -2431,7 +2496,8 @@ def _emit_memory_map(fh,
     image_segs = sorted(
         (s["start"], s["end_excl"], s.get("name", ""))
         for s in segments
-        if s["end_excl"] > base and s["start"] < end_excl)
+        if s["end_excl"] > base and s["start"] < end_excl
+    )
     sorted_ann = sorted(a for a in annotations if base <= a < end_excl)
 
     def _first_annotation_name(lo: int, hi: int) -> str:
@@ -2462,17 +2528,16 @@ def _emit_memory_map(fh,
         b_end = min(end_excl_b, end_excl)
         if b_start > cursor:
             hint = _first_annotation_name(cursor, b_start)
-            image_bands.append((cursor, b_start,
-                                f"code (first: {hint})" if hint else "code",
-                                "code"))
-        image_bands.append((b_start, b_end, name + _emptiness(b_start, b_end),
-                            "data"))
+            image_bands.append(
+                (cursor, b_start, f"code (first: {hint})" if hint else "code", "code")
+            )
+        image_bands.append((b_start, b_end, name + _emptiness(b_start, b_end), "data"))
         cursor = max(cursor, b_end)
     if cursor < end_excl:
         hint = _first_annotation_name(cursor, end_excl)
-        image_bands.append((cursor, end_excl,
-                            f"code (first: {hint})" if hint else "code",
-                            "code"))
+        image_bands.append(
+            (cursor, end_excl, f"code (first: {hint})" if hint else "code", "code")
+        )
 
     # ── I/O overlay rows shown alongside the static-image band ──────────
     # Below $D800 the static image holds RAM (ram_under_io covers the
@@ -2498,21 +2563,30 @@ def _emit_memory_map(fh,
     rows.append((0xFF00, 0xFF01, f"{ff00_name} (LOAD dead-store)", "sys"))
     rows.sort()
 
-    fh.write("; ──────────────────────────────────────────────────────────────────────\n")
+    fh.write(
+        "; ──────────────────────────────────────────────────────────────────────\n"
+    )
     fh.write("; MEMORY MAP — auto-generated from segments + HW anchors + annotations\n")
-    fh.write("; ──────────────────────────────────────────────────────────────────────\n")
+    fh.write(
+        "; ──────────────────────────────────────────────────────────────────────\n"
+    )
     fh.write(";\n")
     for line in _render_memory_map_grid(rows):
         fh.write(f"; {line}\n" if line else ";\n")
     fh.write(";\n")
-    fh.write(";   I/O overlay at $D000-$DFFF (visible when CHAREN/HIRAM bank "
-             "the chips in):\n")
+    fh.write(
+        ";   I/O overlay at $D000-$DFFF (visible when CHAREN/HIRAM bank "
+        "the chips in):\n"
+    )
     io_rows: list[tuple[int, int, str, str]] = [
-        (s, e, n, "hw") for s, e, n in IO_OVERLAY]
+        (s, e, n, "hw") for s, e, n in IO_OVERLAY
+    ]
     for line in _render_memory_map_grid(io_rows, total_end=0xE000):
         fh.write(f"; {line}\n" if line else ";\n")
     fh.write(";\n")
-    fh.write("; ──────────────────────────────────────────────────────────────────────\n")
+    fh.write(
+        "; ──────────────────────────────────────────────────────────────────────\n"
+    )
 
 
 def _emit_architecture_overview(fh) -> None:
@@ -2769,29 +2843,66 @@ _VOICE_RECORD_STRUCT: dict = {
         "name": "VoiceRecord",
         "size": 0x31,
         "fields": [
-            {"name": "slide_acc_lo", "offset": 0x01, "size": 1,
-             "comment": "slide accumulator low byte (v0_slide_acc)"},
-            {"name": "slide_mode", "offset": 0x02, "size": 1,
-             "comment": "slide mode: neg=down, pos=up, 0=hold"},
-            {"name": "ps_depth", "offset": 0x05, "size": 1,
-             "comment": "pulse-sweep / vibrato depth; "
-                        "signed (bit7=direction)"},
-            {"name": "pitch_base", "offset": 0x06, "size": 1,
-             "comment": "per-voice detune ($00/$01/$02 for V0/V1/V2)"},
-            {"name": "voice_bit_mask", "offset": 0x07, "size": 1,
-             "comment": "voice select mask: $01/$02/$04 for V0/V1/V2"},
-            {"name": "voice_bit_complement", "offset": 0x08, "size": 1,
-             "comment": "complement of voice_bit_mask: $FE/$FD/$FB"},
-            {"name": "pw_lo", "offset": 0x0A, "size": 1,
-             "comment": "PW lo immediate operand "
-                        "(also slide-acc transient lo)"},
-            {"name": "pw_hi", "offset": 0x0C, "size": 1,
-             "comment": "PW hi immediate operand "
-                        "(also slide-acc transient hi)"},
-            {"name": "freq_lo", "offset": 0x0E, "size": 1,
-             "comment": "FREQ lo immediate operand patched by pitch oscillator"},
-            {"name": "freq_hi", "offset": 0x0F, "size": 1,
-             "comment": "FREQ hi immediate operand"},
+            {
+                "name": "slide_acc_lo",
+                "offset": 0x01,
+                "size": 1,
+                "comment": "slide accumulator low byte (v0_slide_acc)",
+            },
+            {
+                "name": "slide_mode",
+                "offset": 0x02,
+                "size": 1,
+                "comment": "slide mode: neg=down, pos=up, 0=hold",
+            },
+            {
+                "name": "ps_depth",
+                "offset": 0x05,
+                "size": 1,
+                "comment": "pulse-sweep / vibrato depth; " "signed (bit7=direction)",
+            },
+            {
+                "name": "pitch_base",
+                "offset": 0x06,
+                "size": 1,
+                "comment": "per-voice detune ($00/$01/$02 for V0/V1/V2)",
+            },
+            {
+                "name": "voice_bit_mask",
+                "offset": 0x07,
+                "size": 1,
+                "comment": "voice select mask: $01/$02/$04 for V0/V1/V2",
+            },
+            {
+                "name": "voice_bit_complement",
+                "offset": 0x08,
+                "size": 1,
+                "comment": "complement of voice_bit_mask: $FE/$FD/$FB",
+            },
+            {
+                "name": "pw_lo",
+                "offset": 0x0A,
+                "size": 1,
+                "comment": "PW lo immediate operand " "(also slide-acc transient lo)",
+            },
+            {
+                "name": "pw_hi",
+                "offset": 0x0C,
+                "size": 1,
+                "comment": "PW hi immediate operand " "(also slide-acc transient hi)",
+            },
+            {
+                "name": "freq_lo",
+                "offset": 0x0E,
+                "size": 1,
+                "comment": "FREQ lo immediate operand patched by pitch oscillator",
+            },
+            {
+                "name": "freq_hi",
+                "offset": 0x0F,
+                "size": 1,
+                "comment": "FREQ hi immediate operand",
+            },
         ],
     },
 }
@@ -2814,8 +2925,8 @@ VIRTUAL_STRUCT_SEGMENTS: list[dict] = [
         "end_excl": 0xC819 + 3 * 0x31,
         "name": "sid2_voice_record_v0",
         "comment": "SID#2 mirror of voice_record_v0 (same $31-byte layout; "
-                   "writes go to $D500+ via the SMC patch sites instead of "
-                   "$D400+).",
+        "writes go to $D500+ via the SMC patch sites instead of "
+        "$D400+).",
         "struct": _VOICE_RECORD_STRUCT,
         "instances": [
             ("sid2_voice_record_v0", 0xC819),
@@ -2826,29 +2937,33 @@ VIRTUAL_STRUCT_SEGMENTS: list[dict] = [
 ]
 
 
-def emit_source(mem: bytes, base: int, end_excl: int,
-                instr_at: dict[int, tuple[str, str, int]],
-                consumed: set[int], fh,
-                labels: dict[int, str] | None = None,
-                segments: list[dict] | None = None,
-                annotations: dict[int, dict] | None = None,
-                graph=None,
-                with_bytes: bool = False,
-                text_segments: dict[int, dict] | None = None,
-                byte_runs: dict[int, list[dict]] | None = None,
-                imm_subs: dict[int, str] | None = None,
-                value_names_per_var: dict[int, dict[int, str]] | None = None,
-                branch_operand_override: dict[int, str] | None = None,
-                cmp_facts: dict[int, dict] | None = None,
-                branch_condition_overrides: dict[int, str] | None = None,
-                named_constants: dict[str, int] | None = None,
-                smc_dispatch: dict[int, dict] | None = None,
-                smc_branch: dict[int, dict] | None = None,
-                smc_opcode: dict[int, dict] | None = None,
-                switch_dispatchers: dict[int, dict] | None = None,
-                register_inputs: dict[int, dict[str, int]] | None = None,
-                reg_effects: dict[int, dict] | None = None,
-                ) -> tuple[int, int]:
+def emit_source(
+    mem: bytes,
+    base: int,
+    end_excl: int,
+    instr_at: dict[int, tuple[str, str, int]],
+    consumed: set[int],
+    fh,
+    labels: dict[int, str] | None = None,
+    segments: list[dict] | None = None,
+    annotations: dict[int, dict] | None = None,
+    graph=None,
+    with_bytes: bool = False,
+    text_segments: dict[int, dict] | None = None,
+    byte_runs: dict[int, list[dict]] | None = None,
+    imm_subs: dict[int, str] | None = None,
+    value_names_per_var: dict[int, dict[int, str]] | None = None,
+    branch_operand_override: dict[int, str] | None = None,
+    cmp_facts: dict[int, dict] | None = None,
+    branch_condition_overrides: dict[int, str] | None = None,
+    named_constants: dict[str, int] | None = None,
+    smc_dispatch: dict[int, dict] | None = None,
+    smc_branch: dict[int, dict] | None = None,
+    smc_opcode: dict[int, dict] | None = None,
+    switch_dispatchers: dict[int, dict] | None = None,
+    register_inputs: dict[int, dict[str, int]] | None = None,
+    reg_effects: dict[int, dict] | None = None,
+) -> tuple[int, int]:
     """Emit the .s body. Returns (instr_count, data_byte_count).
 
     ``labels`` is an {addr: name} dict used both for line prefixes at
@@ -2907,16 +3022,15 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         cases = entry["cases"]
         lines = [f"; ─── switch ({var_name}) — {len(cases)} cases ───\n"]
         for c in cases:
-            val_s = (c.get("value_name") or f"${c['value']:02X}")
-            tgt = (c.get("handler_label")
-                   or (f"${c['handler_pc']:04X}" if c.get("handler_pc") is not None
-                       else "?"))
+            val_s = c.get("value_name") or f"${c['value']:02X}"
+            tgt = c.get("handler_label") or (
+                f"${c['handler_pc']:04X}" if c.get("handler_pc") is not None else "?"
+            )
             lines.append(f";     case {val_s:<22} → {tgt}\n")
         default_label = entry.get("default_label")
         default_pc = entry.get("default_pc")
         if default_label or default_pc is not None:
-            default_text = (default_label
-                            or f"${default_pc:04X}")
+            default_text = default_label or f"${default_pc:04X}"
             lines.append(f";     default                   → {default_text}\n")
         return "".join(lines)
 
@@ -2938,14 +3052,18 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         candidates = entry.get("candidate_opcodes") or []
         inconclusive = entry.get("inconclusive", False)
         ps_text = ", ".join(f"${p:04X}" for p in sources) or "(unknown)"
-        lines = [f"; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────\n",
-                 f";   Patched at: {ps_text}\n"]
+        lines = [
+            f"; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────\n",
+            f";   Patched at: {ps_text}\n",
+        ]
         if candidates:
             cand_text = " / ".join(candidates)
             lines.append(f";   {cur} can flip to: {cand_text}\n")
         elif inconclusive:
-            lines.append(f";   {cur} writer-source inconclusive "
-                         f"(register-sourced or chained — curate me)\n")
+            lines.append(
+                f";   {cur} writer-source inconclusive "
+                f"(register-sourced or chained — curate me)\n"
+            )
         # Structured flip targets (e.g. the JMP landing of a STX->JMP
         # voice-skip) — rendered from the annotation so the address stays
         # out of the free-text description.
@@ -2975,8 +3093,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             return ""
         sources = entry.get("patch_sources") or []
         ps_text = ", ".join(f"${p:04X}" for p in sources) or "(unknown)"
-        lines = [f"; ──── SMC-patched branch — static target is the unpatched default ────\n",
-                 f";   Patched at: {ps_text}\n"]
+        lines = [
+            f"; ──── SMC-patched branch — static target is the unpatched default ────\n",
+            f";   Patched at: {ps_text}\n",
+        ]
         desc = (entry.get("description") or "").strip()
         if desc:
             for line in desc.split("\n"):
@@ -3001,13 +3121,13 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         host_mnem, _, _ = instr_at.get(pc, ("?", "", 0))
         host_label = host_mnem.upper() if host_mnem else "dispatch"
         if targets:
-            header = (f"; ──── SMC-patched {host_label} "
-                      f"({len(targets)} catalogued targets) ────\n")
+            header = (
+                f"; ──── SMC-patched {host_label} "
+                f"({len(targets)} catalogued targets) ────\n"
+            )
         else:
-            header = (f"; ──── SMC-patched {host_label} "
-                      "(targets uncatalogued) ────\n")
-        lines = [header,
-                 f";   Patched at: {ps_text}\n"]
+            header = f"; ──── SMC-patched {host_label} " "(targets uncatalogued) ────\n"
+        lines = [header, f";   Patched at: {ps_text}\n"]
         if desc:
             # Word-wrap roughly to 76 cols for readability.
             words = desc.split()
@@ -3060,8 +3180,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # the LOAD's `psid_export_template` at $D7F8..$D8FC stops at $D800;
     # runtime `sta $D801,X` to colour RAM never resolves to
     # `psid_export_template + $09`).
-    annotated_addrs = sorted(a for a in annotations
-                             if base <= a < end_excl and a in labels)
+    annotated_addrs = sorted(
+        a for a in annotations if base <= a < end_excl and a in labels
+    )
     name_spans: list[tuple[int, int, str]] = []
     for i, addr in enumerate(annotated_addrs):
         nxt = annotated_addrs[i + 1] if i + 1 < len(annotated_addrs) else end_excl
@@ -3074,33 +3195,38 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # mismatched address) instead of silently emitting wrong bytes.
     for ts_addr, ts in text_segments.items():
         encoded = _encode_text(ts["string"], ts["encoding"]) * ts.get("reps", 1)
-        actual = mem[ts_addr:ts_addr + len(encoded)]
+        actual = mem[ts_addr : ts_addr + len(encoded)]
         if actual != encoded:
             raise SystemExit(
                 f"text_segments[${ts_addr:04X}]: declared string "
                 f"{ts['string']!r} (×{ts.get('reps', 1)}) encodes to "
                 f"{encoded.hex()} but image has {actual.hex()} — "
-                f"fix the annotation")
+                f"fix the annotation"
+            )
 
     for br_addr, runs in byte_runs.items():
         encoded = _byte_runs_encoded(runs)
-        actual = mem[br_addr:br_addr + len(encoded)]
+        actual = mem[br_addr : br_addr + len(encoded)]
         if actual != encoded:
             raise SystemExit(
                 f"byte_runs[${br_addr:04X}]: declared runs encode to "
                 f"{encoded.hex()} but image has {actual.hex()} — "
-                f"fix the annotation")
+                f"fix the annotation"
+            )
 
     fh.write("; defMON static image — annotated 64tass source.\n")
     fh.write(";\n")
-    fh.write(f"; Layout: ${base:04X}-${end_excl - 1:04X} "
-             f"({end_excl - base} bytes), byte-identical to the\n"
-             "; uncompressed PRG body.\n")
+    fh.write(
+        f"; Layout: ${base:04X}-${end_excl - 1:04X} "
+        f"({end_excl - base} bytes), byte-identical to the\n"
+        "; uncompressed PRG body.\n"
+    )
     fh.write(";\n")
     _emit_architecture_overview(fh)
     fh.write("\n")
-    _emit_memory_map(fh, mem, base, end_excl, segments, HW_ANCHOR_REGIONS,
-                     annotations, labels)
+    _emit_memory_map(
+        fh, mem, base, end_excl, segments, HW_ANCHOR_REGIONS, annotations, labels
+    )
     fh.write("\n")
 
     def _enclosing_label(pc: int) -> str:
@@ -3162,13 +3288,17 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 ft_text = f"${ft_src:04X} {ft_label}"
             else:
                 enclosing = _enclosing_label(ft_src)
-                ft_text = (f"${ft_src:04X} in {enclosing}" if enclosing
-                           else f"${ft_src:04X}")
-            lines = [f"code edges:          fall-through from {ft_text} "
-                     f"({delta} bytes earlier)"]
+                ft_text = (
+                    f"${ft_src:04X} in {enclosing}" if enclosing else f"${ft_src:04X}"
+                )
+            lines = [
+                f"code edges:          fall-through from {ft_text} "
+                f"({delta} bytes earlier)"
+            ]
             if apparent:
-                lines.append(f"apparent (from data): "
-                             f"{_format_apparent_sources(apparent)}")
+                lines.append(
+                    f"apparent (from data): " f"{_format_apparent_sources(apparent)}"
+                )
             return lines
         # No code edges, no fall-through predecessor. Only emit a
         # reachability block when the data-byte channel actually has
@@ -3176,9 +3306,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         # pure boilerplate and the address simply has no callers.
         if not apparent:
             return []
-        return ["code edges:          none",
-                f"apparent (from data): "
-                f"{_format_apparent_sources(apparent)}"]
+        return [
+            "code edges:          none",
+            f"apparent (from data): " f"{_format_apparent_sources(apparent)}",
+        ]
 
     def _derived_callers_line(addr: int, ann: dict | None) -> str:
         """Graph-derived `callers:` rendering.
@@ -3222,8 +3353,11 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         So only the soundly-analysed (certain) functions get a derived
         line, where it genuinely informs (e.g. "A, X" = Y is preserved).
         """
-        if ann and isinstance(ann.get("registers_clobbered"), str) \
-                and ann["registers_clobbered"]:
+        if (
+            ann
+            and isinstance(ann.get("registers_clobbered"), str)
+            and ann["registers_clobbered"]
+        ):
             return ""
         rec = reg_effects.get(addr)
         if not rec or rec.get("uncertain"):
@@ -3244,6 +3378,22 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         if not rec or rec.get("uncertain"):
             return ""
         regs = rec.get("inputs", "")
+        return ", ".join(regs) if regs else ""
+
+    def _derived_outputs_line(addr: int, ann: dict | None) -> str:
+        """Graph-derived `outputs:` (return registers) rendering. Like the
+        inputs line: a hand `outputs` annotation (free prose covering memory
+        / flags too) wins, uncertain functions are skipped, and only a
+        non-empty result renders — `A` means the function returns a value in
+        A that a caller consumes. A register here is one the function always
+        freshly writes AND some caller reads back, so it is a genuine return
+        value, not scratch or a passed-through input."""
+        if ann and isinstance(ann.get("outputs"), str) and ann["outputs"]:
+            return ""
+        rec = reg_effects.get(addr)
+        if not rec or rec.get("uncertain"):
+            return ""
+        regs = rec.get("outputs", "")
         return ", ".join(regs) if regs else ""
 
     def _constraints_lines(ann: dict | None) -> list[str]:
@@ -3285,9 +3435,11 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     for seg in struct_segments:
         for _name, inst_addr in seg.get("instances", []):
             virtual_instance_addrs.add(inst_addr)
-    equate_labels = [(addr, name) for addr, name in labels.items()
-                     if addr not in instr_at
-                     and addr not in virtual_instance_addrs]
+    equate_labels = [
+        (addr, name)
+        for addr, name in labels.items()
+        if addr not in instr_at and addr not in virtual_instance_addrs
+    ]
     equate_labels.sort()
     # Set of names whose addresses are code-starts. Used to strip
     # forward-reference sentences from EQUATE notes — when a variable's
@@ -3295,9 +3447,17 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # encounters the prose before the function has been introduced.
     # The same prose lives (or belongs) at the function's block header.
     code_start_names = {labels[a] for a in instr_at if a in labels}
-    code_ref_re = re.compile(
-        r"\b(?:" + "|".join(re.escape(n) for n in sorted(code_start_names, key=len, reverse=True)) + r")\b"
-    ) if code_start_names else None
+    code_ref_re = (
+        re.compile(
+            r"\b(?:"
+            + "|".join(
+                re.escape(n) for n in sorted(code_start_names, key=len, reverse=True)
+            )
+            + r")\b"
+        )
+        if code_start_names
+        else None
+    )
 
     def _strip_forward_refs(text: str) -> str:
         """Drop sentences/lines that mention a code-start label.
@@ -3349,7 +3509,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         (0x7400, "DISK MENU + SAVE PATH + STATUS PAINTERS ($7400-$87FF)"),
         (0x8800, "UNROLLED PAINT PAGES ($8800-$AAFF)"),
         (0xAB00, "EDITOR HANDLERS — seqED / seqLIST / sidTAB ($AB00-$CFFF)"),
-        (0xD000, "C64 SFRs (VIC / SID / CIA) + RAM-UNDER-IO LOAD/SAVE CODEC ($D000-$DFFF)"),
+        (
+            0xD000,
+            "C64 SFRs (VIC / SID / CIA) + RAM-UNDER-IO LOAD/SAVE CODEC ($D000-$DFFF)",
+        ),
         (0xE000, "seqLIST WRITER BAND + POST-LOAD TAIL ($E000-$E786)"),
         (0xFF00, "KERNAL JUMPTABLE ($FF00-$FFFF)"),
     ]
@@ -3380,8 +3543,12 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         fh.write(";   .struct definition + per-instance .virtual / .dstruct blocks.\n")
         fh.write(";   .virtual discards compilation so the bytes at these addresses\n")
         fh.write(";   are NOT emitted here — the player-IRQ instruction stream below\n")
-        fh.write(";   produces them as the operand bytes of self-modifying loads/stores.\n")
-        fh.write(";   The dotted field labels (e.g. `voice_record_v0.freq_lo`) resolve\n")
+        fh.write(
+            ";   produces them as the operand bytes of self-modifying loads/stores.\n"
+        )
+        fh.write(
+            ";   The dotted field labels (e.g. `voice_record_v0.freq_lo`) resolve\n"
+        )
         fh.write(";   at assemble time, replacing the prior\n")
         fh.write(";   `<seg> + N*Element_size + Element_<field>` flat-equate form.\n")
         fh.write(bar)
@@ -3398,8 +3565,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 # so the diagram lists every overlay site in one place.
                 all_instances: list[tuple[str, int]] = []
                 for s2 in instance_segments:
-                    if (s2.get("struct") or {}).get("element", {}).get(
-                            "name") == ename:
+                    if (s2.get("struct") or {}).get("element", {}).get("name") == ename:
                         all_instances.extend(s2.get("instances", []))
                 fh.write("\n")
                 # Auto-pick cell width and column count. Wider cells fit
@@ -3409,16 +3575,19 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 # equate block below carries the full name unabbreviated.
                 max_field_w = max(
                     (len(f.get("name", "")) for f in element.get("fields", [])),
-                    default=4)
+                    default=4,
+                )
                 cell_w = min(14, max(8, max_field_w + 2))
                 cols = 8 if esize > 16 else min(esize, 8)
-                for line in _render_struct_diagram(element, all_instances,
-                                                   cell_w=cell_w, cols=cols):
+                for line in _render_struct_diagram(
+                    element, all_instances, cell_w=cell_w, cols=cols
+                ):
                     fh.write(f"; {line}\n" if line else ";\n")
                 fh.write("\n")
                 fh.write(f"{ename} .struct\n")
-                fields = sorted(element.get("fields", []),
-                                key=lambda f: f.get("offset", 0))
+                fields = sorted(
+                    element.get("fields", []), key=lambda f: f.get("offset", 0)
+                )
                 cur = 0
                 for f in fields:
                     fname = f.get("name")
@@ -3439,12 +3608,15 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                     fh.write(f"{fname:<20} .byte ?{suffix}\n")
                     cur = foff + fsize
                 if cur < esize:
-                    fh.write(f"            .fill {esize - cur}"
-                             f"    ; +${cur:02X}..${esize - 1:02X}"
-                             f" (unnamed tail)\n")
+                    fh.write(
+                        f"            .fill {esize - cur}"
+                        f"    ; +${cur:02X}..${esize - 1:02X}"
+                        f" (unnamed tail)\n"
+                    )
                 fh.write(f"            .endstruct\n")
-                fh.write(f".cerror size({ename}) != ${esize:02X},"
-                         f' "{ename} size drift"\n')
+                fh.write(
+                    f".cerror size({ename}) != ${esize:02X}," f' "{ename} size drift"\n'
+                )
                 emitted_struct_defs.add(ename)
             fh.write(f"\n;   {seg['name']}: {seg.get('comment', '')}\n")
             for inst_name, inst_addr in seg["instances"]:
@@ -3475,26 +3647,34 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 cname = container.get("name")
                 csize = container.get("size")
                 ccount = container.get("element_count", "?")
-                fh.write(f"\n; {seg['name']}: {cname}[{ccount}]"
-                         f"  ({cname}_size = {csize}, "
-                         f"{ename}_size = {esize})\n")
+                fh.write(
+                    f"\n; {seg['name']}: {cname}[{ccount}]"
+                    f"  ({cname}_size = {csize}, "
+                    f"{ename}_size = {esize})\n"
+                )
                 if cname and csize is not None and cname not in emitted_struct_names:
                     fh.write(f"{cname + '_size':<40} = ${csize:04X}\n")
                     emitted_struct_names.add(cname)
             else:
-                fh.write(f"\n; {seg['name']}: {ename}[]"
-                         f"  ({ename}_size = {esize}; no fixed container — "
-                         f"single-level array)\n")
+                fh.write(
+                    f"\n; {seg['name']}: {ename}[]"
+                    f"  ({ename}_size = {esize}; no fixed container — "
+                    f"single-level array)\n"
+                )
             if ename not in emitted_struct_names:
                 # Pre-equate diagram so the reader sees the layout
                 # visually before the per-field `_size = $NN` lines.
-                cell_w = max(8, max(
-                    (len(f.get("name", "")) for f in element.get("fields", [])),
-                    default=4) + 2)
+                cell_w = max(
+                    8,
+                    max(
+                        (len(f.get("name", "")) for f in element.get("fields", [])),
+                        default=4,
+                    )
+                    + 2,
+                )
                 cols = 8 if esize > 16 else min(esize, 8)
                 fh.write("\n")
-                for line in _render_struct_diagram(element, cell_w=cell_w,
-                                                   cols=cols):
+                for line in _render_struct_diagram(element, cell_w=cell_w, cols=cols):
                     fh.write(f"; {line}\n" if line else ";\n")
                 fh.write("\n")
                 fh.write(f"{ename + '_size':<40} = ${esize:04X}\n")
@@ -3516,7 +3696,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         bar = "; " + "─" * 70 + "\n"
         fh.write(bar)
         fh.write("; NAMED CONSTANTS — IMM operand values given symbolic names\n")
-        fh.write(";   via `[imm.\"$XXXX\"]` entries in annotations.toml. The\n")
+        fh.write(';   via `[imm."$XXXX"]` entries in annotations.toml. The\n')
         fh.write(";   instruction at the cited PC renders `#<NAME>` instead\n")
         fh.write(";   of the bare hex; the equates below close those refs.\n")
         fh.write(bar)
@@ -3640,11 +3820,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     prev_imm: dict[str, int | None] = {"a": None, "x": None, "y": None}
 
     # {start_addr: segment_dict} for O(1) entry-point lookup.
-    seg_starts = {s["start"]: s for s in segments
-                  if base <= s["start"] < end_excl}
+    seg_starts = {s["start"]: s for s in segments if base <= s["start"] < end_excl}
     # End-points where we emit the closing rule.
-    seg_ends = {s["end_excl"]: s for s in segments
-                if base < s["end_excl"] <= end_excl}
+    seg_ends = {s["end_excl"]: s for s in segments if base < s["end_excl"] <= end_excl}
 
     # PCs reached by a real branch / call / jump (per the static call
     # graph). Used to gate the synthetic `_XXXX:` line prefix — when an
@@ -3674,8 +3852,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # 64tass treats bare ``_XXXX`` as a label local to the previous
     # global label, so cross-scope branches would fail to resolve;
     # block-relative names are global-form by construction.
-    block_pcs_sorted, block_name_by_pc = _build_block_pc_index(
-        annotations, instr_at)
+    block_pcs_sorted, block_name_by_pc = _build_block_pc_index(annotations, instr_at)
     block_counters: dict[int, int] = {}
     for tgt in sorted(branch_targets):
         if not (base <= tgt < end_excl and tgt in instr_at and tgt not in labels):
@@ -3683,8 +3860,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         block_pc = _nearest_block_pc(tgt, block_pcs_sorted)
         if block_pc is not None and tgt != block_pc:
             block_counters[block_pc] = block_counters.get(block_pc, 0) + 1
-            labels[tgt] = (f"{block_name_by_pc[block_pc]}"
-                           f"_{block_counters[block_pc]}")
+            labels[tgt] = f"{block_name_by_pc[block_pc]}" f"_{block_counters[block_pc]}"
         else:
             labels[tgt] = f"L_{tgt:04X}"
 
@@ -3697,8 +3873,8 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # globally accessible as the .block name, so they stay bare.
     function_blocks: dict[int, tuple[int, str]] = {}
     _fn_entries: list[int] = sorted(
-        pc for pc in block_name_by_pc
-        if base <= pc < end_excl and pc in instr_at)
+        pc for pc in block_name_by_pc if base <= pc < end_excl and pc in instr_at
+    )
     for _i, _entry_pc in enumerate(_fn_entries):
         _nxt = _fn_entries[_i + 1] if _i + 1 < len(_fn_entries) else end_excl
         _block_name = labels.get(_entry_pc, block_name_by_pc[_entry_pc])
@@ -3744,11 +3920,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         if _tb is None:
             continue
         _prefix = function_blocks[_tb][1]
-        if (_name.startswith(_prefix + "_")
-                and len(_name) > len(_prefix) + 1):
-            _suffix = _name[len(_prefix) + 1:]
-            inblock_name[_addr] = ("l_" + _suffix
-                                   if _suffix[0].isdigit() else _suffix)
+        if _name.startswith(_prefix + "_") and len(_name) > len(_prefix) + 1:
+            _suffix = _name[len(_prefix) + 1 :]
+            inblock_name[_addr] = "l_" + _suffix if _suffix[0].isdigit() else _suffix
 
     current_block_entry: int | None = None
     effective_labels: dict[int, str] = dict(labels)
@@ -3780,9 +3954,11 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         fh.write("\n")
         fh.write(bar)
         size = seg["end_excl"] - seg["start"]
-        fh.write(f"; SEGMENT  {seg['name']}  "
-                 f"(${seg['start']:04X}-${seg['end_excl'] - 1:04X}, "
-                 f"{size} bytes, element_size={seg['element_size']})\n")
+        fh.write(
+            f"; SEGMENT  {seg['name']}  "
+            f"(${seg['start']:04X}-${seg['end_excl'] - 1:04X}, "
+            f"{size} bytes, element_size={seg['element_size']})\n"
+        )
         if seg.get("comment"):
             for line in seg["comment"].split("\n"):
                 fh.write(f";   {line}\n")
@@ -3798,12 +3974,12 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     # `internal_notes`) belong to the RE archive in annotations.toml and
     # are skipped here.
     _STRUCTURED_FIELDS = (
-        ("callers",             "callers"),
-        ("inputs",              "inputs"),
-        ("outputs",             "outputs"),
+        ("callers", "callers"),
+        ("inputs", "inputs"),
+        ("outputs", "outputs"),
         ("registers_clobbered", "registers clobbered"),
-        ("variables_changed",   "variables changed"),
-        ("values",              "values"),
+        ("variables_changed", "variables changed"),
+        ("values", "values"),
     )
     _FIELD_LABEL_WIDTH = max(len(label) for _, label in _STRUCTURED_FIELDS)
 
@@ -3937,16 +4113,22 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         # bit test
         (re.compile(r"^\s*bit[- ]?test\b", re.I), {"bit"}),
         # explicit branch arrow at start → any branch mnemonic
-        (re.compile(r"^\s*→"),
-            {"bcc", "bcs", "beq", "bne", "bmi", "bpl", "bvc", "bvs"}),
+        (
+            re.compile(r"^\s*→"),
+            {"bcc", "bcs", "beq", "bne", "bmi", "bpl", "bvc", "bvs"},
+        ),
         # bare explicit mnemonic at start ("asl A", "bpl —", "rts")
-        (re.compile(r"^\s*(lda|ldx|ldy|sta|stx|sty|adc|sbc|and|ora|eor|"
-                    r"cmp|cpx|cpy|inc|dec|inx|iny|dex|dey|asl|lsr|rol|ror|"
-                    r"bit|tax|tay|txa|tya|tsx|txs|pha|pla|php|plp|"
-                    r"clc|sec|cld|sed|cli|sei|clv|nop|brk|"
-                    r"bcc|bcs|beq|bne|bmi|bpl|bvc|bvs|jmp|jsr|rts|rti)\b",
-                    re.I),
-            {"_explicit_"}),
+        (
+            re.compile(
+                r"^\s*(lda|ldx|ldy|sta|stx|sty|adc|sbc|and|ora|eor|"
+                r"cmp|cpx|cpy|inc|dec|inx|iny|dex|dey|asl|lsr|rol|ror|"
+                r"bit|tax|tay|txa|tya|tsx|txs|pha|pla|php|plp|"
+                r"clc|sec|cld|sed|cli|sei|clv|nop|brk|"
+                r"bcc|bcs|beq|bne|bmi|bpl|bvc|bvs|jmp|jsr|rts|rti)\b",
+                re.I,
+            ),
+            {"_explicit_"},
+        ),
     ]
 
     _EXPLICIT_MNEM_RE = re.compile(
@@ -3989,10 +4171,16 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         _, mode, n = instr_at[pc]
         p1 = mem[pc + 1] if n >= 2 else 0
         p2 = mem[pc + 2] if n >= 3 else 0
-        return emit_64tass_instruction(mode, p1, p2, pc, labels=labels,
-                                       struct_segments=struct_segments,
-                                       name_spans=name_spans,
-                                       anchor_spans=HW_ANCHOR_REGIONS)
+        return emit_64tass_instruction(
+            mode,
+            p1,
+            p2,
+            pc,
+            labels=labels,
+            struct_segments=struct_segments,
+            name_spans=name_spans,
+            anchor_spans=HW_ANCHOR_REGIONS,
+        )
 
     def _bullet_matches_instr(bullet: str, pc: int) -> bool:
         """True if the bullet plausibly anchors at this instruction.
@@ -4031,7 +4219,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 return True
         return False
 
-    def _align_bullets(bullets: list[str], pcs: list[int]) -> list[tuple[int, str]] | None:
+    def _align_bullets(
+        bullets: list[str], pcs: list[int]
+    ) -> list[tuple[int, str]] | None:
         """Map each bullet to its anchor PC in `pcs`. Returns
         [(pc, bullet_text), ...] in order, or None on failed alignment.
 
@@ -4182,8 +4372,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         if not ann:
             return
         role = ann.get("role", "")
-        structured = [(label, ann.get(key, ""))
-                      for key, label in _STRUCTURED_FIELDS]
+        structured = [(label, ann.get(key, "")) for key, label in _STRUCTURED_FIELDS]
         notes = ann.get("notes", "")
         if addr in seq_inlined_addrs:
             notes = _strip_sequence_block(notes)
@@ -4194,8 +4383,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         # the body is a tiny stub (≤3 instructions to RTS/JMP/RTI),
         # skip the header entirely — a five-line block-comment for a
         # two-instruction landing pad reads as filler.
-        has_hand_prose = bool(role or notes
-                              or _constraints_lines(ann))
+        has_hand_prose = bool(role or notes or _constraints_lines(ann))
         if not has_hand_prose:
             body = _walk_linear_block(addr, max_instrs=4)
             if len(body) <= 3:
@@ -4219,8 +4407,14 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         derived_callers = _derived_callers_line(addr, ann)
         derived_clobbers = _derived_clobbers_line(addr, ann)
         derived_inputs = _derived_inputs_line(addr, ann)
-        any_struct = (any(v for _, v in structured) or bool(derived_callers)
-                      or bool(derived_clobbers) or bool(derived_inputs))
+        derived_outputs = _derived_outputs_line(addr, ann)
+        any_struct = (
+            any(v for _, v in structured)
+            or bool(derived_callers)
+            or bool(derived_clobbers)
+            or bool(derived_inputs)
+            or bool(derived_outputs)
+        )
         if any_struct:
             fh.write(";\n")
             for label, val in structured:
@@ -4231,6 +4425,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                     elif label == "inputs" and derived_inputs:
                         pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                         fh.write(f";   {label}:{pad} {derived_inputs}\n")
+                    elif label == "outputs" and derived_outputs:
+                        pad = " " * (_FIELD_LABEL_WIDTH - len(label))
+                        fh.write(f";   {label}:{pad} {derived_outputs}\n")
                     elif label == "registers clobbered" and derived_clobbers:
                         pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                         fh.write(f";   {label}:{pad} {derived_clobbers}\n")
@@ -4298,8 +4495,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             ``$XXYYZZWW`` a 4-byte LE pattern, and so on. So pick the
             narrowest periodic sub-pattern the chunk supports."""
             for period in (1, 2, 4, 8):
-                if all(chunk[i] == chunk[i % period]
-                       for i in range(len(chunk))):
+                if all(chunk[i] == chunk[i % period] for i in range(len(chunk))):
                     sub = chunk[:period]
                     v = 0
                     for j, b in enumerate(sub):
@@ -4316,16 +4512,17 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             full rows (zero pads with $0000-style periodic fills, etc.)."""
             chunks: list[tuple[int, bytes]] = []
             for off in range(0, len(sub), BYTES_PER_LINE):
-                chunks.append((seg_addr + off,
-                               bytes(sub[off:off + BYTES_PER_LINE])))
+                chunks.append((seg_addr + off, bytes(sub[off : off + BYTES_PER_LINE])))
             i = 0
             while i < len(chunks):
                 addr, chunk = chunks[i]
                 if len(chunk) == BYTES_PER_LINE:
                     run_end = i + 1
-                    while (run_end < len(chunks)
-                           and chunks[run_end][1] == chunk
-                           and len(chunks[run_end][1]) == BYTES_PER_LINE):
+                    while (
+                        run_end < len(chunks)
+                        and chunks[run_end][1] == chunk
+                        and len(chunks[run_end][1]) == BYTES_PER_LINE
+                    ):
                         run_end += 1
                     run_len = run_end - i
                     if run_len >= 6:
@@ -4339,7 +4536,8 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                             f"        .fill {middle * BYTES_PER_LINE}, "
                             f"{literal}    "
                             f"; ${elided_lo:04X}-${elided_hi:04X} "
-                            f"({middle} identical rows)\n")
+                            f"({middle} identical rows)\n"
+                        )
                         _emit_chunk(last_addr, last_chunk)
                         i = run_end
                         continue
@@ -4383,10 +4581,12 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             seg_addr = pending_start + off
             if kind == "fill":
                 end_addr = seg_addr + length - 1
-                fh.write(f"        .fill {length}, ${byte_val:02X}    "
-                         f"; ${seg_addr:04X}-${end_addr:04X}\n")
+                fh.write(
+                    f"        .fill {length}, ${byte_val:02X}    "
+                    f"; ${seg_addr:04X}-${end_addr:04X}\n"
+                )
             else:
-                _emit_byte_segment(seg_addr, bytes(pending_data[off:off + length]))
+                _emit_byte_segment(seg_addr, bytes(pending_data[off : off + length]))
 
         pending_data = []
 
@@ -4404,16 +4604,14 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             if current_enc != ts["encoding"]:
                 fh.write(f'        .enc "{ts["encoding"]}"\n')
                 current_enc = ts["encoding"]
-            esc = (ts["string"]
-                   .replace("\\", "\\\\")
-                   .replace('"', '\\"'))
+            esc = ts["string"].replace("\\", "\\\\").replace('"', '\\"')
             if reps == 1:
                 fh.write(f'        .text "{esc}"    ; ${pc:04X}\n')
             else:
-                fh.write(f'        ; ${pc:04X}\n')
-                fh.write(f'        .rept {reps}\n')
+                fh.write(f"        ; ${pc:04X}\n")
+                fh.write(f"        .rept {reps}\n")
                 fh.write(f'        .text "{esc}"\n')
-                fh.write(f'        .endrept\n')
+                fh.write(f"        .endrept\n")
             pc += len(encoded) * reps
             pending_start = pc
             if pc in seg_ends:
@@ -4422,18 +4620,18 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         if pc in byte_runs:
             flush_data()
             runs = byte_runs[pc]
-            fh.write(f'        ; ${pc:04X}\n')
+            fh.write(f"        ; ${pc:04X}\n")
             for r in runs:
                 if r["kind"] == "fill":
                     fh.write(f'        .fill {r["count"]}, ${r["byte"]:02X}\n')
                 else:
                     bytes_text = ", ".join(f"${b:02X}" for b in r["bytes"])
                     if r["reps"] == 1:
-                        fh.write(f'        .byte {bytes_text}\n')
+                        fh.write(f"        .byte {bytes_text}\n")
                     else:
                         fh.write(f'        .rept {r["reps"]}\n')
-                        fh.write(f'        .byte {bytes_text}\n')
-                        fh.write(f'        .endrept\n')
+                        fh.write(f"        .byte {bytes_text}\n")
+                        fh.write(f"        .endrept\n")
             pc += _byte_runs_encoded_length(runs)
             pending_start = pc
             if pc in seg_ends:
@@ -4443,8 +4641,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             flush_data()
             # Function-block lifecycle: close the open .block first so
             # the next function's header/.block emits at top level.
-            if (current_block_entry is not None
-                    and pc >= function_blocks[current_block_entry][0]):
+            if (
+                current_block_entry is not None
+                and pc >= function_blocks[current_block_entry][0]
+            ):
                 fh.write(".bend\n")
                 current_block_entry = None
                 _rebuild_effective_labels()
@@ -4513,24 +4713,33 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 fact = cmp_facts[pc]
                 lhs_for_idiom = fact.get("lhs") or {}
                 step_info = _detect_step_idiom(
-                    lhs_for_idiom,
-                    fact.get("branch", ""),
-                    fact.get("rhs") or {})
+                    lhs_for_idiom, fact.get("branch", ""), fact.get("rhs") or {}
+                )
                 # Only emit the visual-structure block when the source
                 # is a real variable. For `imm`/`from_caller` sources
                 # the slug is already short (`$05 back 1 pos`) and the
                 # multi-line comment adds noise without insight.
                 if step_info is not None and lhs_for_idiom.get("kind") in (
-                        "var", "var_indirect"):
-                    fh.write(_emit_step_idiom_comment(
-                        fact, labels, block_pcs_sorted,
-                        block_name_by_pc, step_info))
-            operand = emit_64tass_instruction(mode, p1, p2, pc, labels=effective_labels,
-                                              imm_subs=imm_subs,
-                                              branch_operand_override=branch_operand_override,
-                                              struct_segments=struct_segments,
-                                              name_spans=name_spans,
-                                              anchor_spans=HW_ANCHOR_REGIONS)
+                    "var",
+                    "var_indirect",
+                ):
+                    fh.write(
+                        _emit_step_idiom_comment(
+                            fact, labels, block_pcs_sorted, block_name_by_pc, step_info
+                        )
+                    )
+            operand = emit_64tass_instruction(
+                mode,
+                p1,
+                p2,
+                pc,
+                labels=effective_labels,
+                imm_subs=imm_subs,
+                branch_operand_override=branch_operand_override,
+                struct_segments=struct_segments,
+                name_spans=name_spans,
+                anchor_spans=HW_ANCHOR_REGIONS,
+            )
             if pc in function_entries_set:
                 # The `funcname .block` directive above already declares
                 # the entry label — emitting `funcname:` again here would
@@ -4541,8 +4750,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 # (stripped form when the label had the funcname_ prefix,
                 # else the full name); outside any block, use the stored
                 # bare label.
-                if (current_block_entry is not None
-                        and label_block.get(pc) == current_block_entry):
+                if (
+                    current_block_entry is not None
+                    and label_block.get(pc) == current_block_entry
+                ):
                     lbl_name = inblock_name.get(pc, labels.get(pc))
                 else:
                     lbl_name = labels.get(pc)
@@ -4557,8 +4768,10 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             if mem[pc] in ROUND_TRIP_UNSAFE_OPCODES:
                 byte_list = ", ".join(f"${mem[pc + i]:02X}" for i in range(n))
                 line = f"{lbl_prefix:<26} .byte {byte_list}"
-                unsafe_instr_note = (f"; {mnem_lower} {operand.strip()} "
-                                     f"(undocumented opcode ${mem[pc]:02X})")
+                unsafe_instr_note = (
+                    f"; {mnem_lower} {operand.strip()} "
+                    f"(undocumented opcode ${mem[pc]:02X})"
+                )
             else:
                 line = f"{lbl_prefix:<26} {mnem_lower:<4} {operand:<28}"
 
@@ -4572,10 +4785,14 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 cond_text = branch_condition_overrides[pc]
             elif mnem_lower in _BRANCH_FLAG and pc in cmp_facts:
                 cond_text = render_condition_from_fact(
-                    cmp_facts[pc], labels, value_names_per_var, imm_subs,
+                    cmp_facts[pc],
+                    labels,
+                    value_names_per_var,
+                    imm_subs,
                     block_pcs_sorted=block_pcs_sorted,
                     block_name_by_pc=block_name_by_pc,
-                    reg_inputs_per_fn=register_inputs)
+                    reg_inputs_per_fn=register_inputs,
+                )
 
             # Hardware-register decode: when this is a STA/STX/STY into
             # a register listed in HW_IMM_DECODERS and the immediately
@@ -4586,14 +4803,13 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             # instruction that would have invalidated the register's
             # contents — see prev_imm bookkeeping below.
             hw_text = None
-            if (mnem_lower in ("sta", "stx", "sty")
-                    and mode in ("abs", "abx", "aby")):
+            if mnem_lower in ("sta", "stx", "sty") and mode in ("abs", "abx", "aby"):
                 tgt = p1 | (p2 << 8)
-                reg = mnem_lower[-1]   # 'a', 'x', or 'y'
+                reg = mnem_lower[-1]  # 'a', 'x', or 'y'
                 imm = prev_imm.get(reg)
                 if tgt in HW_IMM_DECODERS and imm is not None:
                     reg_name = labels.get(tgt, f"${tgt:04X}")
-                    hw_text = (f"{reg_name} := {HW_IMM_DECODERS[tgt](imm)}")
+                    hw_text = f"{reg_name} := {HW_IMM_DECODERS[tgt](imm)}"
             # SMC-immediate comment: classify the operand byte at pc+1
             # for any imm-mode 2-byte instruction (LDA/LDX/LDY/CMP/CPX/
             # CPY/ADC/SBC/AND/ORA/EOR). Three outcomes:
@@ -4609,8 +4825,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 if operand_byte_addr in labels:
                     smc_imm_text = f"← {labels[operand_byte_addr]}"
                 elif operand_byte_addr in smc_write_targets:
-                    smc_imm_text = (f"← (SMC operand at "
-                                    f"${operand_byte_addr:04X}, no name)")
+                    smc_imm_text = (
+                        f"← (SMC operand at " f"${operand_byte_addr:04X}, no name)"
+                    )
 
             tail_parts: list[str] = []
             if unsafe_instr_note:
@@ -4628,8 +4845,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
             # three (safer than tracking arithmetic / transfers).
             if mode == "imm" and mnem_lower in ("lda", "ldx", "ldy"):
                 seeded = mnem_lower[-1]
-                prev_imm = {"a": None, "x": None, "y": None,
-                            seeded: p1}
+                prev_imm = {"a": None, "x": None, "y": None, seeded: p1}
             else:
                 prev_imm = {"a": None, "x": None, "y": None}
 
@@ -4682,6 +4898,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
 # (PETSCII / ASCII for our uppercase strings) and ``screen`` maps ASCII
 # uppercase letters to C64 screen codes.
 
+
 def _encode_text(s: str, encoding: str) -> bytes:
     """Encode ``s`` per the 64tass encoding name. Returns bytes; raises
     ``ValueError`` for characters the encoding can't represent."""
@@ -4691,19 +4908,18 @@ def _encode_text(s: str, encoding: str) -> bytes:
         out = bytearray()
         for c in s:
             n = ord(c)
-            if 0x41 <= n <= 0x5A:        # 'A'-'Z' → $01-$1A
+            if 0x41 <= n <= 0x5A:  # 'A'-'Z' → $01-$1A
                 out.append(n - 0x40)
-            elif n == 0x40:              # '@' → $00
+            elif n == 0x40:  # '@' → $00
                 out.append(0x00)
-            elif n == 0x5B:              # '[' → $1B
+            elif n == 0x5B:  # '[' → $1B
                 out.append(0x1B)
-            elif n == 0x5D:              # ']' → $1D
+            elif n == 0x5D:  # ']' → $1D
                 out.append(0x1D)
-            elif 0x20 <= n <= 0x3F:      # ' '-'?' → same as ASCII
+            elif 0x20 <= n <= 0x3F:  # ' '-'?' → same as ASCII
                 out.append(n)
             else:
-                raise ValueError(
-                    f"screen encoding cannot represent {c!r} (U+{n:04X})")
+                raise ValueError(f"screen encoding cannot represent {c!r} (U+{n:04X})")
         return bytes(out)
     raise ValueError(f"unknown encoding: {encoding!r}")
 
@@ -4795,7 +5011,8 @@ def load_value_names(annotations: dict[int, dict]) -> dict[int, dict[int, str]]:
             if not (isinstance(name, str) and _IDENT_RE.match(name)):
                 raise SystemExit(
                     f"value_names[${addr:04X}][{vt}]: {name!r} is not a "
-                    f"valid 64tass identifier")
+                    f"valid 64tass identifier"
+                )
             if not (0 <= v <= 0xFF):
                 continue
             mapped[v] = name
@@ -4804,8 +5021,9 @@ def load_value_names(annotations: dict[int, dict]) -> dict[int, dict[int, str]]:
     return out
 
 
-def load_register_inputs(annotations: dict[int, dict],
-                         ) -> dict[int, dict[str, int]]:
+def load_register_inputs(
+    annotations: dict[int, dict],
+) -> dict[int, dict[str, int]]:
     """Load per-function ``register_inputs`` declarations.
 
     Schema (in annotations.toml, under any ``[function."$XXXX"]`` block):
@@ -4838,21 +5056,25 @@ def load_register_inputs(annotations: dict[int, dict],
             if reg not in ("a", "x", "y"):
                 raise SystemExit(
                     f"[function.${addr:04X}].register_inputs: register "
-                    f"{reg_key!r} must be one of a/x/y")
+                    f"{reg_key!r} must be one of a/x/y"
+                )
             if not isinstance(var_name, str) or var_name not in name_to_addr:
                 raise SystemExit(
                     f"[function.${addr:04X}].register_inputs.{reg_key}: "
-                    f"{var_name!r} not a known annotation `name`")
+                    f"{var_name!r} not a known annotation `name`"
+                )
             resolved[reg] = name_to_addr[var_name]
         out[addr] = resolved
     return out
 
 
-def build_imm_substitutions(mem: bytes, instr_at: dict,
-                             value_names: dict[int, dict[int, str]],
-                             register_inputs: dict[int, dict[str, int]] | None = None,
-                             cmp_facts: dict[int, dict] | None = None,
-                             ) -> dict[int, str]:
+def build_imm_substitutions(
+    mem: bytes,
+    instr_at: dict,
+    value_names: dict[int, dict[int, str]],
+    register_inputs: dict[int, dict[str, int]] | None = None,
+    cmp_facts: dict[int, dict] | None = None,
+) -> dict[int, str]:
     """Walk instructions in PC order, track A/X/Y provenance, and
     return {pc_of_imm_instr: symbolic_name} for every immediate whose
     value is provably bound to an enum-bound variable's value_names.
@@ -5048,14 +5270,12 @@ def build_imm_substitutions(mem: bytes, instr_at: dict,
             var_addr: int | None = None
             if lhs.get("kind") == "var":
                 try:
-                    var_addr = int(
-                        (lhs.get("var_addr") or "").lstrip("$"), 16)
+                    var_addr = int((lhs.get("var_addr") or "").lstrip("$"), 16)
                 except (AttributeError, ValueError):
                     var_addr = None
             elif lhs.get("kind") == "from_caller":
                 reg_key = (lhs.get("reg") or "").lower()
-                block_pc_text = (
-                    (fact.get("containing_block") or {}).get("pc") or "")
+                block_pc_text = (fact.get("containing_block") or {}).get("pc") or ""
                 try:
                     block_pc = int(block_pc_text.lstrip("$"), 16)
                 except (AttributeError, ValueError):
@@ -5112,18 +5332,22 @@ def load_byte_runs(annotations_path: Path) -> dict[int, list[dict]]:
             if not isinstance(r, dict):
                 continue
             if "count" in r and "byte" in r:
-                runs_out.append({
-                    "kind": "fill",
-                    "count": int(r["count"]),
-                    "byte": _parse_byte_literal(r["byte"]),
-                })
+                runs_out.append(
+                    {
+                        "kind": "fill",
+                        "count": int(r["count"]),
+                        "byte": _parse_byte_literal(r["byte"]),
+                    }
+                )
             elif "bytes" in r:
                 bs = [_parse_byte_literal(b) for b in r["bytes"]]
-                runs_out.append({
-                    "kind": "bytes",
-                    "bytes": bs,
-                    "reps": int(r.get("reps", 1)),
-                })
+                runs_out.append(
+                    {
+                        "kind": "bytes",
+                        "bytes": bs,
+                        "reps": int(r.get("reps", 1)),
+                    }
+                )
         if runs_out:
             out[addr] = runs_out
     return out
@@ -5250,8 +5474,8 @@ def load_imm_overrides(annotations_path: Path) -> dict[int, str]:
             continue
         if not _IDENT_RE.match(name):
             raise SystemExit(
-                f"imm[${addr:04X}].name: {name!r} is not a valid "
-                f"64tass identifier")
+                f"imm[${addr:04X}].name: {name!r} is not a valid " f"64tass identifier"
+            )
         out[addr] = name
     return out
 
@@ -5278,19 +5502,20 @@ def resolve_imm_overrides(
     for pc, name in sorted(imm_overrides.items()):
         info = instr_at.get(pc)
         if info is None:
-            raise SystemExit(
-                f"imm[${pc:04X}]: no instruction starts here")
+            raise SystemExit(f"imm[${pc:04X}]: no instruction starts here")
         _mnem, mode, n = info
         if mode != "imm" or n < 2:
             raise SystemExit(
                 f"imm[${pc:04X}]: instruction is not imm-mode "
-                f"(mode={mode!r}, n={n})")
+                f"(mode={mode!r}, n={n})"
+            )
         value = mem[pc + 1]
         prior = constants.get(name)
         if prior is not None and prior != value:
             raise SystemExit(
                 f"imm[${pc:04X}]: name {name!r} already bound to "
-                f"${prior:02X} elsewhere; cannot rebind to ${value:02X}")
+                f"${prior:02X} elsewhere; cannot rebind to ${value:02X}"
+            )
         constants[name] = value
         additions[pc] = name
     return additions, constants
@@ -5441,8 +5666,13 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
                 except ValueError:
                     continue
             if isinstance(addr, int):
-                targets.append({"addr": addr, "name": t.get("name", ""),
-                                "context": t.get("context", "")})
+                targets.append(
+                    {
+                        "addr": addr,
+                        "name": t.get("name", ""),
+                        "context": t.get("context", ""),
+                    }
+                )
         out[pc] = {
             "description": body.get("description", ""),
             "patch_sources": sorted(sources),
@@ -5547,32 +5777,51 @@ def load_ghidra_segments(segments_path: Path) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bin", default="artefacts/defmon-static.bin",
-                    help="flat 64K static image")
-    ap.add_argument("--entrypoints", default="trace/entrypoints.json",
-                    help="JSON with executed PCs (code-start oracle)")
-    ap.add_argument("--out", default="defmon.s",
-                    help="output 64tass source")
+    ap.add_argument(
+        "--bin", default="artefacts/defmon-static.bin", help="flat 64K static image"
+    )
+    ap.add_argument(
+        "--entrypoints",
+        default="trace/entrypoints.json",
+        help="JSON with executed PCs (code-start oracle)",
+    )
+    ap.add_argument("--out", default="defmon.s", help="output 64tass source")
     ap.add_argument("--start", type=lambda s: int(s, 0), default=LOAD_ADDR)
-    ap.add_argument("--end", type=lambda s: int(s, 0), default=END_ADDR_EXCL,
-                    help="end address (exclusive)")
-    ap.add_argument("--bytes-only", action="store_true",
-                    help="emit pure .byte for everything (no disassembly); "
-                         "useful for re-validating the toolchain only")
-    ap.add_argument("--with-bytes", action="store_true",
-                    help="suffix every instruction line with its raw "
-                         "machine-code bytes (e.g. `; $0828  8D F7 0A`). "
-                         "Default off — the bytes column doubles line "
-                         "width and is rarely consulted; the `; $XXXX` "
-                         "address column always appears.")
-    ap.add_argument("--ghidra", default="artefacts/ghidra",
-                    help="directory holding Ghidra symbols.json + "
-                         "segments.json (pass-2 inputs); pass an "
-                         "empty string to disable")
-    ap.add_argument("--annotations", default="tools/re/annotations.toml",
-                    help="TOML file with [function.$XXXX] / [region.$XXXX] "
-                         "blocks (centralised RE knowledge); pass an empty "
-                         "string to disable")
+    ap.add_argument(
+        "--end",
+        type=lambda s: int(s, 0),
+        default=END_ADDR_EXCL,
+        help="end address (exclusive)",
+    )
+    ap.add_argument(
+        "--bytes-only",
+        action="store_true",
+        help="emit pure .byte for everything (no disassembly); "
+        "useful for re-validating the toolchain only",
+    )
+    ap.add_argument(
+        "--with-bytes",
+        action="store_true",
+        help="suffix every instruction line with its raw "
+        "machine-code bytes (e.g. `; $0828  8D F7 0A`). "
+        "Default off — the bytes column doubles line "
+        "width and is rarely consulted; the `; $XXXX` "
+        "address column always appears.",
+    )
+    ap.add_argument(
+        "--ghidra",
+        default="artefacts/ghidra",
+        help="directory holding Ghidra symbols.json + "
+        "segments.json (pass-2 inputs); pass an "
+        "empty string to disable",
+    )
+    ap.add_argument(
+        "--annotations",
+        default="tools/re/annotations.toml",
+        help="TOML file with [function.$XXXX] / [region.$XXXX] "
+        "blocks (centralised RE knowledge); pass an empty "
+        "string to disable",
+    )
     args = ap.parse_args()
 
     mem = Path(args.bin).read_bytes()
@@ -5640,8 +5889,7 @@ def main() -> None:
         text_segments_map = load_text_segments(Path(args.annotations))
         byte_runs_map = load_byte_runs(Path(args.annotations))
         value_names_per_var = load_value_names(annotations)
-        branch_condition_overrides = load_branch_overrides(
-            Path(args.annotations))
+        branch_condition_overrides = load_branch_overrides(Path(args.annotations))
         # Auto-derive {addr: name} from annotation summaries that lead
         # with the `name — description` convention. Lower precedence
         # than SEED_LANDMARKS / EQUATE_LABELS / Ghidra (already in
@@ -5656,8 +5904,10 @@ def main() -> None:
     graph = None
     if not args.bytes_only:
         from tools.re.callgraph import build as _build_callgraph
-        graph = _build_callgraph(mem, set(instr_at.keys()), consumed,
-                                 args.start, args.end)
+
+        graph = _build_callgraph(
+            mem, set(instr_at.keys()), consumed, args.start, args.end
+        )
 
     # Comparison-site facts (CFG-walked lhs/rhs per conditional branch).
     # Drives both the per-branch condition comment and the `on_<cond>`
@@ -5675,11 +5925,13 @@ def main() -> None:
     if not args.bytes_only and args.annotations:
         from tools.re.reg_effects import analyze as _analyze_reg_effects
         from tools.re.reg_effects import _function_entries
+
         fn_entries = _function_entries(Path(args.annotations))
         reg_effects = {
             int(k.lstrip("$"), 16): v
             for k, v in _analyze_reg_effects(
-                mem, instr_at, fn_entries, args.start, args.end).items()
+                mem, instr_at, fn_entries, args.start, args.end
+            ).items()
         }
 
     # Per-PC IMM operand overrides (manual `[imm."$XXXX"]` entries).
@@ -5690,7 +5942,8 @@ def main() -> None:
         imm_overrides_map = load_imm_overrides(Path(args.annotations))
         if imm_overrides_map:
             additions, named_constants = resolve_imm_overrides(
-                imm_overrides_map, mem, instr_at)
+                imm_overrides_map, mem, instr_at
+            )
             # Manual overrides win — apply AFTER build_imm_substitutions.
             imm_overrides_map = additions
 
@@ -5698,10 +5951,9 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w") as fh:
         register_inputs_map = load_register_inputs(annotations)
-        imm_subs_map = build_imm_substitutions(mem, instr_at,
-                                                value_names_per_var,
-                                                register_inputs_map,
-                                                cmp_facts=cmp_facts)
+        imm_subs_map = build_imm_substitutions(
+            mem, instr_at, value_names_per_var, register_inputs_map, cmp_facts=cmp_facts
+        )
         imm_subs_map.update(imm_overrides_map)
         # Branch operands take their semantic name from alias equates
         # (`on_<cond> = $XXXX`). The landing keeps its block-relative
@@ -5713,15 +5965,18 @@ def main() -> None:
             # alias-dedup logic stays consistent.
             _labels_view = dict(labels)
             block_pcs_sorted, block_name_by_pc = _build_block_pc_index(
-                annotations, instr_at)
+                annotations, instr_at
+            )
             block_counters: dict[int, int] = {}
             for tgt in sorted(_branch_targets):
                 if tgt in instr_at and tgt not in _labels_view:
                     block_pc = _nearest_block_pc(tgt, block_pcs_sorted)
                     if block_pc is not None and tgt != block_pc:
                         block_counters[block_pc] = block_counters.get(block_pc, 0) + 1
-                        _labels_view[tgt] = (f"{block_name_by_pc[block_pc]}"
-                                             f"_{block_counters[block_pc]}")
+                        _labels_view[tgt] = (
+                            f"{block_name_by_pc[block_pc]}"
+                            f"_{block_counters[block_pc]}"
+                        )
                     else:
                         _labels_view[tgt] = f"L_{tgt:04X}"
         # Branch operands resolve through the standard lbl() chain
@@ -5732,25 +5987,37 @@ def main() -> None:
         # Detect switch dispatchers (CMP/branch cascades on the same
         # variable). Pure documentation — adds a Ghidra-style case
         # table comment above the first CMP of each detected group.
-        switch_dispatchers = detect_switch_dispatchers(
-            cmp_facts, labels, value_names_per_var) if cmp_facts else {}
-        ic, dc = emit_source(mem, args.start, args.end, instr_at, consumed, fh,
-                             labels=labels, segments=segments,
-                             annotations=annotations, graph=graph,
-                             with_bytes=args.with_bytes,
-                             text_segments=text_segments_map,
-                             byte_runs=byte_runs_map,
-                             imm_subs=imm_subs_map,
-                             value_names_per_var=value_names_per_var,
-                             cmp_facts=cmp_facts,
-                             branch_condition_overrides=branch_condition_overrides,
-                             named_constants=named_constants,
-                             smc_dispatch=smc_dispatch_map,
-                             smc_branch=smc_branch_map,
-                             smc_opcode=smc_opcode_map,
-                             switch_dispatchers=switch_dispatchers,
-                             register_inputs=register_inputs_map,
-                             reg_effects=reg_effects)
+        switch_dispatchers = (
+            detect_switch_dispatchers(cmp_facts, labels, value_names_per_var)
+            if cmp_facts
+            else {}
+        )
+        ic, dc = emit_source(
+            mem,
+            args.start,
+            args.end,
+            instr_at,
+            consumed,
+            fh,
+            labels=labels,
+            segments=segments,
+            annotations=annotations,
+            graph=graph,
+            with_bytes=args.with_bytes,
+            text_segments=text_segments_map,
+            byte_runs=byte_runs_map,
+            imm_subs=imm_subs_map,
+            value_names_per_var=value_names_per_var,
+            cmp_facts=cmp_facts,
+            branch_condition_overrides=branch_condition_overrides,
+            named_constants=named_constants,
+            smc_dispatch=smc_dispatch_map,
+            smc_branch=smc_branch_map,
+            smc_opcode=smc_opcode_map,
+            switch_dispatchers=switch_dispatchers,
+            register_inputs=register_inputs_map,
+            reg_effects=reg_effects,
+        )
 
     total = args.end - args.start
     print(f"wrote {out_path}  ({total} bytes  ${args.start:04X}-${args.end - 1:04X})")
@@ -5763,13 +6030,16 @@ def main() -> None:
         print(f"  rejected code-starts (overlap/oob/unknown opcode) = {rejected}")
     if ghidra_label_count or segments:
         print(f"  ghidra labels merged = {ghidra_label_count}")
-        print(f"  ghidra data segments = {len(segments)} "
-              f"(annotated as block headers)")
+        print(
+            f"  ghidra data segments = {len(segments)} " f"(annotated as block headers)"
+        )
     if annotations:
         n_func = sum(1 for addr in annotations if addr in instr_at)
         n_region = len(annotations) - n_func
-        print(f"  annotations merged   = {len(annotations)} "
-              f"({n_func} function, {n_region} region)")
+        print(
+            f"  annotations merged   = {len(annotations)} "
+            f"({n_func} function, {n_region} region)"
+        )
 
 
 if __name__ == "__main__":

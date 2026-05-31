@@ -1,15 +1,23 @@
-"""Per-function register-effect analysis (clobbers + inputs).
+"""Per-function register-effect analysis (clobbers + inputs + outputs).
 
-For every ``[function]`` entry, computes two interface fields over A/X/Y:
+For every ``[function]`` entry, computes three interface fields over A/X/Y:
   - ``registers_clobbered`` — registers the function destroys (written on
     some path before it returns), transitive over its callees.
   - ``inputs`` — registers it reads before defining (live-in): what the
     caller must set up, also transitive over its callees.
+  - ``outputs`` — registers it returns a meaningful value in: those it
+    DEFINITELY writes before every exit (must-define) AND that some caller
+    reads after the call before redefining (interprocedural liveness). The
+    intersection excludes scratch left in a register and inputs passed
+    through unchanged, so it does not falsely claim a return value; a
+    function with no caller (handler/entrypoint) has no outputs.
 
-Both compose across JSR/tail-call edges via a fixed-point. A register is
-clobbered if any path writes it; an input if any path reads it before a
+All three compose across JSR/tail-call edges via fixed-points. A register
+is clobbered if any path writes it; an input if any path reads it before a
 definite write. Computed/self-modified/out-of-image calls are treated
-conservatively (clobber A/X/Y; read A/X/Y) so neither field UNDER-reports.
+conservatively (clobber A/X/Y; read A/X/Y) so neither clobbers nor inputs
+UNDER-reports; outputs is the conservative-against-false-claim direction
+and is only rendered for soundly-analysed (certain) functions.
 
 Method
 ======
@@ -230,36 +238,39 @@ def _walk_subroutine(
             go(pc + n)
 
         callees |= calls
-        nodes[pc] = {"reads": reads, "writes": writes, "calls": calls, "succs": succs}
+        nodes[pc] = {
+            "reads": reads,
+            "writes": writes,
+            "calls": calls,
+            "succs": succs,
+            "op": op,
+        }
     return nodes, callees, uncertain
 
 
-def _live_in(entry: int, nodes: dict, clob: dict, inputs: dict, unc: dict) -> set[str]:
-    """Registers this subroutine reads before defining (live-in / inputs),
-    composing callee inputs/clobbers. Forward 'definite-written' must-
-    analysis: in[pc] = ∩ out[pred]; a read of R not in in[pc] is an input;
-    out[pc] = in[pc] ∪ writes(pc) ∪ clobbers(callees). Over-approximates
-    (never under-reports an input) — joins shrink the must-set."""
+def _preds(nodes: dict) -> dict[int, list[int]]:
     preds: dict[int, list[int]] = {pc: [] for pc in nodes}
     for pc, nd in nodes.items():
         for s in nd["succs"]:
             if s in preds:
                 preds[s].append(pc)
+    return preds
 
-    def node_reads(nd: dict) -> set[str]:
-        r = set(nd["reads"])
-        for c in nd["calls"]:
-            r |= inputs.get(c, set())  # callee's unmet inputs propagate
-        return r
 
-    def node_writes(nd: dict) -> set[str]:
-        w = set(nd["writes"])
-        for c in nd["calls"]:
-            w |= _ALL if unc.get(c) else clob.get(c, set())
-        return w
+def _node_writes(nd: dict, clob: dict, unc: dict) -> set[str]:
+    w = set(nd["writes"])
+    for c in nd["calls"]:
+        w |= _ALL if unc.get(c) else clob.get(c, set())
+    return w
 
-    # Fixed-point on the must-set (start optimistic = all-written, except
-    # the entry which has nothing written before it).
+
+def _definite_written(
+    entry: int, nodes: dict, preds: dict, clob: dict, unc: dict
+) -> dict[int, set[str]]:
+    """Forward 'definite-written' must-analysis. Returns out[pc] = the set
+    of A/X/Y written on EVERY path from entry through pc. Starts optimistic
+    (all-written) and shrinks at joins (in[pc] = ∩ out[pred]); the entry —
+    and any node unreachable from it — starts with nothing written."""
     out: dict[int, set[str]] = {pc: set(_ALL) for pc in nodes}
     changed = True
     while changed:
@@ -269,21 +280,131 @@ def _live_in(entry: int, nodes: dict, clob: dict, inputs: dict, unc: dict) -> se
             for p in preds[pc]:
                 in_set &= out[p]
             if not preds[pc] and pc != entry:
-                in_set = set()  # unreachable-from-entry node: assume nothing
-            new_out = in_set | node_writes(nd)
+                in_set = set()
+            new_out = in_set | _node_writes(nd, clob, unc)
             if new_out != out[pc]:
                 out[pc] = new_out
                 changed = True
+    return out
+
+
+def _in_set(pc: int, entry: int, preds: dict, out: dict) -> set[str]:
+    """The definite-written set on entry to ``pc`` (before its own writes)."""
+    if pc == entry or not preds[pc]:
+        return set()
+    acc = set(_ALL)
+    for p in preds[pc]:
+        acc &= out[p]
+    return acc
+
+
+def _live_in(entry: int, nodes: dict, clob: dict, inputs: dict, unc: dict) -> set[str]:
+    """Registers this subroutine reads before defining (live-in / inputs),
+    composing callee inputs/clobbers. A read of R at pc that is not in the
+    definite-written set on entry to pc is an input; callee unmet inputs
+    propagate. Over-approximates (never under-reports an input)."""
+    preds = _preds(nodes)
+    out = _definite_written(entry, nodes, preds, clob, unc)
+
+    def node_reads(nd: dict) -> set[str]:
+        r = set(nd["reads"])
+        for c in nd["calls"]:
+            r |= inputs.get(c, set())  # callee's unmet inputs propagate
+        return r
 
     inp: set[str] = set()
     for pc, nd in nodes.items():
-        in_set = set() if pc == entry else set(_ALL)
-        for p in preds[pc]:
-            in_set &= out[p]
-        if not preds[pc] and pc != entry:
-            in_set = set()
-        inp |= node_reads(nd) - in_set
+        inp |= node_reads(nd) - _in_set(pc, entry, preds, out)
     return inp
+
+
+def _exit_nodes(nodes: dict) -> list[int]:
+    """PCs at which the subroutine returns to its caller: an RTS/RTI/BRK, a
+    tail-call (JMP/fall-through into another entry — calls set, no intra
+    successor), or an indirect/computed tail JMP."""
+    out = []
+    for pc, nd in nodes.items():
+        op = nd["op"]
+        if op in _RETURNS or op == _JMP_IND or (nd["calls"] and not nd["succs"]):
+            out.append(pc)
+    return out
+
+
+def _defined_at_exit(
+    entry: int, nodes: dict, clob: dict, unc: dict, mustdef: dict
+) -> set[str]:
+    """Registers this subroutine DEFINITELY writes before every return —
+    a must-analysis intersected over all exit points. A tail-call exit also
+    inherits whatever the tail callee must-defines (``mustdef``). Used to
+    distinguish a genuine return value from a register the caller passed
+    through unchanged. No normal exit (pure loop) -> nothing claimed."""
+    preds = _preds(nodes)
+    out = _definite_written(entry, nodes, preds, clob, unc)
+    exits = _exit_nodes(nodes)
+    if not exits:
+        return set()
+    acc = set(_ALL)
+    for pc in exits:
+        nd = nodes[pc]
+        defined = out[pc]  # includes pc's own writes / call clobbers
+        if nd["op"] == _JMP_ABS and nd["calls"] and not nd["succs"]:
+            for c in nd["calls"]:
+                defined = defined | mustdef.get(c, set())
+        acc &= defined
+    return acc
+
+
+def _liveness(
+    entry: int, nodes: dict, inputs: dict, clob: dict, unc: dict, demand_f: set[str]
+) -> dict[int, set[str]]:
+    """Backward liveness within one subroutine, given ``demand_f`` (the
+    registers this subroutine's own callers want back). Returns, per call
+    site, the set of registers live immediately after that site — i.e. what
+    its callee is demanded to produce. A JSR site uses the callee's inputs
+    and is killed by the callee's clobbers; an exit node's live-out is
+    ``demand_f`` (the value flows on up to this subroutine's caller)."""
+    live_in: dict[int, set[str]] = {pc: set() for pc in nodes}
+    live_out: dict[int, set[str]] = {pc: set() for pc in nodes}
+
+    def use_def(nd: dict) -> tuple[set[str], set[str]]:
+        use = set(nd["reads"])
+        dfn = set(nd["writes"])
+        for c in nd["calls"]:
+            use |= inputs.get(c, set())
+            dfn |= _ALL if unc.get(c) else clob.get(c, set())
+        return use, dfn
+
+    is_exit = set(_exit_nodes(nodes))
+    changed = True
+    while changed:
+        changed = False
+        for pc, nd in nodes.items():
+            if pc in is_exit:
+                lo = set(demand_f)
+            else:
+                lo = set()
+                for s in nd["succs"]:
+                    lo |= live_in[s]
+            use, dfn = use_def(nd)
+            li = use | (lo - dfn)
+            if lo != live_out[pc] or li != live_in[pc]:
+                live_out[pc], live_in[pc] = lo, li
+                changed = True
+
+    # What each callee is demanded to produce from this subroutine.
+    contrib: dict[int, set[str]] = {}
+    for pc, nd in nodes.items():
+        if not nd["calls"]:
+            continue
+        if nd["op"] == _JSR:
+            after = set()  # live immediately after the call = live-in of succs
+            for s in nd["succs"]:
+                after |= live_in[s]
+        else:  # tail-call: the callee returns straight to this caller's caller
+            after = set(demand_f)
+        for c in nd["calls"]:
+            contrib.setdefault(c, set()).update(after)
+    return contrib
 
 
 def _jsr_targets(mem: bytes, instr_at: dict) -> set[int]:
@@ -352,6 +473,43 @@ def analyze(
                 inputs[e] = new
                 changed = True
 
+    # Must-define-at-exit: registers a function always freshly writes before
+    # returning. Fixed-point because a tail-call exit inherits its callee's
+    # must-defines.
+    mustdef = {e: set(_ALL) for e in entries}
+    changed = True
+    while changed:
+        changed = False
+        for e in entries:
+            new = _defined_at_exit(e, nodes_of[e], clob, unc, mustdef)
+            if new != mustdef[e]:
+                mustdef[e] = new
+                changed = True
+
+    # Demand (interprocedural backward liveness): the registers some caller
+    # reads after a call to F, before redefining them. Grows monotonically:
+    # as a function's own demand rises, so does what it asks of its callees.
+    demand = {e: set() for e in entries}
+    changed = True
+    while changed:
+        changed = False
+        acc = {e: set() for e in entries}
+        for e in entries:
+            for c, regs in _liveness(
+                e, nodes_of[e], inputs, clob, unc, demand[e]
+            ).items():
+                if c in acc:
+                    acc[c] |= regs
+        for e in entries:
+            if acc[e] != demand[e]:
+                demand[e] = acc[e]
+                changed = True
+
+    # A return register is one the function definitely produces (mustdef) AND
+    # a caller actually consumes (demand): excludes scratch left in a register
+    # and inputs passed through unchanged.
+    outputs = {e: (mustdef[e] & demand[e]) for e in entries}
+
     out: dict = {}
     for f in sorted(fn_entries):
         if f not in clob:
@@ -360,6 +518,7 @@ def analyze(
         out[f"${f:04X}"] = {
             "clobbers": "".join(sorted(regs)),
             "inputs": "".join(sorted(inputs[f])),
+            "outputs": "".join(sorted(outputs[f])),
             "direct": "".join(sorted(direct[f])),
             "uncertain": unc[f],
             "callees": sorted(f"${c:04X}" for c in callees.get(f, ())),
@@ -413,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         from collections import Counter  # noqa: PLC0415
 
         print(f"functions analysed: {len(facts)}")
-        for field in ("clobbers", "inputs"):
+        for field in ("clobbers", "inputs", "outputs"):
             dist = Counter(v[field] or "(none)" for v in facts.values())
             print(f"  {field} distribution:")
             for combo, n in sorted(dist.items(), key=lambda x: (-x[1], x[0])):

@@ -124,9 +124,10 @@ $(BUILD_DIR)/callgraph.json: $(STATIC_BIN) $(ANNOTATIONS) \
 
 callgraph: $(BUILD_DIR)/callgraph.json
 
-# Per-function register-clobber analysis (which of A/X/Y each [function]
-# destroys, transitive over its callees). Read-only artifact + report;
-# `--report` cross-checks the hand-written registers_clobbered fields.
+# Per-function register-effect analysis: which of A/X/Y each [function]
+# destroys (clobbers), reads before defining (inputs), and returns to a
+# caller (outputs) — transitive over its callees. Read-only artifact +
+# report; `--report` cross-checks the hand-written registers_clobbered.
 $(BUILD_DIR)/reg_effects.json: $(STATIC_BIN) $(ANNOTATIONS) $(ENTRYPOINTS) \
                                tools/re/reg_effects.py \
                                tools/re/emit_defmon_source.py | $(BUILD_DIR)
