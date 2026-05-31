@@ -53,86 +53,278 @@ DEFAULT_OUT = REPO_ROOT / "build" / "cmp_facts.json"
 
 # ── Mnemonic categories ─────────────────────────────────────────────
 
-_BRANCHES = frozenset({"BPL", "BMI", "BVC", "BVS",
-                       "BCC", "BCS", "BNE", "BEQ"})
+_BRANCHES = frozenset({"BPL", "BMI", "BVC", "BVS", "BCC", "BCS", "BNE", "BEQ"})
 
 # Which flag each branch consumes.
 _BRANCH_FLAG = {
-    "BEQ": "Z", "BNE": "Z",
-    "BMI": "N", "BPL": "N",
-    "BCS": "C", "BCC": "C",
-    "BVS": "V", "BVC": "V",
+    "BEQ": "Z",
+    "BNE": "Z",
+    "BMI": "N",
+    "BPL": "N",
+    "BCS": "C",
+    "BCC": "C",
+    "BVS": "V",
+    "BVC": "V",
 }
 
-# Instructions that set each flag.
-_FLAG_SETTERS_ZN = frozenset({
-    "LDA", "LDX", "LDY", "AND", "ORA", "EOR", "ADC", "SBC",
-    "INC", "DEC", "INX", "INY", "DEX", "DEY",
-    "ASL", "LSR", "ROL", "ROR",
-    "TAX", "TAY", "TXA", "TYA", "TSX",
-    "CMP", "CPX", "CPY", "BIT", "PLA",
-})
+# Instructions that set each flag. The undocumented opcodes defMON uses
+# set the same N/Z(/C) flags as their documented analogues: LAX loads
+# A/X (N/Z); ANC/ALR/ARR compute A (N/Z + C); AXS computes X (N/Z/C).
+_FLAG_SETTERS_ZN = frozenset(
+    {
+        "LDA",
+        "LDX",
+        "LDY",
+        "AND",
+        "ORA",
+        "EOR",
+        "ADC",
+        "SBC",
+        "INC",
+        "DEC",
+        "INX",
+        "INY",
+        "DEX",
+        "DEY",
+        "ASL",
+        "LSR",
+        "ROL",
+        "ROR",
+        "TAX",
+        "TAY",
+        "TXA",
+        "TYA",
+        "TSX",
+        "CMP",
+        "CPX",
+        "CPY",
+        "BIT",
+        "PLA",
+        "LAX",
+        "ANC",
+        "ALR",
+        "ARR",
+        "AXS",
+    }
+)
 _FLAG_SETTERS = {
     "Z": _FLAG_SETTERS_ZN,
     "N": _FLAG_SETTERS_ZN,
-    "C": frozenset({"CMP", "CPX", "CPY", "ADC", "SBC",
-                    "ASL", "LSR", "ROL", "ROR",
-                    "SEC", "CLC", "PLP", "RTI"}),
+    "C": frozenset(
+        {
+            "CMP",
+            "CPX",
+            "CPY",
+            "ADC",
+            "SBC",
+            "ASL",
+            "LSR",
+            "ROL",
+            "ROR",
+            "SEC",
+            "CLC",
+            "PLP",
+            "RTI",
+            "ANC",
+            "ALR",
+            "ARR",
+            "AXS",
+        }
+    ),
     "V": frozenset({"ADC", "SBC", "BIT", "CLV", "PLP", "RTI"}),
 }
 
 # Flag-neutral instructions — skippable when hunting backwards for the
 # instruction that actually set the flag the branch consumes.
-_FLAG_NEUTRAL = frozenset({
-    "STA", "STX", "STY", "NOP", "PHA", "PHP", "TXS",
-    "SED", "CLD", "CLI", "SEI",
-    # branches don't write flags
-    "BEQ", "BNE", "BMI", "BPL", "BCS", "BCC", "BVS", "BVC",
-})
+_FLAG_NEUTRAL = frozenset(
+    {
+        "STA",
+        "STX",
+        "STY",
+        "NOP",
+        "PHA",
+        "PHP",
+        "TXS",
+        "SED",
+        "CLD",
+        "CLI",
+        "SEI",
+        # branches don't write flags
+        "BEQ",
+        "BNE",
+        "BMI",
+        "BPL",
+        "BCS",
+        "BCC",
+        "BVS",
+        "BVC",
+    }
+)
 
 
 # Per-register classification used during the source walk. A "writer"
 # kills the register's source; a "neutral" op walks past; a "transform"
 # is recorded and carried in the transform chain.
 _A_WRITERS_PLAIN = frozenset({"LDA", "TXA", "TYA", "PLA", "LAX"})
-_A_TRANSFORMS = frozenset({"AND", "ORA", "EOR", "ADC", "SBC"})
+_A_TRANSFORMS = frozenset({"AND", "ORA", "EOR", "ADC", "SBC", "ANC", "ALR", "ARR"})
 
-_X_WRITERS = frozenset({"LDX", "TAX", "TSX", "INX", "DEX", "LAX"})
+_X_WRITERS = frozenset({"LDX", "TAX", "TSX", "INX", "DEX", "LAX", "AXS"})
 _Y_WRITERS = frozenset({"LDY", "TAY", "INY", "DEY"})
 
 # Per-register neutrals. Anything not in writers/transforms/neutrals
 # is "unmodeled" — treated as a kill (conservative).
-_A_NEUTRAL = frozenset({
-    "LDX", "LDY", "STA", "STX", "STY",
-    "INC", "DEC", "INX", "INY", "DEX", "DEY",
-    "TAX", "TAY",
-    "CMP", "CPX", "CPY", "BIT",
-    "NOP", "PHA", "PHP", "PLP", "TXS",
-    "SED", "CLD", "CLI", "SEI", "SEC", "CLC", "CLV",
-    "JMP",
-    "BEQ", "BNE", "BMI", "BPL", "BCS", "BCC", "BVS", "BVC",
-})
-_X_NEUTRAL = frozenset({
-    "LDA", "LDY", "STA", "STX", "STY", "INC", "DEC",
-    "INY", "DEY", "TYA", "TAY", "TXA",
-    "AND", "ORA", "EOR", "ADC", "SBC",
-    "CMP", "CPX", "CPY", "BIT", "NOP", "PHA", "PHP", "PLP", "TXS",
-    "SED", "CLD", "CLI", "SEI", "SEC", "CLC", "CLV",
-    "ASL", "LSR", "ROL", "ROR",
-    "JMP",
-    "BEQ", "BNE", "BMI", "BPL", "BCS", "BCC", "BVS", "BVC",
-})
-_Y_NEUTRAL = frozenset({
-    "LDA", "LDX", "STA", "STX", "STY", "INC", "DEC",
-    "INX", "DEX", "TXA", "TAX", "TSX", "TYA",
-    "AND", "ORA", "EOR", "ADC", "SBC",
-    "CMP", "CPX", "CPY", "BIT", "NOP", "PHA", "PHP", "PLP", "TXS",
-    "SED", "CLD", "CLI", "SEI", "SEC", "CLC", "CLV",
-    "ASL", "LSR", "ROL", "ROR",
-    "LAX",  # writes A+X, reads Y — neutral for Y
-    "JMP",
-    "BEQ", "BNE", "BMI", "BPL", "BCS", "BCC", "BVS", "BVC",
-})
+_A_NEUTRAL = frozenset(
+    {
+        "LDX",
+        "LDY",
+        "STA",
+        "STX",
+        "STY",
+        "INC",
+        "DEC",
+        "INX",
+        "INY",
+        "DEX",
+        "DEY",
+        "TAX",
+        "TAY",
+        "CMP",
+        "CPX",
+        "CPY",
+        "BIT",
+        "NOP",
+        "PHA",
+        "PHP",
+        "PLP",
+        "TXS",
+        "SED",
+        "CLD",
+        "CLI",
+        "SEI",
+        "SEC",
+        "CLC",
+        "CLV",
+        "AXS",  # writes X only — neutral for A
+        "JMP",
+        "BEQ",
+        "BNE",
+        "BMI",
+        "BPL",
+        "BCS",
+        "BCC",
+        "BVS",
+        "BVC",
+    }
+)
+_X_NEUTRAL = frozenset(
+    {
+        "LDA",
+        "LDY",
+        "STA",
+        "STX",
+        "STY",
+        "INC",
+        "DEC",
+        "INY",
+        "DEY",
+        "TYA",
+        "TAY",
+        "TXA",
+        "AND",
+        "ORA",
+        "EOR",
+        "ADC",
+        "SBC",
+        "ANC",
+        "ALR",
+        "ARR",  # write A only — neutral for X
+        "CMP",
+        "CPX",
+        "CPY",
+        "BIT",
+        "NOP",
+        "PHA",
+        "PHP",
+        "PLP",
+        "TXS",
+        "SED",
+        "CLD",
+        "CLI",
+        "SEI",
+        "SEC",
+        "CLC",
+        "CLV",
+        "ASL",
+        "LSR",
+        "ROL",
+        "ROR",
+        "JMP",
+        "BEQ",
+        "BNE",
+        "BMI",
+        "BPL",
+        "BCS",
+        "BCC",
+        "BVS",
+        "BVC",
+    }
+)
+_Y_NEUTRAL = frozenset(
+    {
+        "LDA",
+        "LDX",
+        "STA",
+        "STX",
+        "STY",
+        "INC",
+        "DEC",
+        "INX",
+        "DEX",
+        "TXA",
+        "TAX",
+        "TSX",
+        "TYA",
+        "AND",
+        "ORA",
+        "EOR",
+        "ADC",
+        "SBC",
+        "ANC",
+        "ALR",
+        "ARR",
+        "AXS",  # write A or X only — neutral for Y
+        "CMP",
+        "CPX",
+        "CPY",
+        "BIT",
+        "NOP",
+        "PHA",
+        "PHP",
+        "PLP",
+        "TXS",
+        "SED",
+        "CLD",
+        "CLI",
+        "SEI",
+        "SEC",
+        "CLC",
+        "CLV",
+        "ASL",
+        "LSR",
+        "ROL",
+        "ROR",
+        "LAX",  # writes A+X, reads Y — neutral for Y
+        "JMP",
+        "BEQ",
+        "BNE",
+        "BMI",
+        "BPL",
+        "BCS",
+        "BCC",
+        "BVS",
+        "BVC",
+    }
+)
 
 _LOADER_OF = {"A": "LDA", "X": "LDX", "Y": "LDY"}
 _LOADER_MODES = {
@@ -143,9 +335,11 @@ _LOADER_MODES = {
 # Modes that load via a zp pointer + register index. The source isn't
 # a static memory address; we record it as ("var_indirect", ptr_zp_addr,
 # index_reg). Both LDA and LAX use izy for `lda/lax (zp),Y`.
-_INDIRECT_LOADER_MODES = {"A": frozenset({"izy"}),
-                           "X": frozenset(),  # LDX doesn't have izy
-                           "Y": frozenset()}
+_INDIRECT_LOADER_MODES = {
+    "A": frozenset({"izy"}),
+    "X": frozenset(),  # LDX doesn't have izy
+    "Y": frozenset(),
+}
 _INDEXED = {"abx": "X", "aby": "Y", "zpx": "X", "zpy": "Y"}
 
 # Walk budget per branch — guards against pathological CFGs (wide
@@ -170,8 +364,7 @@ def _operand_addr(mem: bytes, pc: int, mode: str, n: int) -> int | None:
     return None
 
 
-def _preds_of(pc: int, graph, instr_at: dict[int, tuple[str, str, int]]
-              ) -> list[int]:
+def _preds_of(pc: int, graph, instr_at: dict[int, tuple[str, str, int]]) -> list[int]:
     """Intra-procedural predecessors of ``pc``: its fall-through
     predecessor (if any) plus any branch / JMP source landing on it.
     JSR sources are deliberately excluded — they cross function
@@ -191,9 +384,13 @@ def _preds_of(pc: int, graph, instr_at: dict[int, tuple[str, str, int]]
     return preds
 
 
-def _find_flag_setter(branch_pc: int, branch_mnem: str,
-                      graph, instr_at: dict[int, tuple[str, str, int]],
-                      max_skip: int = 6) -> int | None:
+def _find_flag_setter(
+    branch_pc: int,
+    branch_mnem: str,
+    graph,
+    instr_at: dict[int, tuple[str, str, int]],
+    max_skip: int = 6,
+) -> int | None:
     """Walk back via fall-through edges through flag-neutral ops,
     returning the PC of the most recent instruction that sets the
     flag the branch consumes. Returns None if no recognised setter
@@ -334,9 +531,13 @@ def _is_neutral(mnem: str, mode: str, reg: str) -> bool:
 #   ("ASL",) / ("LSR",) / ("ROL",) / ("ROR",)
 
 
-def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
-                 instr_at: dict[int, tuple[str, str, int]],
-                 graph) -> dict:
+def _resolve_lhs(
+    setter_pc: int,
+    reg: str,
+    mem: bytes,
+    instr_at: dict[int, tuple[str, str, int]],
+    graph,
+) -> dict:
     """Find what fed ``reg`` at ``setter_pc``.
 
     Walks backwards over intra-procedural CFG edges. State carried per
@@ -391,8 +592,7 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
         # Loader for the currently-tracked register?
         # LAX loads BOTH A and X from memory; counts as a loader for
         # either when we're tracking that register.
-        is_loader = (mnem == _LOADER_OF[cur]) or \
-                    (mnem == "LAX" and cur in ("A", "X"))
+        is_loader = (mnem == _LOADER_OF[cur]) or (mnem == "LAX" and cur in ("A", "X"))
         if is_loader:
             if mode == "imm":
                 sources.add(("imm", mem[pc + 1], transform))
@@ -404,8 +604,7 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
                 index = _INDEXED.get(mode)
                 sources.add(("var", addr, index, transform))
                 continue
-            if mode in _INDIRECT_LOADER_MODES[cur] or \
-                    (mnem == "LAX" and mode == "izy"):
+            if mode in _INDIRECT_LOADER_MODES[cur] or (mnem == "LAX" and mode == "izy"):
                 # lda/lax (zp),Y — source is the zp pointer + Y index.
                 # The pointer's contents change at runtime, so we can't
                 # name a single var, but the pointer's label is itself
@@ -413,8 +612,7 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
                 ptr_addr = mem[pc + 1]
                 sources.add(("var_indirect", ptr_addr, "Y", transform))
                 continue
-            return {"kind": "unknown",
-                    "reason": f"{mnem.lower()}_mode_{mode}"}
+            return {"kind": "unknown", "reason": f"{mnem.lower()}_mode_{mode}"}
 
         # ── Register-switching transfers ─────────────────────────
         # Walking BACKWARDS, a transfer that wrote our tracked
@@ -448,8 +646,9 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
                 frontier.append((p, new_t, "A"))
             continue
         # INX/DEX on X, INY/DEY on Y
-        if (cur == "X" and mnem in ("INX", "DEX")) or \
-           (cur == "Y" and mnem in ("INY", "DEY")):
+        if (cur == "X" and mnem in ("INX", "DEX")) or (
+            cur == "Y" and mnem in ("INY", "DEY")
+        ):
             new_t = transform + ((mnem,),)
             for p in _preds_of(pc, graph, instr_at):
                 frontier.append((p, new_t, cur))
@@ -468,7 +667,7 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
             # branch condition surfaces the comparison (e.g. `A < #imm?`)
             # even though the operand isn't a variable. Other writers
             # (PLA from stack, etc.) stay unknown.
-            if mnem in ("ADC", "SBC", "ORA", "EOR", "AND"):
+            if mnem in ("ADC", "SBC", "ORA", "EOR", "AND", "ANC", "ALR", "ARR", "AXS"):
                 return {"kind": "computed_reg", "reg": cur, "via": mnem}
             return {"kind": "unknown", "reason": f"clobber_{mnem.lower()}"}
 
@@ -584,8 +783,7 @@ def _format_source(src: tuple) -> dict:
             out["transform"] = _format_transform(src[3])
         return out
     if tag == "var_indirect":
-        out = {"kind": "var_indirect", "ptr_addr": f"${src[1]:02X}",
-               "index": src[2]}
+        out = {"kind": "var_indirect", "ptr_addr": f"${src[1]:02X}", "index": src[2]}
         if src[3]:
             out["transform"] = _format_transform(src[3])
         return out
@@ -605,9 +803,9 @@ def _format_source(src: tuple) -> dict:
 # ── Containing-block lookup ─────────────────────────────────────────
 
 
-def _build_block_index(annotations: dict[int, dict],
-                       instr_at: dict[int, tuple[str, str, int]]
-                       ) -> tuple[list[int], dict[int, str]]:
+def _build_block_index(
+    annotations: dict[int, dict], instr_at: dict[int, tuple[str, str, int]]
+) -> tuple[list[int], dict[int, str]]:
     """Return ``(sorted_pcs, name_by_pc)`` over annotation entries that
     land on a known code-start AND carry a ``name``. Those are the
     de-facto function-entry blocks. Region-only entries (state vars)
@@ -625,8 +823,9 @@ def _build_block_index(annotations: dict[int, dict],
     return sorted(name_by_pc.keys()), name_by_pc
 
 
-def _block_of(pc: int, sorted_pcs: list[int],
-              name_by_pc: dict[int, str]) -> dict | None:
+def _block_of(
+    pc: int, sorted_pcs: list[int], name_by_pc: dict[int, str]
+) -> dict | None:
     idx = bisect.bisect_right(sorted_pcs, pc) - 1
     if idx < 0:
         return None
@@ -637,11 +836,12 @@ def _block_of(pc: int, sorted_pcs: list[int],
 # ── Top-level driver ────────────────────────────────────────────────
 
 
-def collect_facts(mem: bytes,
-                  instr_at: dict[int, tuple[str, str, int]],
-                  graph,
-                  annotations: dict[int, dict],
-                  ) -> dict:
+def collect_facts(
+    mem: bytes,
+    instr_at: dict[int, tuple[str, str, int]],
+    graph,
+    annotations: dict[int, dict],
+) -> dict:
     """Return the cmp_facts table for every conditional branch in
     ``instr_at``. Each entry has the shape documented in the module
     docstring; ``stats`` summarises resolution outcomes."""
@@ -651,14 +851,14 @@ def collect_facts(mem: bytes,
     stats = {
         "branches": 0,
         "no_flag_setter": 0,
-        "operand_based": 0,    # LDA/LDX/LDY/BIT/INC/DEC as setter — no walk needed
+        "operand_based": 0,  # LDA/LDX/LDY/BIT/INC/DEC as setter — no walk needed
         "resolved_var": 0,
         "resolved_var_indirect": 0,
         "resolved_imm": 0,
         "transformed": 0,
         "from_caller": 0,
-        "computed_reg": 0,     # ALU-computed register (ADC/SBC/ORA/EOR/AND)
-        "jsr_return": 0,       # register as a callee left it (`<fn>->reg`)
+        "computed_reg": 0,  # ALU-computed register (ADC/SBC/ORA/EOR/AND)
+        "jsr_return": 0,  # register as a callee left it (`<fn>->reg`)
         "multi_source": 0,
         "unknown": 0,
     }
@@ -708,6 +908,24 @@ def collect_facts(mem: bytes,
             if saddr is not None:
                 flag_setter_rec["addr"] = f"${saddr:04X}"
 
+        # Undocumented ALU setters compute the tested register from A/X +
+        # an immediate (ANC/ALR/ARR -> A, AXS -> X); the result, not the
+        # operand, is what the branch tests, so surface it as a computed
+        # register (like ADC/AND reached in a walk).
+        if s_mnem in ("ANC", "ALR", "ARR", "AXS"):
+            reg = "X" if s_mnem == "AXS" else "A"
+            facts[f"${pc:04X}"] = {
+                "branch": mnem,
+                "taken_target": f"${taken:04X}" if taken is not None else None,
+                "fall_through": f"${fall_through:04X}",
+                "flag_setter": flag_setter_rec,
+                "lhs": {"kind": "computed_reg", "reg": reg, "via": s_mnem},
+                "rhs": None,
+                "containing_block": _block_of(pc, sorted_pcs, name_by_pc),
+            }
+            stats["computed_reg"] += 1
+            continue
+
         reg_info = _reg_for_setter(s_mnem, s_mode)
 
         # Operand-based setters: the value being tested IS the setter's
@@ -742,7 +960,11 @@ def collect_facts(mem: bytes,
         # acc-mode ASL), record the post-op on the lhs so the renderer
         # can surface it as (X + 1), shifted-A bit 7, etc.
         if post_op is not None and lhs["kind"] in (
-            "var", "imm", "from_caller", "computed_reg", "jsr_return"
+            "var",
+            "imm",
+            "from_caller",
+            "computed_reg",
+            "jsr_return",
         ):
             lhs = dict(lhs)
             lhs["post_op"] = post_op
@@ -796,8 +1018,9 @@ def collect_facts(mem: bytes,
     return {"stats": stats, "facts": facts}
 
 
-def _lhs_from_operand_setter(setter_pc: int, mnem: str, mode: str, n: int,
-                              mem: bytes) -> dict:
+def _lhs_from_operand_setter(
+    setter_pc: int, mnem: str, mode: str, n: int, mem: bytes
+) -> dict:
     """LHS for setters whose operand IS the tested value: standalone
     LDA/LDX/LDY (the loaded value is the test), BIT, INC/DEC mem.
     """
@@ -832,13 +1055,14 @@ def _rhs_zero_or_none(mnem: str) -> dict | None:
     compare against zero (BEQ/BNE) or test bit 7 (BMI/BPL). The RHS is
     implicit-zero (or bit-7 for sign tests); we emit ``{"kind": "zero"}``
     and the renderer decides based on the branch."""
-    if mnem in ("LDA", "LDX", "LDY", "INC", "DEC", "BIT"):
+    if mnem in ("LDA", "LDX", "LDY", "INC", "DEC", "BIT", "LAX"):
         return {"kind": "zero"}
     return None
 
 
-def _rhs_from_register_setter(mnem: str, mode: str, n: int,
-                              setter_pc: int, mem: bytes) -> dict | None:
+def _rhs_from_register_setter(
+    mnem: str, mode: str, n: int, setter_pc: int, mem: bytes
+) -> dict | None:
     """RHS for CMP/CPX/CPY/AND/ORA/EOR/ADC/SBC followed by branch. The
     setter's operand IS the RHS for CMP/CPX/CPY; for arithmetic / bitwise
     setters the branch tests the transformed value against zero (or
@@ -895,23 +1119,40 @@ def main(argv: list[str] | None = None) -> int:
 
     stats = result["stats"]
     print(f"cmp_facts: wrote {args.out}")
-    for key in ("branches", "no_flag_setter", "operand_based",
-                "resolved_var", "resolved_var_indirect",
-                "resolved_imm", "transformed",
-                "from_caller", "computed_reg", "jsr_return",
-                "multi_source", "unknown"):
+    for key in (
+        "branches",
+        "no_flag_setter",
+        "operand_based",
+        "resolved_var",
+        "resolved_var_indirect",
+        "resolved_imm",
+        "transformed",
+        "from_caller",
+        "computed_reg",
+        "jsr_return",
+        "multi_source",
+        "unknown",
+    ):
         print(f"  {key:<22} = {stats[key]}")
-    resolved = (stats["operand_based"] + stats["resolved_var"]
-                + stats["resolved_var_indirect"]
-                + stats["resolved_imm"] + stats["transformed"])
+    resolved = (
+        stats["operand_based"]
+        + stats["resolved_var"]
+        + stats["resolved_var_indirect"]
+        + stats["resolved_imm"]
+        + stats["transformed"]
+    )
     if stats["branches"]:
         pct = 100.0 * resolved / stats["branches"]
         print(f"  resolved (any kind)    = {resolved}  ({pct:.1f}%)")
         # from_caller + computed_reg are register-level lhs: not a named
         # variable, but the branch condition still surfaces the
         # comparison (`A < #imm?`) so they are genuine information.
-        with_reg = (resolved + stats["from_caller"] + stats["computed_reg"]
-                    + stats["jsr_return"])
+        with_reg = (
+            resolved
+            + stats["from_caller"]
+            + stats["computed_reg"]
+            + stats["jsr_return"]
+        )
         pct2 = 100.0 * with_reg / stats["branches"]
         print(f"  + register-level lhs   = {with_reg}  ({pct2:.1f}%)")
     return 0

@@ -4301,7 +4301,7 @@ ps_sweep_anc_imm_smc .block
                            .byte $2B, $7F    ; $149D  ; anc #$7F (undocumented opcode $2B)
                            adc  pw_lo_patch_v0,x    ; $149F
                            sta  pw_lo_patch_v0,x    ; $14A2
-                           bcc  pitch_oscillator_loop_tail    ; $14A5
+                           bcc  pitch_oscillator_loop_tail    ; $14A5  pw_lo_patch_v0 no carry
                            lda  pw_hi_patch_v0,x    ; $14A7
                            cmp  #$0F    ; $14AA
                            beq  ps_sweep_hi_clamp    ; $14AC  pw_hi_patch_v0,X was $0F?
@@ -4394,7 +4394,7 @@ pitch_oscillator_loop_tail .block
 ;   Subtracts the $31 per-voice record stride as the loop walks voices.
 pitch_oscillator_loop_tail_smc .block
                            axs  #$31    ; $14E4
-                           bmi  pitch_oscillator_voice_loop_tail.groove_song_position    ; $14E6
+                           bmi  pitch_oscillator_voice_loop_tail.groove_song_position    ; $14E6  X had bit 7 set?
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -4498,7 +4498,7 @@ l_2:                       lda  #$00    ; $1549
 ;   Same $31 stride-subtract semantics.
 pitch_oscillator_anc_smc_mirror .block
                            axs  #$31    ; $156E
-                           bpl  player_init_body.l_2    ; $1570
+                           bpl  player_init_body.l_2    ; $1570  X had bit 7 clear?
                            lda  #SILENCE_FLAG_QUIET    ; $1572
                            sta  silence_or_endsong_flag    ; $1574
                            rts    ; $1577
@@ -4673,7 +4673,7 @@ l_7:                       sta  filter_resonance_routing    ; $174B
 ;   callers:             1 code sites: $1728
 pitch_lut_tail_smc .block
                            lax  zp_scratch_96    ; $174E
-                           beq  l_4    ; $1750
+                           beq  l_4    ; $1750  zp_scratch_96 was zero?
                            and  #$40    ; $1752
                            beq  l_1    ; $1754  (zp_scratch_96 & $40) was zero?
                            iny    ; $1756
@@ -17828,7 +17828,7 @@ sid2_pitch_pw_clamp_commit .block
                            .byte $2B, $7F    ; $CC9D  ; anc #$7F (undocumented opcode $2B)
                            adc  sid2_v0_step_accumulator,x    ; $CC9F
                            sta  sid2_v0_step_accumulator,x    ; $CCA2
-                           bcc  sid2_cascade_dispatch_wrap_guard    ; $CCA5
+                           bcc  sid2_cascade_dispatch_wrap_guard    ; $CCA5  sid2_v0_step_accumulator no carry
                            lda  sid2_v0_voice_record_pw_slot,x    ; $CCA7
                            cmp  #$0F    ; $CCAA
                            beq  l_1    ; $CCAC  sid2_v0_voice_record_pw_slot,X was $0F?
@@ -17880,7 +17880,7 @@ sid2_cascade_dispatch_wrap_guard .block
 ;   Reads the SID#2 stride/wrap state, branches back to sid2_pitch_oscillator if more voices to process. Companion to sid2_pitch_oscillator's body.
 sid2_pitch_oscillator_wrap_tail .block
                            axs  #$31    ; $CCE4
-                           bmi  l_1    ; $CCE6
+                           bmi  l_1    ; $CCE6  X had bit 7 set?
                            jmp  sid2_pitch_oscillator    ; $CCE8
 l_1:                       rts    ; $CCEB
         .byte $00, $00    ; $CCEC
@@ -17988,7 +17988,7 @@ l_2:                       lda  #$00    ; $CD49
 ;   Companion to sid2_player_init_body.
 sid2_player_init_tail .block
                            axs  #$31    ; $CD6E
-                           bpl  sid2_main_tick.l_2    ; $CD70
+                           bpl  sid2_main_tick.l_2    ; $CD70  X had bit 7 clear?
                            lda  #$80    ; $CD72
                            sta  sid2_v1_voice_record_slot_b    ; $CD74
                            rts    ; $CD77
@@ -18111,7 +18111,7 @@ sid2_sidtab_row_apply_ctrl_write .block
 ;   Y←$96 / beq +43 / A&=$40 / beq +6 / increment Y / read ($FB),Y / write sid2_voice_record_v2 / A←X / and … — CTRL-accumulator merge logic feeding the sid2_sidtab_row_apply_ctrl_write write sid2_silence_latch_acc write. Mirror of SID#1's sidtab_row_apply cascade CTRL handling.
 sid2_sidtab_ctrl_accumulator .block
                            lax  zp_scratch_96    ; $CE16
-                           beq  l_4    ; $CE18
+                           beq  l_4    ; $CE18  zp_scratch_96 was zero?
                            and  #$40    ; $CE1A
                            beq  l_1    ; $CE1C  (zp_scratch_96 & $40) was zero?
                            iny    ; $CE1E
