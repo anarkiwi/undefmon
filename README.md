@@ -190,9 +190,14 @@ reproducing the build.)
         print('\n'.join(pc for pc,f in cf['facts'].items() \
         if f.get('lhs',{}).get('kind')=='unknown'))"
 
-3. **Ghidra symbol table is 3,580 entries but only 187 are merged**
-   into `defmon.s`. The rest are `DAT_xxxx` / `BYTE_xxxx`
-   placeholders. Promote interesting ones via `annotations.toml`.
+3. **Ghidra's symbol table has ~3,370 `DAT_`/`BYTE_` placeholders, but
+   `defmon.s` does not use them.** The emitter names addresses from its
+   own layers (annotations + `SEED_LANDMARKS` + state/equate labels), so
+   essentially every operand in `defmon.s` already resolves to a label —
+   a grep for bare `$XXXX` operands finds none. The placeholder count is
+   Ghidra's internal view, not a `defmon.s` readability gap; promoting a
+   Ghidra `DAT_xxxx` only matters where it would feed the export's
+   symbol table, not the disassembly the reader sees.
 
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
