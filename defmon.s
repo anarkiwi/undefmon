@@ -1050,6 +1050,7 @@ voice_selector_lut_v2    = $71DB
 voice_selector_lut_v3    = $71DE
 voice_selector_lut_v4    = $71E1
 voice_selector_lut_modifier_class = $71E4
+seqed_scratch_buffer     = $7200
 seqED_cursor_band        = $7280
 ;   notes: seqlist_col_cursor is the seqLIST col-cursor; seqlist_row_counter is the related counter. The seqED row cursor does not live in this band.
 seqlist_col_cursor       = $7286
@@ -6248,8 +6249,8 @@ l_5:                       jmp  disk_menu_input_wait    ; $76B3
 ;   registers clobbered: none (preserves A/X/Y)
 disk_menu_exit_arm .block
                            rts    ; $76B6
-l_1:                       jsr  save_prg_loadaddr_msb.l_1    ; $76B7
-                           bcc  l_2    ; $76BA  save_prg_loadaddr_msb_1 returned carry clear?
+l_1:                       jsr  savename_from_dir_entry    ; $76B7
+                           bcc  l_2    ; $76BA  savename_from_dir_entry returned carry clear?
                            jmp  disk_menu_input_wait    ; $76BC
 l_2:                       lda  save_name_buf_marker    ; $76BF
                            cmp  #$2E    ; $76C2
@@ -6329,8 +6330,8 @@ l_1:                       lda  #$00    ; $76F0
 ;
 ;   Reached from disk_menu_shift_dispatch's SHIFT+'S' arm. Sub-routines that write the file body under the current filename (without re-prompting). Body extends past save_overwrite_tail.
 save_overwrite_tail .block
-                           jsr  save_prg_loadaddr_msb.l_1    ; $76FC
-                           bcc  l_1    ; $76FF  save_prg_loadaddr_msb_1 returned carry clear?
+                           jsr  savename_from_dir_entry    ; $76FC
+                           bcc  l_1    ; $76FF  savename_from_dir_entry returned carry clear?
                            jmp  disk_menu_input_wait    ; $7701
 l_1:                       lda  #$01    ; $7704
                            sta  save_overwrite_state_byte    ; $7706
@@ -6504,13 +6505,13 @@ save_end_ptr_hi_read .block
                            sta  save_name_buf_byte0    ; $785B
                            lda  #$08    ; $785E
                            sta  save_name_buf_byte1    ; $7860
-                           jsr  kernal_load_call_site.l_2    ; $7863
+                           jsr  save_setnam_prep    ; $7863
                            jmp  cold_boot_prelude_midbyte    ; $7866
 l_1:                       lda  #$00    ; $7869
                            sta  save_name_buf_byte0    ; $786B
                            lda  #$10    ; $786E
                            sta  save_name_buf_byte1    ; $7870
-                           jsr  kernal_load_call_site.l_2    ; $7873
+                           jsr  save_setnam_prep    ; $7873
                            lda  #$00    ; $7876
                            jsr  player_init    ; $7878
                            lda  #PLAYBACK_ON    ; $787B
@@ -6582,23 +6583,33 @@ save_prg_loadaddr_msb .block
 ;     X → save_name_input_state (target screen-RAM column).
                            stx  save_name_buf_byte2    ; $78A6
                            sty  save_name_buf_byte3    ; $78A9
-                           jsr  kernal_load_call_site.l_2    ; $78AC
+                           jsr  save_setnam_prep    ; $78AC
                            rts    ; $78AF
-l_1:                       ldy  #$16    ; $78B0
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $78B0  savename_from_dir_entry
+; ──────────────────────────────────────────────────────────────────────
+; Copies a filename out of a directory entry into the save-name buffer, skipping quotes and stopping at the shifted-space terminator.
+;
+;   callers:             2 code sites: $76B7 disk_menu_exit_arm_1, $76FC save_overwrite_tail
+;   registers clobbered: A, X, Y
+savename_from_dir_entry .block
+                           ldy  #$16    ; $78B0
                            ldx  #$00    ; $78B2
-l_2:                       lda  (zp_ptr1_lo),y    ; $78B4
+l_1:                       lda  (zp_ptr1_lo),y    ; $78B4
                            cmp  #$A0    ; $78B6
-                           beq  l_4    ; $78B8  (zp_ptr1_lo),Y was $A0?
+                           beq  l_3    ; $78B8  (zp_ptr1_lo),Y was $A0?
                            cmp  #$22    ; $78BA
-                           beq  l_3    ; $78BC  (zp_ptr1_lo),Y was $22?
+                           beq  l_2    ; $78BC  (zp_ptr1_lo),Y was $22?
                            sta  save_name_buf_marker,x    ; $78BE
                            iny    ; $78C1
                            inx    ; $78C2
-                           jmp  l_2    ; $78C3
-l_3:                       stx  save_name_buf_len    ; $78C6
+                           jmp  l_1    ; $78C3
+l_2:                       stx  save_name_buf_len    ; $78C6
                            clc    ; $78C9
                            rts    ; $78CA
-l_4:                       sec    ; $78CB
+l_3:                       sec    ; $78CB
                            rts    ; $78CC
         .byte $00    ; $78CD
 .bend
@@ -6739,24 +6750,34 @@ kernal_load_call_site .block
 l_1:                       inc  VIC_SP2_X.VIC_BG0    ; $79B9
                            jmp  l_1    ; $79BC
         .byte $38, $60    ; $79BF
-l_2:                       lda  save_name_buf_pre    ; $79C1
-                           beq  l_3    ; $79C4  save_name_buf_pre was zero?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $79C1  save_setnam_prep
+; ──────────────────────────────────────────────────────────────────────
+; Prepares the save filename pointer and length (from the entered name) before the disk save SETNAM.
+;
+;   callers:             3 code sites: $7863, $7873, $78AC
+;   registers clobbered: A, X, Y
+save_setnam_prep .block
+                           lda  save_name_buf_pre    ; $79C1
+                           beq  l_1    ; $79C4  save_name_buf_pre was zero?
                            lda  save_name_buf_len    ; $79C6
                            clc    ; $79C9
                            adc  #$03    ; $79CA
                            ldx  #$7C    ; $79CC
                            ldy  #$79    ; $79CE
-                           jmp  l_4    ; $79D0
-l_3:                       lda  save_name_buf_len    ; $79D3
+                           jmp  l_2    ; $79D0
+l_1:                       lda  save_name_buf_len    ; $79D3
                            ldx  #$7F    ; $79D6
                            ldy  #$79    ; $79D8
-l_4:                       jsr  KERNAL_SETNAM    ; $79DA
+l_2:                       jsr  KERNAL_SETNAM    ; $79DA
                            lda  #$00    ; $79DD
                            ldx  cbm_drive_num    ; $79DF
                            cpx  #$08    ; $79E1
-                           bcs  l_5    ; $79E3  cbm_drive_num was $08 or above?
+                           bcs  l_3    ; $79E3  cbm_drive_num was $08 or above?
                            ldx  #$08    ; $79E5
-l_5:                       ldy  #$00    ; $79E7
+l_3:                       ldy  #$00    ; $79E7
                            jsr  KERNAL_SETLFS    ; $79E9
                            lda  save_name_buf_byte0    ; $79EC
                            sta  zp_decoder_dest_lo    ; $79EF
@@ -6766,10 +6787,10 @@ l_5:                       ldy  #$00    ; $79E7
                            ldy  save_name_buf_byte3    ; $79F9
                            lda  #$FD    ; $79FC
                            jsr  KERNAL_SAVE    ; $79FE
-                           bcs  l_6    ; $7A01  KERNAL_SAVE returned carry set?
+                           bcs  l_4    ; $7A01  KERNAL_SAVE returned carry set?
                            rts    ; $7A03
-l_6:                       inc  VIC_BORDER    ; $7A04
-                           jmp  l_6    ; $7A07
+l_4:                       inc  VIC_BORDER    ; $7A04
+                           jmp  l_4    ; $7A07
         .byte $60    ; $7A0A
         .fill 245, $EA    ; $7A0B-$7AFF
         ; $7B00
@@ -7759,7 +7780,7 @@ l_6:                       cpx  #$14    ; $8339
                            jmp  stereo_enable_toggle    ; $8341
 l_7:                       cpy  #KEY_UP_ARROW    ; $8344
                            bne  l_8    ; $8346  kbd_decoded_key was not KEY_UP_ARROW?
-                           jmp  sid2_base_advance.l_1    ; $8348
+                           jmp  sid2_base_select_next    ; $8348
 l_8:                       cpy  #KEY_PERIOD    ; $834B
                            bne  l_9    ; $834D  kbd_decoded_key was not KEY_PERIOD?
                            inc  super_cmd_staged    ; $834F
@@ -13360,7 +13381,7 @@ l_9:                       cpy  #$1F    ; $AF8D
                            jmp  seqED_CRSRUD_bare_arm.l_3    ; $AF9D
 l_10:                      cpy  #$18    ; $AFA0
                            bne  l_11    ; $AFA2  Y was not $18?
-                           jsr  writer_speed.l_1    ; $AFA4
+                           jsr  seqed_scratch_clear    ; $AFA4
                            ldx  #$C0    ; $AFA7
                            ldy  #$B5    ; $AFA9
                            jmp  field_writer_dispatcher    ; $AFAB
@@ -13619,7 +13640,7 @@ l_2:                       cpy  #$20    ; $B14D
                            jmp  seqED_auto_advance    ; $B158
 l_3:                       cpy  #$18    ; $B15B
                            bne  l_4    ; $B15D  Y was not $18?
-                           jsr  writer_speed.l_1    ; $B15F
+                           jsr  seqed_scratch_clear    ; $B15F
                            ldx  #$EB    ; $B162
                            ldy  #$B5    ; $B164
                            jmp  field_writer_dispatcher    ; $B166
@@ -13688,7 +13709,7 @@ l_3:                       cpy  #$2C    ; $B1A9
                            jmp  field_writer_dispatcher    ; $B1B1
 l_4:                       cpy  #$18    ; $B1B4
                            bne  l_5    ; $B1B6  Y was not $18?
-                           jsr  writer_speed.l_1    ; $B1B8
+                           jsr  seqed_scratch_clear    ; $B1B8
                            ldx  #$23    ; $B1BB
                            ldy  #$B6    ; $B1BD
                            jmp  field_writer_dispatcher    ; $B1BF
@@ -14223,11 +14244,22 @@ writer_speed .block
         .byte $A0, $00, $AE, $C8, $71, $F0, $1A, $B1, $02, $29, $F0, $8D, $72, $B5, $B1, $02    ; $B573
         .byte $29, $0F, $C9, $00, $F0, $0B, $38, $E9, $01, $0D, $72, $B5, $91, $02, $CA, $D0    ; $B583
         .byte $E6, $60, $60    ; $B593
-l_1:                       ldx  #$80    ; $B596
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $B596  seqed_scratch_clear
+; ──────────────────────────────────────────────────────────────────────
+; Clears the 128-byte seqed_scratch_buffer to zero.
+;
+;   callers:             3 code sites: $AFA4, $B15F, $B1B8
+;   outputs:             A
+;   registers clobbered: A, X
+seqed_scratch_clear .block
+                           ldx  #$80    ; $B596
                            lda  #$00    ; $B598
-l_2:                       sta  octave_offset + $2D,x    ; $B59A
+l_1:                       sta  seqed_scratch_buffer,x    ; $B59A
                            dex    ; $B59D
-                           bpl  l_2    ; $B59E  $80 walked back 1 and had bit 7 clear?
+                           bpl  l_1    ; $B59E  $80 walked back 1 and had bit 7 clear?
                            rts    ; $B5A0
 .bend
 
@@ -17258,7 +17290,7 @@ chipview_toggle_helper .block
                            inc  editor_col_delta    ; $C604
                            jsr  statusline_clear    ; $C607
                            lda  sid_chip_view    ; $C60A
-                           bne  sid2_base_advance.l_5    ; $C60D  sid_chip_view was not SID_VIEW_1?
+                           bne  sid2_base_select_next.l_4    ; $C60D  sid_chip_view was not SID_VIEW_1?
                            ldx  #$85    ; $C60F
                            ldy  #$71    ; $C611
                            lda  #$05    ; $C613
@@ -17312,19 +17344,30 @@ sid2_base_advance .block
                            adc  #$20    ; $C64A
                            sta  sid2_base_lo    ; $C64C
                            jsr  secondary_disk_data_reader    ; $C64F
-                           jmp  l_4    ; $C652
-l_1:                       ldx  #$04    ; $C655
-l_2:                       dex    ; $C657
-                           bmi  l_3    ; $C658  $04 walked back 2 and had bit 7 set?
+                           jmp  sid2_base_select_next.l_3    ; $C652
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $C655  sid2_base_select_next
+; ──────────────────────────────────────────────────────────────────────
+; Cycles the SID#2 base address to the next entry in the secondary-disk base table and re-reads its data.
+;
+;   callers:             1 code sites: $8348
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+sid2_base_select_next .block
+                           ldx  #$04    ; $C655
+l_1:                       dex    ; $C657
+                           bmi  l_2    ; $C658  $04 walked back 2 and had bit 7 set?
                            lda  sid2_base_hi    ; $C65A
                            cmp  secondary_disk_key_action_lut,x    ; $C65D
-                           bne  l_2    ; $C660  sid2_base_hi was not secondary_disk_key_action_lut,X?
-l_3:                       lda  secondary_disk_key_action_lut + $01,x    ; $C662
+                           bne  l_1    ; $C660  sid2_base_hi was not secondary_disk_key_action_lut,X?
+l_2:                       lda  secondary_disk_key_action_lut + $01,x    ; $C662
                            sta  sid2_base_hi    ; $C665
                            jsr  secondary_disk_data_reader    ; $C668
-l_4:                       jmp  l_5    ; $C66B
+l_3:                       jmp  l_4    ; $C66B
         .byte $D4, $D5, $DE, $DF, $D4    ; $C66E
-l_5:                       jsr  statusline_clear    ; $C673
+l_4:                       jsr  statusline_clear    ; $C673
                            ldx  #$8A    ; $C676
                            ldy  #$71    ; $C678
                            lda  #$07    ; $C67A
@@ -17563,7 +17606,7 @@ l_10:                      asl  a    ; $C8D4
 ;   Patched at: $C80C, $C813
 ;   LDA can flip to: RTS
 l_11:                      lda  #$FF    ; $C8D8  ; ← sid2_v1_voice_record_slot_b
-                           bpl  l_16    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
+                           bpl  sid2_pattern_base_setup.l_3    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
                            and  #$0F    ; $C8DC
                            sta  sid2_v1_voice_record_slot_b    ; $C8DE
                            sta  sid2_v1_sc1_step_counter    ; $C8E1
@@ -17571,24 +17614,36 @@ l_11:                      lda  #$FF    ; $C8D8  ; ← sid2_v1_voice_record_slot
                            sta  sid2_v0_sc2_step_counter    ; $C8E7
                            ldy  #$FF    ; $C8EA  ; ← sid2_frame_state_slot
                            ldx  arranger_v3_sid2,y    ; $C8EC
-                           bpl  l_15    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
+                           bpl  sid2_pattern_base_setup.l_2    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
                            lda  arranger_v5_sid2,y    ; $C8F1
-                           beq  l_13    ; $C8F4  arranger_v5_sid2,Y was zero?
+                           beq  sid2_pattern_base_setup    ; $C8F4  arranger_v5_sid2,Y was zero?
                            cpy  sid2_player_init_stride    ; $C8F6
                            beq  l_12    ; $C8F9  $FF was sid2_player_init_stride?
                            sty  sid2_player_init_stride    ; $C8FB
                            sta  sid2_player_init_stride_counter    ; $C8FE
-                           jmp  l_13    ; $C901
+                           jmp  sid2_pattern_base_setup    ; $C901
 l_12:                      dec  sid2_player_init_stride_counter    ; $C904
-                           bne  l_13    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
+                           bne  sid2_pattern_base_setup    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
                            lda  #$00    ; $C909
                            sta  sid2_player_init_stride    ; $C90B
                            iny    ; $C90E
-                           jmp  l_14    ; $C90F
-l_13:                      lda  arranger_v4_sid2,y    ; $C912
+                           jmp  sid2_pattern_base_setup.l_1    ; $C90F
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $C912  sid2_pattern_base_setup
+; ──────────────────────────────────────────────────────────────────────
+; Loads the three SID#2 voices' pattern-base pointers (from arranger_v3_sid2/arranger_v4_sid2/arranger_v5_sid2) into the SID#2 player's self-modified operands.
+;
+;   callers:             3 code sites: $C8F4, $C901, $C907
+;   inputs:              Y
+;   outputs:             A, X, Y
+;   registers clobbered: A, X, Y
+sid2_pattern_base_setup .block
+                           lda  arranger_v4_sid2,y    ; $C912
                            tay    ; $C915
-l_14:                      ldx  arranger_v3_sid2,y    ; $C916
-l_15:                      lda  pat_base_lo,x    ; $C919
+l_1:                       ldx  arranger_v3_sid2,y    ; $C916
+l_2:                       lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_c986    ; $C91C
                            lda  pat_base_hi,x    ; $C91F
                            sta  sid2_filter_slot_c987    ; $C922
@@ -17604,64 +17659,64 @@ l_15:                      lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_ca97    ; $C940
                            iny    ; $C943
                            sty  sid2_frame_state_slot    ; $C944
-l_16:                      ldx  #$00    ; $C947
+l_3:                       ldx  #$00    ; $C947
                            ldy  #$FF    ; $C949  ; ← sid2_v1_sc1_step_counter
-                           bmi  l_17    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
+                           bmi  l_4    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
                            dec  sid2_v1_sc1_step_counter    ; $C94D
 ;   step-idiom: source = sid2_v1_sc1_step_counter  (= $C94A)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $C94D
 ;               test     = BPL "had bit 7 clear?"
                            bpl  sid2_v0_row_read_ldy_smc.l_1    ; $C950  sid2_v1_sc1_step_counter walked back 1 and had bit 7 clear?
                            lda  sid2_filter_slot_c986    ; $C952
-                           sta  sid2_voice_record_v2 + $127    ; $C955
-                           sta  sid2_voice_record_v2 + $119    ; $C958
-                           sta  sid2_voice_record_v2 + $F0    ; $C95B
+                           sta  sid2_pattern_base_setup + $90    ; $C955
+                           sta  sid2_pattern_base_setup + $82    ; $C958
+                           sta  sid2_pattern_base_setup + $59    ; $C95B
                            lda  sid2_filter_slot_c987    ; $C95E
-                           sta  sid2_voice_record_v2 + $128    ; $C961
-                           sta  sid2_voice_record_v2 + $11A    ; $C964
-                           sta  sid2_voice_record_v2 + $F1    ; $C967
+                           sta  sid2_pattern_base_setup + $91    ; $C961
+                           sta  sid2_pattern_base_setup + $83    ; $C964
+                           sta  sid2_pattern_base_setup + $5A    ; $C967
                            lda  VEC_IRQ_HI    ; $C96A
-                           sta  sid2_voice_record_v2 + $13A    ; $C96D
+                           sta  sid2_pattern_base_setup + $A3    ; $C96D
                            asl  a    ; $C970
-                           sta  sid2_voice_record_v2 + $107    ; $C971
+                           sta  sid2_pattern_base_setup + $70    ; $C971
                            asl  a    ; $C974
-                           sta  sid2_voice_record_v2 + $115    ; $C975
+                           sta  sid2_pattern_base_setup + $7E    ; $C975
                            asl  a    ; $C978
-                           sta  sid2_voice_record_v2 + $123    ; $C979
+                           sta  sid2_pattern_base_setup + $8C    ; $C979
                            jmp  sid2_v0_row_read_ldy_smc.l_1    ; $C97C
-l_17:                      ldy  #$01    ; $C97F
+l_4:                       ldy  #$01    ; $C97F
                            lda  #$FF    ; $C981  ; ← (SMC operand at $C982, no name)
-                           bpl  l_18    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
+                           bpl  l_5    ; $C983  sid2_pattern_base_setup_$70 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C985
                            sta  sid2_cascade_step_counter    ; $C988
                            stx  sid2_filter_slot_cae0    ; $C98B
-l_18:                      iny    ; $C98E
+l_5:                       iny    ; $C98E
                            lda  #$FF    ; $C98F  ; ← (SMC operand at $C990, no name)
-                           bpl  l_19    ; $C991  sid2_register_write_body_$16E had bit 7 clear?
+                           bpl  l_6    ; $C991  sid2_pattern_base_setup_$7E had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C993
                            sta  sid2_v2_sc2_counter    ; $C996
                            stx  sid2_cascade_inner_gate_counter    ; $C999
-l_19:                      iny    ; $C99C
+l_6:                       iny    ; $C99C
                            lda  #$FF    ; $C99D  ; ← (SMC operand at $C99E, no name)
-                           bpl  l_20    ; $C99F  sid2_register_write_body_$17C had bit 7 clear?
+                           bpl  l_7    ; $C99F  sid2_pattern_base_setup_$8C had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C9A1
                            sta  sid2_v2_sc2_step_counter    ; $C9A4
                            sta  sid2_cascade_inner_counter    ; $C9A7
                            stx  sid2_voice_record_v0    ; $C9AA
                            stx  sid2_v0_voice_record_slot_a    ; $C9AD
                            stx  sid2_v0_voice_record_slot_c    ; $C9B0
-l_20:                      iny    ; $C9B3
+l_7:                       iny    ; $C9B3
                            ldx  #$FF    ; $C9B4  ; ← (SMC operand at $C9B5, no name)
-                           bpl  l_21    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
+                           bpl  l_8    ; $C9B6  sid2_pattern_base_setup_$A3 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $C9B8
-                           bmi  sid2_v0_row_read_ldy_smc.l_1    ; $C9BB  sid2_register_write_body_$193 had bit 7 set?
-l_21:                      tya    ; $C9BD
+                           bmi  sid2_v0_row_read_ldy_smc.l_1    ; $C9BB  sid2_pattern_base_setup_$A3 had bit 7 set?
+l_8:                       tya    ; $C9BD
                            clc    ; $C9BE
                            adc  sid2_filter_slot_c986    ; $C9BF
                            sta  sid2_filter_slot_c986    ; $C9C2
-                           bcc  l_22    ; $C9C5  sid2_filter_slot_c986 no carry
+                           bcc  l_9    ; $C9C5  sid2_filter_slot_c986 no carry
                            inc  sid2_filter_slot_c987    ; $C9C7
-l_22:                      lda  #$0F    ; $C9CA
+l_9:                       lda  #$0F    ; $C9CA
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -17669,7 +17724,7 @@ l_22:                      lda  #$0F    ; $C9CA
 ; ──────────────────────────────────────────────────────────────────────
 ; Undocumented opcode $8F (abs): SID#2 mirror of the voice-0 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
 ;
-;   code edges:          fall-through from $C9CA sid2_register_write_body_22 (2 bytes earlier)
+;   code edges:          fall-through from $C9CA sid2_pattern_base_setup_9 (2 bytes earlier)
 ;
 ;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
 sid2_v0_row_read_ldy_smc .block
@@ -18524,7 +18579,7 @@ save_prep_orchestrator .block
                            lda  #$18    ; $CE9C
                            sta  decoder_byte_count_hi_smc    ; $CE9E
                            sta  decoder_dest_init_hi_smc    ; $CEA1
-                           jsr  decoder_pointer_init.l_1    ; $CEA4
+                           jsr  load_decode_chain_walk    ; $CEA4
                            lda  zp_decoder_dest_lo    ; $CEA7
                            sta  song_end_pointer    ; $CEA9
                            lda  zp_decoder_dest_hi    ; $CEAC
@@ -19150,22 +19205,44 @@ l_2:                       lda  (zp_decoder_dest_lo),y    ; $D1FB
                            lda  (zp_decoder_dest_lo),y    ; $D21F
                            and  #$F0    ; $D221
                            sta  pat_num_occupancy_table_d309    ; $D223
-                           bpl  l_3    ; $D226  ((zp_decoder_dest_lo),Y & $F0) had bit 7 clear?
+                           bpl  save_encode_pattern_loop    ; $D226  ((zp_decoder_dest_lo),Y & $F0) had bit 7 clear?
                            inc  load_decoder_continuation_d28c + $51    ; $D228
-                           jmp  l_4    ; $D22B
-l_3:                       jsr  save_encoder_y_plus_4_stride    ; $D22E
+                           jmp  save_encode_emit_triple    ; $D22B
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D22E  save_encode_pattern_loop
+; ──────────────────────────────────────────────────────────────────────
+; Save-encode inner loop over a pattern's bytes, masking each nibble and accumulating byte counts via the save-encoder helpers until the row end.
+;
+;   callers:             2 code sites: $D226, $D247
+;   inputs:              X, Y
+;   registers clobbered: A, X, Y
+save_encode_pattern_loop .block
+                           jsr  save_encoder_y_plus_4_stride    ; $D22E
                            cpy  #$80    ; $D231
-                           beq  l_4    ; $D233  save_encoder_y_plus_4_stride->Y was $80?
+                           beq  save_encode_emit_triple    ; $D233  save_encoder_y_plus_4_stride->Y was $80?
                            lda  (zp_decoder_dest_lo),y    ; $D235
                            and  #$F0    ; $D237
-                           bne  l_4    ; $D239  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
+                           bne  save_encode_emit_triple    ; $D239  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
                            lda  (zp_decoder_dest_lo),y    ; $D23B
                            and  #$0F    ; $D23D
                            jsr  save_encoder_byte_counter_acc    ; $D23F
                            lda  #$02    ; $D242
                            jsr  save_encoder_byte_counter_acc    ; $D244
-                           jmp  l_3    ; $D247
-l_4:                       sty  pat_num_occupancy_d30a    ; $D24A
+                           jmp  save_encode_pattern_loop    ; $D247
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D24A  save_encode_emit_triple
+; ──────────────────────────────────────────────────────────────────────
+; Writes a 3-byte event (from the decode scratch triple) into the encode destination at the running offset.
+;
+;   callers:             3 code sites: $D22B, $D233, $D239
+;   inputs:              X, Y
+;   registers clobbered: A, X, Y
+save_encode_emit_triple .block
+                           sty  pat_num_occupancy_d30a    ; $D24A
                            ldy  pat_num_occupancy_d30b    ; $D24D
                            iny    ; $D250
                            lda  pat_num_occupancy_table + $05    ; $D251
@@ -19185,7 +19262,7 @@ l_4:                       sty  pat_num_occupancy_d30a    ; $D24A
 ; ──────────────────────────────────────────────────────────────────────
 ; End-of-span marker for the load_decoder_setup_chain-load_decoder_main_entry_chain_end LOAD-decoder main entry chain.
 ;
-;   code edges:          fall-through from $D263 in save_encode_copy_patterns_4 (1 bytes earlier)
+;   code edges:          fall-through from $D263 in save_encode_emit_triple (1 bytes earlier)
 ;
 ;   The byte at load_decoder_main_entry_chain_end is the tail of the chain; the next annotated address at save_encoder_bytes_remaining_check begins the post-decoder region.
 load_decoder_main_entry_chain_end .block
@@ -19284,7 +19361,7 @@ load_decoder_commit_arm_7: rts    ; $D2F3
 ; ──────────────────────────────────────────────────────────────────────
 ; Save-encoder Y += 4 stride helper.
 ;
-;   callers:             4 code sites: $D22E save_encode_copy_patterns_3, $D298, $D2B3, $D2D6
+;   callers:             4 code sites: $D22E save_encode_pattern_loop, $D298, $D2B3, $D2D6
 ;   inputs:              Y
 ;   outputs:             Y
 ;   registers clobbered: A, Y
@@ -19784,68 +19861,78 @@ decoder_pointer_init .block
                            lda  decoder_dest_init_hi_smc    ; $D620
                            sta  zp_decoder_dest_hi    ; $D623
                            rts    ; $D625
-l_1:                       lda  #$00    ; $D626
-                           sta  decoder_pointer_init + $90    ; $D628
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D626  load_decode_chain_walk
+; ──────────────────────────────────────────────────────────────────────
+; Decode-time pass that re-inits the decoder pointer and walks the source chain, accumulating each entry's delta.
+;
+;   callers:             1 code sites: $CEA4
+;   registers clobbered: A, X, Y
+load_decode_chain_walk .block
+                           lda  #$00    ; $D626
+                           sta  load_decode_chain_walk + $7B    ; $D628
                            jsr  decoder_pointer_init    ; $D62B
-l_2:                       inc  SCREEN_RAM + $3C1    ; $D62E
+l_1:                       inc  SCREEN_RAM + $3C1    ; $D62E
                            ldy  #$00    ; $D631
                            lda  (zp_ptr1_lo),y    ; $D633
-l_3:                       iny    ; $D635
-                           beq  l_4    ; $D636  (($00 + 1) + 1) was zero?
+l_2:                       iny    ; $D635
+                           beq  l_3    ; $D636  (($00 + 1) + 1) was zero?
                            cmp  (zp_ptr1_lo),y    ; $D638
-                           beq  l_3    ; $D63A  (zp_ptr1_lo),Y was zero?
-l_4:                       pha    ; $D63C
+                           beq  l_2    ; $D63A  (zp_ptr1_lo),Y was zero?
+l_3:                       pha    ; $D63C
                            tya    ; $D63D
                            tax    ; $D63E
-                           beq  l_5    ; $D63F  ($00 + 1) was zero?
+                           beq  l_4    ; $D63F  ($00 + 1) was zero?
                            clc    ; $D641
                            adc  zp_ptr1_lo    ; $D642
                            sta  zp_ptr1_lo    ; $D644
-                           bcc  l_6    ; $D646  zp_ptr1_lo no carry
-l_5:                       inc  zp_ptr1_hi    ; $D648
-l_6:                       lda  #$FF    ; $D64A  ; ← decoder_save_state_d64b
+                           bcc  l_5    ; $D646  zp_ptr1_lo no carry
+l_4:                       inc  zp_ptr1_hi    ; $D648
+l_5:                       lda  #$FF    ; $D64A  ; ← decoder_save_state_d64b
                            sec    ; $D64C
                            sbc  zp_ptr1_lo    ; $D64D
                            eor  #$FF    ; $D64F
-                           sta  decoder_pointer_init + $53    ; $D651
-                           beq  l_7    ; $D654  (A ^ $FF) was zero?
-                           dec  decoder_pointer_init + $53    ; $D656
-l_7:                       bcs  l_8    ; $D659  zp_ptr1_lo no borrow
+                           sta  load_decode_chain_walk + $3E    ; $D651
+                           beq  l_6    ; $D654  (A ^ $FF) was zero?
+                           dec  load_decode_chain_walk + $3E    ; $D656
+l_6:                       bcs  l_7    ; $D659  zp_ptr1_lo no borrow
                            lda  #$FF    ; $D65B  ; ← decoder_save_state_d65c
                            sbc  zp_ptr1_hi    ; $D65D
-                           bcs  l_8    ; $D65F  zp_ptr1_hi no borrow
+                           bcs  l_7    ; $D65F  zp_ptr1_hi no borrow
                            txa    ; $D661
                            sec    ; $D662
                            sbc  #$FF    ; $D663  ; ← (SMC operand at $D664, no name)
                            tax    ; $D665
-                           inc  decoder_pointer_init + $90    ; $D666
-l_8:                       ldy  #$00    ; $D669
+                           inc  load_decode_chain_walk + $7B    ; $D666
+l_7:                       ldy  #$00    ; $D669
                            pla    ; $D66B
                            cpx  #$01    ; $D66C
-                           beq  l_11    ; $D66E  A was $01?
+                           beq  l_10    ; $D66E  A was $01?
                            cpx  #$02    ; $D670
-                           beq  l_10    ; $D672  A was $02?
+                           beq  l_9    ; $D672  A was $02?
                            jsr  decoder_emit_byte_inc    ; $D674
                            cmp  #$FF    ; $D677
-                           bne  l_9    ; $D679  decoder_emit_byte_inc->A was not $FF?
+                           bne  l_8    ; $D679  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D67B
-l_9:                       lda  #$FF    ; $D67E
+l_8:                       lda  #$FF    ; $D67E
                            jsr  decoder_emit_byte_inc    ; $D680
                            dex    ; $D683
                            dex    ; $D684
                            txa    ; $D685
                            jsr  decoder_emit_byte_inc    ; $D686
-                           jmp  l_12    ; $D689
-l_10:                      jsr  decoder_emit_byte_inc    ; $D68C
+                           jmp  l_11    ; $D689
+l_9:                       jsr  decoder_emit_byte_inc    ; $D68C
                            cmp  #$FF    ; $D68F
-                           bne  l_11    ; $D691  decoder_emit_byte_inc->A was not $FF?
+                           bne  l_10    ; $D691  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D693
-l_11:                      jsr  decoder_emit_byte_inc    ; $D696
+l_10:                      jsr  decoder_emit_byte_inc    ; $D696
                            cmp  #$FF    ; $D699
-                           bne  l_12    ; $D69B  decoder_emit_byte_inc->A was not $FF?
+                           bne  l_11    ; $D69B  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D69D
-l_12:                      lda  #$FF    ; $D6A0  ; ← (SMC operand at $D6A1, no name)
-                           beq  l_2    ; $D6A2  decoder_pointer_init_$90 was zero?
+l_11:                      lda  #$FF    ; $D6A0  ; ← (SMC operand at $D6A1, no name)
+                           beq  l_1    ; $D6A2  load_decode_chain_walk_$7B was zero?
                            lda  decoder_save_state_d64b    ; $D6A4
                            sec    ; $D6A7
                            sbc  decoder_byte_count_lo_smc    ; $D6A8
@@ -19861,7 +19948,7 @@ l_12:                      lda  #$FF    ; $D6A0  ; ← (SMC operand at $D6A1, no
 ; ──────────────────────────────────────────────────────────────────────
 ; Decoder emit-byte (ascending).
 ;
-;   callers:             10 code sites: $D674, $D67B, $D680, $D686, $D68C decoder_pointer_init_10, $D693, $D696 decoder_pointer_init_11, $D69D, +2 more
+;   callers:             10 code sites: $D674, $D67B, $D680, $D686, $D68C load_decode_chain_walk_9, $D693, $D696 load_decode_chain_walk_10, $D69D, +2 more
 ;   inputs:              A = byte to emit, Y = $00 (page offset for the store), $FD/$FE = dest pointer
 ;   outputs:             $FD/$FE += 1, decoder_byte_count += 1
 ;   registers clobbered: none (preserves A/X/Y)
@@ -20695,16 +20782,27 @@ l_1:                       pha    ; $E1E3
                            inc  editor_col_delta    ; $E1F8
 l_2:                       pla    ; $E1FB
                            rts    ; $E1FC
-l_3:                       ldx  seqlist_col_cursor    ; $E1FD
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E1FD  seqlist_col_left_pair_flag
+; ──────────────────────────────────────────────────────────────────────
+; Returns A=1 when the seqLIST column cursor is on one of the two left (V0/V1) columns.
+;
+;   callers:             2 code sites: $E674, $E74E
+;   outputs:             A
+;   registers clobbered: A, X
+seqlist_col_left_pair_flag .block
+                           ldx  seqlist_col_cursor    ; $E1FD
                            cpx  #$02    ; $E200
-                           bcs  l_4    ; $E202  seqlist_col_cursor was $02 or above?
+                           bcs  l_1    ; $E202  seqlist_col_cursor was $02 or above?
                            lda  #$01    ; $E204
                            rts    ; $E206
-l_4:                       cpx  #$04    ; $E207
-                           bcs  l_5    ; $E209  seqlist_col_cursor was $04 or above?
+l_1:                       cpx  #$04    ; $E207
+                           bcs  l_2    ; $E209  seqlist_col_cursor was $04 or above?
                            lda  #$02    ; $E20B
                            rts    ; $E20D
-l_5:                       lda  #$04    ; $E20E
+l_2:                       lda  #$04    ; $E20E
                            rts    ; $E210
 .bend
 
@@ -20846,9 +20944,9 @@ l_18:                      lda  arranger_v5_sid2,y    ; $E2EE
 l_19:                      cpy  #$FF    ; $E2F4  ; ← (SMC operand at $E2F5, no name)
                            beq  l_20    ; $E2F6  ($FF − 1) was $FF?
                            jmp  l_3    ; $E2F8
-l_20:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E2FB
+l_20:                      jsr  seqlist_v0_arranger_store    ; $E2FB
                            dex    ; $E2FE
-                           beq  seqLIST_screen_dirty_bump    ; $E2FF  (seqLIST_screen_dirty_bump_1->X − 1) was zero?
+                           beq  seqLIST_screen_dirty_bump    ; $E2FF  (seqlist_v0_arranger_store->X − 1) was zero?
                            jmp  l_1    ; $E301
 .bend
 
@@ -20864,43 +20962,54 @@ l_20:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E2FB
 seqLIST_screen_dirty_bump .block
                            inc  editor_row_delta    ; $E304
                            rts    ; $E307
-l_1:                       lda  super_arg_count    ; $E308
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E308  seqlist_v0_arranger_store
+; ──────────────────────────────────────────────────────────────────────
+; Conditionally writes the V0 arranger entry (arranger_v0_sid1), gated on the super-command parity flag and the SID chip view.
+;
+;   callers:             2 code sites: $E2FB writer_seqlist_supercmd_20, $E411 post_load_decoder_internal_label_13
+;   inputs:              Y
+;   registers clobbered: A
+seqlist_v0_arranger_store .block
+                           lda  super_arg_count    ; $E308
                            and  #$01    ; $E30B
                            eor  #$01    ; $E30D
-                           bne  l_3    ; $E30F  ((super_arg_count & $01) ^ $01) was non-zero?
+                           bne  l_2    ; $E30F  ((super_arg_count & $01) ^ $01) was non-zero?
                            pha    ; $E311
                            lda  sid_chip_view    ; $E312
-                           bne  l_2    ; $E315  sid_chip_view was not SID_VIEW_1?
+                           bne  l_1    ; $E315  sid_chip_view was not SID_VIEW_1?
                            pla    ; $E317
                            sta  arranger_v0_sid1,y    ; $E318
-                           jmp  l_3    ; $E31B
-l_2:                       pla    ; $E31E
+                           jmp  l_2    ; $E31B
+l_1:                       pla    ; $E31E
                            sta  arranger_v3_sid2,y    ; $E31F
-l_3:                       lda  super_arg_count    ; $E322
+l_2:                       lda  super_arg_count    ; $E322
                            and  #$02    ; $E325
                            eor  #$02    ; $E327
-                           bne  l_5    ; $E329  ((super_arg_count & $02) ^ $02) was non-zero?
+                           bne  l_4    ; $E329  ((super_arg_count & $02) ^ $02) was non-zero?
                            pha    ; $E32B
                            lda  sid_chip_view    ; $E32C
-                           bne  l_4    ; $E32F  sid_chip_view was not SID_VIEW_1?
+                           bne  l_3    ; $E32F  sid_chip_view was not SID_VIEW_1?
                            pla    ; $E331
                            sta  arranger_v1_sid1,y    ; $E332
-                           jmp  l_5    ; $E335
-l_4:                       pla    ; $E338
+                           jmp  l_4    ; $E335
+l_3:                       pla    ; $E338
                            sta  arranger_v4_sid2,y    ; $E339
-l_5:                       lda  super_arg_count    ; $E33C
+l_4:                       lda  super_arg_count    ; $E33C
                            and  #$04    ; $E33F
                            eor  #$04    ; $E341
-                           bne  l_7    ; $E343  ((super_arg_count & $04) ^ $04) was non-zero?
+                           bne  l_6    ; $E343  ((super_arg_count & $04) ^ $04) was non-zero?
                            pha    ; $E345
                            lda  sid_chip_view    ; $E346
-                           bne  l_6    ; $E349  sid_chip_view was not SID_VIEW_1?
+                           bne  l_5    ; $E349  sid_chip_view was not SID_VIEW_1?
                            pla    ; $E34B
                            sta  arranger_v2_sid1,y    ; $E34C
-                           jmp  l_7    ; $E34F
-l_6:                       pla    ; $E352
+                           jmp  l_6    ; $E34F
+l_5:                       pla    ; $E352
                            sta  arranger_v5_sid2,y    ; $E353
-l_7:                       rts    ; $E356
+l_6:                       rts    ; $E356
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -21006,9 +21115,9 @@ l_12:                      iny    ; $E409
                            cpy  #$FF    ; $E40A
                            beq  l_13    ; $E40C  seqLIST_helper->A was $FF?
                            jmp  seqLIST_writer_super_arg_dispatch.l_2    ; $E40E
-l_13:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E411
+l_13:                      jsr  seqlist_v0_arranger_store    ; $E411
                            dex    ; $E414
-                           beq  l_14    ; $E415  (seqLIST_screen_dirty_bump_1->X − 1) was zero?
+                           beq  l_14    ; $E415  (seqlist_v0_arranger_store->X − 1) was zero?
                            jmp  seqLIST_writer_super_arg_dispatch.l_1    ; $E417
 l_14:                      inc  editor_row_delta    ; $E41A
                            rts    ; $E41D
@@ -21431,7 +21540,7 @@ l_23:                      cpy  #KEY_SPACE    ; $E660
 l_24:                      cpy  #KEY_RETURN    ; $E66E
                            bne  l_25    ; $E670  kbd_decoded_key was not KEY_RETURN?
                            lda  #$01    ; $E672
-                           jsr  seqLIST_step_auto_advance.l_3    ; $E674
+                           jsr  seqlist_col_left_pair_flag    ; $E674
                            ldx  #$3C    ; $E677
                            ldy  #$E2    ; $E679
                            jmp  field_writer_dispatcher    ; $E67B
@@ -21540,7 +21649,7 @@ l_43:                      cpy  #KEY_INSTDEL    ; $E73F
                            jmp  field_writer_dispatcher    ; $E747
 l_44:                      cpy  #KEY_RETURN    ; $E74A
                            bne  l_45    ; $E74C  kbd_decoded_key was not KEY_RETURN?
-                           jsr  seqLIST_step_auto_advance.l_3    ; $E74E
+                           jsr  seqlist_col_left_pair_flag    ; $E74E
                            ldx  #$57    ; $E751
                            ldy  #$E3    ; $E753
                            jmp  field_writer_dispatcher    ; $E755
