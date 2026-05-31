@@ -69,6 +69,7 @@ fetch-static: $(STATIC_BIN)
 # emitter, or the comparison-site facts change. cmp_facts.json is the
 # only intermediate build artefact and lives under build/.
 $(OUT): $(STATIC_BIN) $(ANNOTATIONS) \
+        tools/re/reg_effects.py \
         tools/re/emit_defmon_source.py $(BUILD_DIR)/cmp_facts.json
 	$(PYTHON) -m tools.re.emit_defmon_source
 
