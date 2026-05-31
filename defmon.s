@@ -2515,7 +2515,7 @@ sid_silence_and_reinit .block
                            sta  SID_VOL_FILTER    ; $0C91  ; SID_VOL_FILTER := vol=15
                            ldx  #$11    ; $0C94
                            lda  #$00    ; $0C96
-l_1:                       sta  load_decoder_pat_base_walk.SID_V1_FREQ_LO,x    ; $0C98
+l_1:                       sta  save_encode_clear_dedup.SID_V1_FREQ_LO,x    ; $0C98
                            ldy  stereo_enable    ; $0C9B
                            beq  l_2    ; $0C9E  stereo_enable was STEREO_OFF?
                            sta  sid2_base_default,x    ; $0CA0
@@ -2523,7 +2523,7 @@ l_2:                       dex    ; $0CA3
                            bpl  l_1    ; $0CA4  $11 walked back 1 and had bit 7 clear?
                            lda  #$08    ; $0CA6
                            sta  SID_V1_CTRL    ; $0CA8  ; SID_V1_CTRL := wave off TEST
-                           sta  load_decoder_pat_base_walk.SID_V2_CTRL    ; $0CAB
+                           sta  save_encode_clear_dedup.SID_V2_CTRL    ; $0CAB
                            sta  SID_V3_CTRL    ; $0CAE
                            ldy  stereo_enable    ; $0CB1
                            beq  l_3    ; $0CB4  stereo_enable was STEREO_OFF?
@@ -3282,16 +3282,16 @@ player_play_body .block
 ;     $1053  v1_sid_write_band             [skip V0 SID writes]
 ;   STX -> JMP: when voice 0's wave is off, the SID-write band entry is overwritten with a jump that skips V0's SID writes; restored to STX when the voice plays again.
 l_1:                       stx  SID_V1_PW_LO    ; $1026
-                           sta  load_decoder_pat_base_walk.SID_V1_PW_HI    ; $1029
+                           sta  save_encode_clear_dedup.SID_V1_PW_HI    ; $1029
                            ldx  #$00    ; $102C  ; ← slide_acc_commit_lo
                            lda  #$00    ; $102E  ; ← slide_acc_commit_hi
-                           stx  load_decoder_pat_base_walk.SID_V1_FREQ_LO    ; $1030
+                           stx  save_encode_clear_dedup.SID_V1_FREQ_LO    ; $1030
                            sta  SID_V1_FREQ_HI    ; $1033
                            ldx  #$00    ; $1036  ; ← v0_sid_patch_a
                            ldy  #$00    ; $1038  ; ← v0_sid_patch_b
                            lda  #$00    ; $103A  ; ← v0_sid_patch_c
                            eor  #$00    ; $103C  ; ← v0_sid_patch_d
-                           stx  load_decoder_pat_base_walk.SID_V1_SR    ; $103E
+                           stx  save_encode_clear_dedup.SID_V1_SR    ; $103E
                            sty  SID_V1_AD    ; $1041
                            sta  SID_V1_CTRL    ; $1044
                            jmp  v1_sid_write_band    ; $1047
@@ -3317,11 +3317,11 @@ v1_sid_write_band .block
 ;   When patched, jumps to:
 ;     $1084  v2_sid_write_band             [skip V1 SID writes]
 ;   STX -> JMP: skips voice 1's SID writes when V1's wave is off.
-l_1:                       stx  load_decoder_pat_base_walk.SID_V2_PW_LO    ; $1057
+l_1:                       stx  save_encode_clear_dedup.SID_V2_PW_LO    ; $1057
                            sta  SID_V2_PW_HI    ; $105A
                            ldx  #$00    ; $105D
                            lda  #$00    ; $105F
-                           stx  load_decoder_pat_base_walk.SID_V2_FREQ_LO    ; $1061
+                           stx  save_encode_clear_dedup.SID_V2_FREQ_LO    ; $1061
                            sta  SID_V2_FREQ_HI    ; $1064
                            ldx  #$00    ; $1067
                            ldy  #$00    ; $1069
@@ -3329,7 +3329,7 @@ l_1:                       stx  load_decoder_pat_base_walk.SID_V2_PW_LO    ; $10
                            eor  #$00    ; $106D
                            stx  SID_V2_SR    ; $106F
                            sty  SID_V2_AD    ; $1072
-                           sta  load_decoder_pat_base_walk.SID_V2_CTRL    ; $1075
+                           sta  save_encode_clear_dedup.SID_V2_CTRL    ; $1075
                            jmp  v2_sid_write_band    ; $1078
         .byte $00, $00, $00, $00, $00, $00, $02, $04, $FB    ; $107B
 .bend
@@ -3353,21 +3353,21 @@ v2_sid_write_band .block
 ;   When patched, jumps to:
 ;     $10A9  sid1_globals_tail             [skip V2 SID writes]
 ;   STX -> JMP: skips voice 2's SID writes when V2's wave is off.
-l_1:                       stx  load_decoder_pat_base_walk.SID_V3_PW_LO    ; $1088
+l_1:                       stx  save_encode_clear_dedup.SID_V3_PW_LO    ; $1088
                            sta  SID_V3_PW_HI    ; $108B
                            ldx  #$00    ; $108E
                            lda  #$00    ; $1090
-                           stx  load_decoder_pat_base_walk.SID_V3_FREQ_LO    ; $1092
-                           sta  load_decoder_pat_base_walk.SID_V3_FREQ_HI    ; $1095
+                           stx  save_encode_clear_dedup.SID_V3_FREQ_LO    ; $1092
+                           sta  save_encode_clear_dedup.SID_V3_FREQ_HI    ; $1095
                            ldx  #$00    ; $1098
                            ldy  #$00    ; $109A
                            lda  #$00    ; $109C
                            eor  #$00    ; $109E
                            stx  SID_V3_SR    ; $10A0
-                           sty  load_decoder_pat_base_walk.SID_V3_AD    ; $10A3
+                           sty  save_encode_clear_dedup.SID_V3_AD    ; $10A3
                            sta  SID_V3_CTRL    ; $10A6
                            lda  #$00    ; $10A9  ; ← filter_resonance_routing
-                           sta  load_decoder_pat_base_walk.SID_FILTER_RES    ; $10AB
+                           sta  save_encode_clear_dedup.SID_FILTER_RES    ; $10AB
                            lda  #$00    ; $10AE  ; ← filter_volume_or_mode
                            ora  #$0F    ; $10B0
                            sta  SID_VOL_FILTER    ; $10B2
@@ -4522,8 +4522,8 @@ l_1:                       cmp  VIC_RASTER    ; $14F2
                            bne  l_1    ; $14F5  $FC was not VIC_RASTER?
                            lda  #$FF    ; $14F7  ; ← slide_dec_lut_lo
                            sta  SID_V3_CTRL    ; $14F9  ; SID_V3_CTRL := TRI+SAW+PUL+NOI GATE SYNC RING TEST
-                           sta  load_decoder_pat_base_walk.SID_V3_FREQ_LO    ; $14FC
-                           sta  load_decoder_pat_base_walk.SID_V3_FREQ_HI    ; $14FF
+                           sta  save_encode_clear_dedup.SID_V3_FREQ_LO    ; $14FC
+                           sta  save_encode_clear_dedup.SID_V3_FREQ_HI    ; $14FF
                            lda  #$20    ; $1502
                            sta  SID_V3_CTRL    ; $1504  ; SID_V3_CTRL := SAW
                            lda  SID_OSC3    ; $1507
@@ -4555,7 +4555,7 @@ player_init_body .block
                            sta  current_arranger_row    ; $1522
                            ldy  #$17    ; $1525
                            lda  #$00    ; $1527
-l_1:                       sta  load_decoder_pat_base_walk.SID_V1_FREQ_LO,y    ; $1529
+l_1:                       sta  save_encode_clear_dedup.SID_V1_FREQ_LO,y    ; $1529
                            dey    ; $152C
                            bpl  l_1    ; $152D  $17 walked back 1 and had bit 7 clear?
                            sta  filter_cutoff_acc_lo    ; $152F
@@ -7759,7 +7759,7 @@ l_6:                       cpx  #$14    ; $8339
                            jmp  stereo_enable_toggle    ; $8341
 l_7:                       cpy  #KEY_UP_ARROW    ; $8344
                            bne  l_8    ; $8346  kbd_decoded_key was not KEY_UP_ARROW?
-                           jmp  stereo_enable_toggle.l_3    ; $8348
+                           jmp  sid2_base_advance.l_1    ; $8348
 l_8:                       cpy  #KEY_PERIOD    ; $834B
                            bne  l_9    ; $834D  kbd_decoded_key was not KEY_PERIOD?
                            inc  super_cmd_staged    ; $834F
@@ -7797,7 +7797,7 @@ l_2:                       cpx  #$24    ; $837D
                            bne  statusline_print_bare_return    ; $837F  kbd_modifiers was not $24?
                            cpy  #KEY_UP_ARROW    ; $8381
                            bne  l_3    ; $8383  kbd_decoded_key was not KEY_UP_ARROW?
-                           jsr  stereo_enable_toggle.l_2    ; $8385
+                           jsr  sid2_base_advance    ; $8385
 l_3:                       jmp  statusline_print_bare_return    ; $8388
 .bend
 
@@ -12862,7 +12862,7 @@ l_88:                      lda  ui_mode    ; $A9BA
                            lda  (zp_ptr1_lo),y    ; $A9D9
                            ora  #$80    ; $A9DB
                            sta  (zp_ptr1_lo),y    ; $A9DD
-l_89:                      jsr  l_91    ; $A9DF
+l_89:                      jsr  statusline_reverse_fill    ; $A9DF
                            ldx  #$FF    ; $A9E2
                            lda  octave_offset    ; $A9E4
 l_90:                      inx    ; $A9E7
@@ -12872,12 +12872,23 @@ l_90:                      inx    ; $A9E7
                            lda  hex_digit_rvs_screencode,x    ; $A9ED
                            sta  SCREEN_RAM + $3E7    ; $A9F0
                            rts    ; $A9F3
-l_91:                      ldx  #$0D    ; $A9F4
-l_92:                      lda  statusline_buffer,x    ; $A9F6
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $A9F4  statusline_reverse_fill
+; ──────────────────────────────────────────────────────────────────────
+; Fills the 14-cell status-line colour row with the current colour, reverse-video bit set.
+;
+;   callers:             2 code sites: $A9DF vic_sprite_init_internal_89, $E138 seqLIST_paint_loop_tail_7
+;   outputs:             X
+;   registers clobbered: A, X
+statusline_reverse_fill .block
+                           ldx  #$0D    ; $A9F4
+l_1:                       lda  statusline_buffer,x    ; $A9F6
                            ora  #$80    ; $A9F9
                            sta  SCREEN_RAM + $3C2,x    ; $A9FB
                            dex    ; $A9FE
-                           bpl  l_92    ; $A9FF  $0D walked back 1 and had bit 7 clear?
+                           bpl  l_1    ; $A9FF  $0D walked back 1 and had bit 7 clear?
                            rts    ; $AA01
 .bend
 
@@ -13036,10 +13047,22 @@ l_4:                       lda  seqED_header_color_template + $50,x    ; $AB3E
                            sta  screen_ram_row01,x    ; $AB4C
                            dex    ; $AB4F
                            bpl  l_4    ; $AB50  $27 walked back 1 and had bit 7 clear?
-                           jsr  l_5    ; $AB52
+                           jsr  chip_view_voice_cells_paint    ; $AB52
                            rts    ; $AB55
-l_5:                       ldx  sid_chip_view    ; $AB56
-                           beq  l_6    ; $AB59  sid_chip_view was SID_VIEW_1?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $AB56  chip_view_voice_cells_paint
+; ──────────────────────────────────────────────────────────────────────
+; Repaints the three chip-view per-voice selection cells from the per-voice state bytes when SID#2 is in view.
+;
+;   callers:             3 code sites: $AB52, $B0C3, $E720
+;   inputs:              Y
+;   outputs:             X
+;   registers clobbered: A, X
+chip_view_voice_cells_paint .block
+                           ldx  sid_chip_view    ; $AB56
+                           beq  l_1    ; $AB59  sid_chip_view was SID_VIEW_1?
                            ldx  #$02    ; $AB5B
                            lda  kbd_voice_mute_mirror    ; $AB5D
                            jsr  paint_ui_selection_cell    ; $AB60
@@ -13049,8 +13072,8 @@ l_5:                       ldx  sid_chip_view    ; $AB56
                            ldx  #$14    ; $AB6B
                            lda  super_cmd_state_71bd    ; $AB6D
                            jsr  paint_ui_selection_cell    ; $AB70
-                           jmp  l_7    ; $AB73
-l_6:                       ldx  #$02    ; $AB76
+                           jmp  l_2    ; $AB73
+l_1:                       ldx  #$02    ; $AB76
                            lda  cursor_state_cluster    ; $AB78
                            jsr  paint_ui_selection_cell    ; $AB7B
                            ldx  #$0B    ; $AB7E
@@ -13059,7 +13082,7 @@ l_6:                       ldx  #$02    ; $AB76
                            ldx  #$14    ; $AB86
                            lda  super_cmd_state_71ba    ; $AB88
                            jsr  paint_ui_selection_cell    ; $AB8B
-l_7:                       rts    ; $AB8E
+l_2:                       rts    ; $AB8E
         .fill 113, $EA    ; $AB8F-$ABFF
         ; $AC00
         .rept 10
@@ -13328,7 +13351,7 @@ l_8:                       cpy  #$93    ; $AF71
                            jmp  mode_transition_wrapper    ; $AF8A
 l_9:                       cpy  #$1F    ; $AF8D
                            bne  l_10    ; $AF8F  Y was not $1F?
-                           jsr  writer_seqED_flag_byte_merge.l_1    ; $AF91
+                           jsr  chip_view_cursor_home    ; $AF91
                            clc    ; $AF94
                            adc  #$01    ; $AF95
                            tay    ; $AF97
@@ -13442,7 +13465,7 @@ l_9:                       cpy  #$93    ; $B031
                            jmp  mode_transition_wrapper    ; $B04A
 l_10:                      cpy  #$1F    ; $B04D
                            bne  l_11    ; $B04F  Y was not $1F?
-                           jsr  writer_seqED_flag_byte_merge.l_1    ; $B051
+                           jsr  chip_view_cursor_home    ; $B051
                            clc    ; $B054
                            adc  #$02    ; $B055
                            tay    ; $B057
@@ -13518,7 +13541,7 @@ l_4:                       cpy  #$1F    ; $B0B7
                            lda  stereo_enable    ; $B0BB
                            beq  l_5    ; $B0BE  stereo_enable was STEREO_OFF?
                            jsr  chipview_toggle_helper    ; $B0C0
-                           jmp  vic_sprite_init.l_5    ; $B0C3
+                           jmp  chip_view_voice_cells_paint    ; $B0C3
 l_5:                       cpy  #$07    ; $B0C6
                            bne  l_8    ; $B0C8  Y was not $07?
                            jsr  seqED_step_cursor_increment    ; $B0CA
@@ -13985,12 +14008,12 @@ l_1:                       cpy  #$FF    ; $B327
                            bne  l_2    ; $B329  page_pair_counter was not $FF?
                            cmp  #$1F    ; $B32B
                            bne  l_2    ; $B32D  A was not $1F?
-                           jsr  post_write_paint_tail.l_2    ; $B32F
+                           jsr  step_cursor_inc_wrap    ; $B32F
 l_2:                       lda  cursor_walk_x_offset_smc    ; $B332
                            cmp  #$08    ; $B335
-                           bcc  post_write_paint_tail.l_4    ; $B337  cursor_walk_x_offset_smc was below $08?
+                           bcc  step_cursor_inc_wrap.l_2    ; $B337  cursor_walk_x_offset_smc was below $08?
                            cmp  #$09    ; $B339
-                           bcs  post_write_paint_tail.l_2    ; $B33B  cursor_walk_x_offset_smc was $09 or above?
+                           bcs  step_cursor_inc_wrap    ; $B33B  cursor_walk_x_offset_smc was $09 or above?
                            lda  cursor_walk_x_offset_smc    ; $B33D
                            sta  page_offset    ; $B340
                            jmp  post_write_paint_tail    ; $B343
@@ -14020,23 +14043,34 @@ l_1:                       lda  page_offset    ; $B352
                            inc  editor_col_delta    ; $B363
                            lda  #$02    ; $B366
                            jmp  mode_transition_wrapper    ; $B368
-l_2:                       lda  step_cursor    ; $B36B
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $B36B  step_cursor_inc_wrap
+; ──────────────────────────────────────────────────────────────────────
+; Advances step_cursor by one, wrapping at $20 and bumping page_pair_counter (sidTAB auto-advance, +1 variant).
+;
+;   callers:             2 code sites: $B32F, $B33B
+;   outputs:             Y
+;   registers clobbered: A, Y
+step_cursor_inc_wrap .block
+                           lda  step_cursor    ; $B36B
                            clc    ; $B36E
                            adc  #$01    ; $B36F
                            cmp  #$20    ; $B371
-                           bne  l_3    ; $B373  A was not $20?
+                           bne  l_1    ; $B373  A was not $20?
                            inc  page_pair_counter    ; $B375
                            lda  #$00    ; $B378
-l_3:                       sta  step_cursor    ; $B37A
+l_1:                       sta  step_cursor    ; $B37A
                            jmp  post_write_paint_tail    ; $B37D
-l_4:                       lda  step_cursor    ; $B380
+l_2:                       lda  step_cursor    ; $B380
                            sec    ; $B383
                            sbc  #$01    ; $B384
-                           bcs  l_5    ; $B386  (step_cursor − $01) shifted-out bit was 1?
+                           bcs  l_3    ; $B386  (step_cursor − $01) shifted-out bit was 1?
                            lda  page_pair_counter    ; $B388
                            dec  page_pair_counter    ; $B38B
                            lda  #$1F    ; $B38E
-l_5:                       sta  step_cursor    ; $B390
+l_3:                       sta  step_cursor    ; $B390
                            jmp  post_write_paint_tail    ; $B393
 .bend
 
@@ -14368,7 +14402,18 @@ writer_seqED_flag_byte_merge .block
                            ora  (zp_ptr1_lo),y    ; $B637
                            sta  (zp_ptr1_lo),y    ; $B639
                            rts    ; $B63B
-l_1:                       lda  #$06    ; $B63C
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $B63C  chip_view_cursor_home
+; ──────────────────────────────────────────────────────────────────────
+; Resets the chip-view (sidTAB) cursor to column 6 / row 0 and re-reads the voice selector.
+;
+;   callers:             2 code sites: $AF91, $B051
+;   outputs:             A
+;   registers clobbered: A, X, Y
+chip_view_cursor_home .block
+                           lda  #$06    ; $B63C
                            sta  chip_view_cursor_x    ; $B63E
                            lda  #$00    ; $B641
                            sta  chip_view_cursor_y    ; $B643
@@ -14971,30 +15016,41 @@ l_3:                       lda  sidtab_dispatch_lut0,x    ; $BB49
 l_4:                       sta  color_ram_disk_menu_offset,x    ; $BB7A
                            dex    ; $BB7D
                            bpl  l_4    ; $BB7E  $0D walked back 1 and had bit 7 clear?
-                           jsr  l_5    ; $BB80
+                           jsr  chip_view_voice_glyph    ; $BB80
                            rts    ; $BB83
-l_5:                       lda  sid_chip_view    ; $BB84
-                           beq  l_9    ; $BB87  sid_chip_view was SID_VIEW_1?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BB84  chip_view_voice_glyph
+; ──────────────────────────────────────────────────────────────────────
+; Returns the glyph for a chip-view voice cell, choosing the muted glyph when SID#2 is active and the voice is off.
+;
+;   callers:             2 code sites: $BB80, $BD7E
+;   outputs:             X
+;   registers clobbered: A, X
+chip_view_voice_glyph .block
+                           lda  sid_chip_view    ; $BB84
+                           beq  l_4    ; $BB87  sid_chip_view was SID_VIEW_1?
                            ldx  #$02    ; $BB89
-l_6:                       lda  kbd_voice_mute_mirror,x    ; $BB8B
-                           beq  l_7    ; $BB8E  kbd_voice_mute_mirror,X was zero?
+l_1:                       lda  kbd_voice_mute_mirror,x    ; $BB8B
+                           beq  l_2    ; $BB8E  kbd_voice_mute_mirror,X was zero?
                            lda  #$A0    ; $BB90
-                           jmp  l_8    ; $BB92
-l_7:                       lda  #$D1    ; $BB95
-l_8:                       sta  SCREEN_RAM_SIDTAB_GLYPH,x    ; $BB97
+                           jmp  l_3    ; $BB92
+l_2:                       lda  #$D1    ; $BB95
+l_3:                       sta  SCREEN_RAM_SIDTAB_GLYPH,x    ; $BB97
                            dex    ; $BB9A
-                           bpl  l_6    ; $BB9B  $02 walked back 1 and had bit 7 clear?
-                           jmp  l_13    ; $BB9D
-l_9:                       ldx  #$02    ; $BBA0
-l_10:                      lda  cursor_state_cluster,x    ; $BBA2
-                           beq  l_11    ; $BBA5  cursor_state_cluster,X was zero?
+                           bpl  l_1    ; $BB9B  $02 walked back 1 and had bit 7 clear?
+                           jmp  l_8    ; $BB9D
+l_4:                       ldx  #$02    ; $BBA0
+l_5:                       lda  cursor_state_cluster,x    ; $BBA2
+                           beq  l_6    ; $BBA5  cursor_state_cluster,X was zero?
                            lda  #$A0    ; $BBA7
-                           jmp  l_12    ; $BBA9
-l_11:                      lda  #$D1    ; $BBAC
-l_12:                      sta  SCREEN_RAM_SIDTAB_GLYPH,x    ; $BBAE
+                           jmp  l_7    ; $BBA9
+l_6:                       lda  #$D1    ; $BBAC
+l_7:                       sta  SCREEN_RAM_SIDTAB_GLYPH,x    ; $BBAE
                            dex    ; $BBB1
-                           bpl  l_10    ; $BBB2  $02 walked back 1 and had bit 7 clear?
-l_13:                      rts    ; $BBB4
+                           bpl  l_5    ; $BBB2  $02 walked back 1 and had bit 7 clear?
+l_8:                       rts    ; $BBB4
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -15696,7 +15752,7 @@ sidtab_cascade_ctrl_leftarrow_arm .block
                            lda  stereo_enable    ; $BD76
                            beq  l_1    ; $BD79  stereo_enable was STEREO_OFF?
                            jsr  chipview_toggle_helper    ; $BD7B
-                           jmp  sidTAB_handler_band.l_5    ; $BD7E
+                           jmp  chip_view_voice_glyph    ; $BD7E
 l_1:                       jmp  sidtab_dispatch_bare_return    ; $BD81
 .bend
 
@@ -15755,7 +15811,7 @@ sidtab_dispatch_bare_return .block
 ; ──────────────────────────────────────────────────────────────────────
 ; sidTAB staging buffer (sidTAB_staging..sidTAB_staging_buffer_ext).
 ;
-;   callers:             26 code sites: $BE04, $BE7E pitch_lut_generator_inner_loop_8, $BE9E, $BF47, $C0AF, $C102, $C153, $C158, +18 more
+;   callers:             26 code sites: $BE04, $BE7E sidtab_staging_clear_1, $BE9E, $BF47, $C0AF, $C102, $C153, $C158, +18 more
 ;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   79 bytes of working state used by the sidTAB writer cascade between cell-read, edit, and write-back. Layout includes the field mask table at sidTAB_staging_buffer_ext+ (per-column raw + mask pairs) and the digit-phase indices at sidTAB_staging_buffer_ext+. Pure data region. Loaded by pitch_lut_generator_inner_loop fan-out and read by every sidTAB writer arm.
@@ -15784,7 +15840,19 @@ sidTAB_helper .block
                            lda  super_cmd_writer_step_smc    ; $BDF3
                            sta  sidTAB_staging_prefix    ; $BDF6
                            rts    ; $BDF9
-l_1:                       txa    ; $BDFA
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BDFA  sidtab_row_decode_to_staging
+; ──────────────────────────────────────────────────────────────────────
+; Decodes the current sidTAB row into the staging buffer via sidtab_row_decoder.
+;
+;   callers:             5 code sites: $BF4E sidtab_staging_store_1, $C0F6, $C2B3, $C337, $C355
+;   inputs:              X
+;   outputs:             X
+;   registers clobbered: A, X
+sidtab_row_decode_to_staging .block
+                           txa    ; $BDFA
                            pha    ; $BDFB
                            jsr  sidtab_row_decoder    ; $BDFC
 .bend
@@ -15794,7 +15862,7 @@ l_1:                       txa    ; $BDFA
 ; ──────────────────────────────────────────────────────────────────────
 ; sidTAB handler band end.
 ;
-;   code edges:          fall-through from $BDFC in sidTAB_helper_1 (3 bytes earlier)
+;   code edges:          fall-through from $BDFC in sidtab_row_decode_to_staging (3 bytes earlier)
 sidTAB_handler_band_end .block
                            ldx  sidTAB_staging_prefix    ; $BDFF
                            lda  zp_ptr1_lo    ; $BE02
@@ -15821,12 +15889,37 @@ sidTAB_shifted_helper .block
                            ldx  chip_view_cursor_x    ; $BE15
                            lda  sidtab_cell_descriptor_lut,x    ; $BE18
                            rts    ; $BE1B
-l_1:                       ldx  chip_view_cursor_x    ; $BE1C
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE1C  sidtab_field_at_cursor
+; ──────────────────────────────────────────────────────────────────────
+; Returns in Y the sidTAB field byte under the chip-view cursor, bit 7 masked off.
+;
+;   callers:             10 code sites: $C165, $C19F, $C1B1, $C1D4, $C3AC, $C3C4, $C3F9, $C435, +2 more
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+;
+;   Indexes the sidTAB field row by chip_view_cursor_x. A read-only accessor used throughout the sidTAB editor (10 call sites).
+sidtab_field_at_cursor .block
+                           ldx  chip_view_cursor_x    ; $BE1C
                            lda  sidtab_cell_descriptor_lut,x    ; $BE1F
                            and  #$7F    ; $BE22
                            tay    ; $BE24
                            rts    ; $BE25
-l_2:                       dec  seqlist_cursor_aux1    ; $BE26
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE26  sidtab_voice_mask_compute
+; ──────────────────────────────────────────────────────────────────────
+; Recomputes the three sidTAB voice-mask bytes from the staging prefix.
+;
+;   callers:             4 code sites: $C21F, $C2E3, $C378, $C411
+;   registers clobbered: A
+;
+;   Derives the set / cleared / combined masks (ORA, EOR+AND against the prefix) used when applying a sidTAB edit across voices.
+sidtab_voice_mask_compute .block
+                           dec  seqlist_cursor_aux1    ; $BE26
                            lda  sidTAB_staging_prefix    ; $BE29
                            sta  seqlist_cursor_aux3    ; $BE2C
                            ora  seqlist_cursor_aux1    ; $BE2F
@@ -15885,203 +15978,258 @@ l_1:                       dex    ; $BE5A
 l_2:                       sta  zp_ptr1_lo    ; $BE5D
                            ldx  #$FF    ; $BE5F  ; ← (SMC operand at $BE60, no name)
                            rts    ; $BE61
-l_3:                       lda  zp_ptr1_lo    ; $BE62
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE62  sidtab_row_ptr_next
+; ──────────────────────────────────────────────────────────────────────
+; Advances the sidTAB row pointer (zp_decoder_src) by one 15-byte row.
+;
+;   callers:             6 code sites: $C296, $C2FE, $C328, $C3BE, $C42F, $C46E
+;   registers clobbered: A
+sidtab_row_ptr_next .block
+                           lda  zp_ptr1_lo    ; $BE62
                            clc    ; $BE64
                            adc  #$0F    ; $BE65
                            sta  zp_ptr1_lo    ; $BE67
-                           bcc  l_4    ; $BE69  (zp_ptr1_lo + $0F) shifted-out bit was 0?
+                           bcc  l_1    ; $BE69  (zp_ptr1_lo + $0F) shifted-out bit was 0?
                            inc  zp_ptr1_hi    ; $BE6B
-l_4:                       rts    ; $BE6D
-l_5:                       lda  zp_ptr1_lo    ; $BE6E
+l_1:                       rts    ; $BE6D
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE6E  sidtab_row_ptr_prev
+; ──────────────────────────────────────────────────────────────────────
+; Retreats the sidTAB row pointer (zp_decoder_src) by one 15-byte row.
+;
+;   callers:             6 code sites: $C2A1, $C2A4, $C31A, $C3E4, $C3E7, $C447
+;   registers clobbered: A
+sidtab_row_ptr_prev .block
+                           lda  zp_ptr1_lo    ; $BE6E
                            sec    ; $BE70
                            sbc  #$0F    ; $BE71
                            sta  zp_ptr1_lo    ; $BE73
-                           bcs  l_6    ; $BE75  (zp_ptr1_lo − $0F) shifted-out bit was 1?
+                           bcs  l_1    ; $BE75  (zp_ptr1_lo − $0F) shifted-out bit was 1?
                            dec  zp_ptr1_hi    ; $BE77
-l_6:                       rts    ; $BE79
-l_7:                       lda  #$00    ; $BE7A
+l_1:                       rts    ; $BE79
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE7A  sidtab_staging_clear
+; ──────────────────────────────────────────────────────────────────────
+; Clears the 15-byte sidTAB staging buffer to zero.
+;
+;   callers:             1 code sites: $BE85 sidtab_staging_load
+;   registers clobbered: A, Y
+sidtab_staging_clear .block
+                           lda  #$00    ; $BE7A
                            ldy  #$0E    ; $BE7C
-l_8:                       sta  sidTAB_staging,y    ; $BE7E
+l_1:                       sta  sidTAB_staging,y    ; $BE7E
                            dey    ; $BE81
-                           bpl  l_8    ; $BE82  $0E walked back 1 and had bit 7 clear?
+                           bpl  l_1    ; $BE82  $0E walked back 1 and had bit 7 clear?
                            rts    ; $BE84
-l_9:                       jsr  l_7    ; $BE85
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BE85  sidtab_staging_load
+; ──────────────────────────────────────────────────────────────────────
+; Clears the sidTAB staging buffer, then loads the prefix-selected row into it.
+;
+;   callers:             18 code sites: $C149, $C162, $C19C, $C1AE, $C1D1, $C22B, $C27D, $C2B6, +10 more
+;   registers clobbered: A, Y
+;
+;   Calls sidtab_staging_clear, then loads the current row (selected by sidTAB_staging_prefix) via the song_position_arrays_hi / pitch_lut_band_alt_base tables. The sidTAB editor's row-load workhorse (18 call sites).
+sidtab_staging_load .block
+                           jsr  sidtab_staging_clear    ; $BE85
                            lda  #$00    ; $BE88
                            sta  sidtab_staging_field1    ; $BE8A
                            sta  sidtab_staging_field2    ; $BE8D
                            ldy  sidTAB_staging_prefix    ; $BE90
                            lda  song_position_arrays_hi,y    ; $BE93
                            sta  sidtab_staging_field3    ; $BE96
-                           bne  l_10    ; $BE99  song_position_arrays_hi,Y was non-zero?
+                           bne  l_1    ; $BE99  song_position_arrays_hi,Y was non-zero?
                            lda  song_position_arrays_lo,y    ; $BE9B
                            sta  sidTAB_staging    ; $BE9E
                            rts    ; $BEA1
-l_10:                      lda  dl_per_step_counters,y    ; $BEA2
+l_1:                       lda  dl_per_step_counters,y    ; $BEA2
                            sta  sidTAB_staging_buffer_ext    ; $BEA5
                            ldy  #$00    ; $BEA8
                            lda  (zp_ptr1_lo),y    ; $BEAA
                            sta  sidtab_staging_field1    ; $BEAC
                            asl  a    ; $BEAF
                            sta  zp_decoder_dest_lo    ; $BEB0
-                           bpl  l_11    ; $BEB2  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_2    ; $BEB2  (zp_ptr1_lo),Y had bit 7 clear?
                            iny    ; $BEB4
                            lda  (zp_ptr1_lo),y    ; $BEB5
                            sta  sidTAB_staging_buffer_ext + $01    ; $BEB7
-l_11:                      bcc  l_12    ; $BEBA  (zp_ptr1_lo),Y shifted-out bit was 0?
+l_2:                       bcc  l_3    ; $BEBA  (zp_ptr1_lo),Y shifted-out bit was 0?
                            iny    ; $BEBC
                            lda  (zp_ptr1_lo),y    ; $BEBD
                            sta  sidTAB_staging_buffer_ext + $02    ; $BEBF
-l_12:                      bit  zp_decoder_dest_lo    ; $BEC2
-                           bvc  l_13    ; $BEC4  zp_decoder_dest_lo had bit 6 clear?
+l_3:                       bit  zp_decoder_dest_lo    ; $BEC2
+                           bvc  l_4    ; $BEC4  zp_decoder_dest_lo had bit 6 clear?
                            iny    ; $BEC6
                            lda  (zp_ptr1_lo),y    ; $BEC7
                            sta  sidTAB_staging_buffer_ext + $03    ; $BEC9
-l_13:                      lda  zp_decoder_dest_lo    ; $BECC
+l_4:                       lda  zp_decoder_dest_lo    ; $BECC
                            and  #$20    ; $BECE
-                           beq  l_14    ; $BED0  (zp_decoder_dest_lo & $20) was zero?
+                           beq  l_5    ; $BED0  (zp_decoder_dest_lo & $20) was zero?
                            iny    ; $BED2
                            lda  (zp_ptr1_lo),y    ; $BED3
                            sta  sidTAB_staging_buffer_ext + $04    ; $BED5
-l_14:                      lda  zp_decoder_dest_lo    ; $BED8
+l_5:                       lda  zp_decoder_dest_lo    ; $BED8
                            and  #$10    ; $BEDA
-                           beq  l_15    ; $BEDC  (zp_decoder_dest_lo & $10) was zero?
+                           beq  l_6    ; $BEDC  (zp_decoder_dest_lo & $10) was zero?
                            iny    ; $BEDE
                            lda  (zp_ptr1_lo),y    ; $BEDF
                            sta  sidTAB_staging_buffer_ext + $05    ; $BEE1
-l_15:                      lda  zp_decoder_dest_lo    ; $BEE4
+l_6:                       lda  zp_decoder_dest_lo    ; $BEE4
                            and  #$08    ; $BEE6
-                           beq  l_16    ; $BEE8  (zp_decoder_dest_lo & $08) was zero?
+                           beq  l_7    ; $BEE8  (zp_decoder_dest_lo & $08) was zero?
                            iny    ; $BEEA
                            lda  (zp_ptr1_lo),y    ; $BEEB
                            sta  sidTAB_staging_buffer_ext + $06    ; $BEED
-l_16:                      lda  zp_decoder_dest_lo    ; $BEF0
+l_7:                       lda  zp_decoder_dest_lo    ; $BEF0
                            and  #$04    ; $BEF2
-                           beq  l_17    ; $BEF4  (zp_decoder_dest_lo & $04) was zero?
+                           beq  l_8    ; $BEF4  (zp_decoder_dest_lo & $04) was zero?
                            iny    ; $BEF6
                            lda  (zp_ptr1_lo),y    ; $BEF7
                            sta  sidTAB_staging_buffer_ext + $07    ; $BEF9
-l_17:                      iny    ; $BEFC
+l_8:                       iny    ; $BEFC
                            lda  (zp_ptr1_lo),y    ; $BEFD
                            sta  sidtab_staging_field2    ; $BEFF
                            asl  a    ; $BF02
                            sta  zp_decoder_dest_lo    ; $BF03
-                           bcc  l_18    ; $BF05  (zp_ptr1_lo),Y shifted-out bit was 0?
+                           bcc  l_9    ; $BF05  (zp_ptr1_lo),Y shifted-out bit was 0?
                            iny    ; $BF07
                            lda  (zp_ptr1_lo),y    ; $BF08
                            sta  sidTAB_staging_buffer_ext + $08    ; $BF0A
-l_18:                      asl  zp_decoder_dest_lo    ; $BF0D
-                           bcc  l_19    ; $BF0F  zp_decoder_dest_lo shifted-out bit was 0?
+l_9:                       asl  zp_decoder_dest_lo    ; $BF0D
+                           bcc  l_10    ; $BF0F  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BF11
                            lda  (zp_ptr1_lo),y    ; $BF12
                            sta  sidTAB_staging_buffer_ext + $09    ; $BF14
-l_19:                      asl  zp_decoder_dest_lo    ; $BF17
-                           bcc  l_20    ; $BF19  zp_decoder_dest_lo shifted-out bit was 0?
+l_10:                      asl  zp_decoder_dest_lo    ; $BF17
+                           bcc  l_11    ; $BF19  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BF1B
                            lda  (zp_ptr1_lo),y    ; $BF1C
                            sta  sidTAB_staging_buffer_ext + $0A    ; $BF1E
-l_20:                      asl  zp_decoder_dest_lo    ; $BF21
-                           bcc  l_21    ; $BF23  zp_decoder_dest_lo shifted-out bit was 0?
+l_11:                      asl  zp_decoder_dest_lo    ; $BF21
+                           bcc  l_12    ; $BF23  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BF25
                            lda  (zp_ptr1_lo),y    ; $BF26
                            sta  sidTAB_staging_buffer_ext + $0B    ; $BF28
-l_21:                      asl  zp_decoder_dest_lo    ; $BF2B
-                           bcc  l_22    ; $BF2D  zp_decoder_dest_lo shifted-out bit was 0?
+l_12:                      asl  zp_decoder_dest_lo    ; $BF2B
+                           bcc  l_13    ; $BF2D  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BF2F
                            lda  (zp_ptr1_lo),y    ; $BF30
                            sta  sidTAB_staging_buffer_ext + $0C    ; $BF32
                            iny    ; $BF35
                            lda  (zp_ptr1_lo),y    ; $BF36
                            sta  sidTAB_staging_buffer_ext + $0D    ; $BF38
-l_22:                      rts    ; $BF3B
-l_23:                      ldy  sidTAB_staging_prefix    ; $BF3C
+l_13:                      rts    ; $BF3B
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $BF3C  sidtab_staging_store
+; ──────────────────────────────────────────────────────────────────────
+; Stores the sidTAB staging buffer back into the prefix-selected row tables (inverse of sidtab_staging_load).
+;
+;   callers:             14 code sites: $C15B, $C195 writer_sidtab_digit_2, $C1A7, $C1CA, $C1ED, $C299, $C2C4, $C31D, +6 more
+;   inputs:              X
+;   registers clobbered: A, X, Y
+;
+;   Writes sidTAB_staging / its high byte into song_position_arrays_hi / pitch_lut_band_alt_base at sidTAB_staging_prefix. The sidTAB editor's row-commit workhorse (14 call sites).
+sidtab_staging_store .block
+                           ldy  sidTAB_staging_prefix    ; $BF3C
                            lda  sidtab_staging_field3    ; $BF3F
-                           bne  l_24    ; $BF42  sidtab_staging_field3 was non-zero?
+                           bne  l_1    ; $BF42  sidtab_staging_field3 was non-zero?
                            sta  song_position_arrays_hi,y    ; $BF44
                            lda  sidTAB_staging    ; $BF47
                            sta  song_position_arrays_lo,y    ; $BF4A
                            rts    ; $BF4D
-l_24:                      jsr  sidTAB_helper.l_1    ; $BF4E
+l_1:                       jsr  sidtab_row_decode_to_staging    ; $BF4E
                            lda  sidTAB_staging_buffer_ext    ; $BF51
                            sta  dl_per_step_counters,y    ; $BF54
                            lda  zp_ptr1_hi    ; $BF57
-                           bne  l_26    ; $BF59  zp_ptr1_hi was non-zero?
-l_25:                      inc  VIC_SP2_X.VIC_BG0    ; $BF5B
-                           jmp  l_25    ; $BF5E
-l_26:                      ldy  #$00    ; $BF61
+                           bne  l_3    ; $BF59  zp_ptr1_hi was non-zero?
+l_2:                       inc  VIC_SP2_X.VIC_BG0    ; $BF5B
+                           jmp  l_2    ; $BF5E
+l_3:                       ldy  #$00    ; $BF61
                            lda  sidtab_staging_field1    ; $BF63
                            sta  (zp_ptr1_lo),y    ; $BF66
                            asl  a    ; $BF68
                            sta  zp_decoder_dest_lo    ; $BF69
-                           bpl  l_27    ; $BF6B  (sidtab_staging_field1 << 1) had bit 7 clear?
+                           bpl  l_4    ; $BF6B  (sidtab_staging_field1 << 1) had bit 7 clear?
                            iny    ; $BF6D
                            lda  sidTAB_staging_buffer_ext + $01    ; $BF6E
                            sta  (zp_ptr1_lo),y    ; $BF71
-l_27:                      bcc  l_28    ; $BF73  (sidtab_staging_field1 << 1) shifted-out bit was 0?
+l_4:                       bcc  l_5    ; $BF73  (sidtab_staging_field1 << 1) shifted-out bit was 0?
                            iny    ; $BF75
                            lda  sidTAB_staging_buffer_ext + $02    ; $BF76
                            sta  (zp_ptr1_lo),y    ; $BF79
-l_28:                      bit  zp_decoder_dest_lo    ; $BF7B
-                           bvc  l_29    ; $BF7D  zp_decoder_dest_lo had bit 6 clear?
+l_5:                       bit  zp_decoder_dest_lo    ; $BF7B
+                           bvc  l_6    ; $BF7D  zp_decoder_dest_lo had bit 6 clear?
                            iny    ; $BF7F
                            lda  sidTAB_staging_buffer_ext + $03    ; $BF80
                            sta  (zp_ptr1_lo),y    ; $BF83
-l_29:                      lda  zp_decoder_dest_lo    ; $BF85
+l_6:                       lda  zp_decoder_dest_lo    ; $BF85
                            and  #$20    ; $BF87
-                           beq  l_30    ; $BF89  (zp_decoder_dest_lo & $20) was zero?
+                           beq  l_7    ; $BF89  (zp_decoder_dest_lo & $20) was zero?
                            iny    ; $BF8B
                            lda  sidTAB_staging_buffer_ext + $04    ; $BF8C
                            sta  (zp_ptr1_lo),y    ; $BF8F
-l_30:                      lda  zp_decoder_dest_lo    ; $BF91
+l_7:                       lda  zp_decoder_dest_lo    ; $BF91
                            and  #$10    ; $BF93
-                           beq  l_31    ; $BF95  (zp_decoder_dest_lo & $10) was zero?
+                           beq  l_8    ; $BF95  (zp_decoder_dest_lo & $10) was zero?
                            iny    ; $BF97
                            lda  sidTAB_staging_buffer_ext + $05    ; $BF98
                            sta  (zp_ptr1_lo),y    ; $BF9B
-l_31:                      lda  zp_decoder_dest_lo    ; $BF9D
+l_8:                       lda  zp_decoder_dest_lo    ; $BF9D
                            and  #$08    ; $BF9F
-                           beq  l_32    ; $BFA1  (zp_decoder_dest_lo & $08) was zero?
+                           beq  l_9    ; $BFA1  (zp_decoder_dest_lo & $08) was zero?
                            iny    ; $BFA3
                            lda  sidTAB_staging_buffer_ext + $06    ; $BFA4
                            sta  (zp_ptr1_lo),y    ; $BFA7
-l_32:                      lda  zp_decoder_dest_lo    ; $BFA9
+l_9:                       lda  zp_decoder_dest_lo    ; $BFA9
                            and  #$04    ; $BFAB
-                           beq  l_33    ; $BFAD  (zp_decoder_dest_lo & $04) was zero?
+                           beq  l_10    ; $BFAD  (zp_decoder_dest_lo & $04) was zero?
                            iny    ; $BFAF
                            lda  sidTAB_staging_buffer_ext + $07    ; $BFB0
                            sta  (zp_ptr1_lo),y    ; $BFB3
-l_33:                      iny    ; $BFB5
+l_10:                      iny    ; $BFB5
                            lda  sidtab_staging_field2    ; $BFB6
                            sta  (zp_ptr1_lo),y    ; $BFB9
                            asl  a    ; $BFBB
                            sta  zp_decoder_dest_lo    ; $BFBC
-                           bcc  l_34    ; $BFBE  (sidtab_staging_field2 << 1) shifted-out bit was 0?
+                           bcc  l_11    ; $BFBE  (sidtab_staging_field2 << 1) shifted-out bit was 0?
                            iny    ; $BFC0
                            lda  sidTAB_staging_buffer_ext + $08    ; $BFC1
                            sta  (zp_ptr1_lo),y    ; $BFC4
-l_34:                      asl  zp_decoder_dest_lo    ; $BFC6
-                           bcc  l_35    ; $BFC8  zp_decoder_dest_lo shifted-out bit was 0?
+l_11:                      asl  zp_decoder_dest_lo    ; $BFC6
+                           bcc  l_12    ; $BFC8  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BFCA
                            lda  sidTAB_staging_buffer_ext + $09    ; $BFCB
                            sta  (zp_ptr1_lo),y    ; $BFCE
-l_35:                      asl  zp_decoder_dest_lo    ; $BFD0
-                           bcc  l_36    ; $BFD2  zp_decoder_dest_lo shifted-out bit was 0?
+l_12:                      asl  zp_decoder_dest_lo    ; $BFD0
+                           bcc  l_13    ; $BFD2  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BFD4
                            lda  sidTAB_staging_buffer_ext + $0A    ; $BFD5
                            sta  (zp_ptr1_lo),y    ; $BFD8
-l_36:                      asl  zp_decoder_dest_lo    ; $BFDA
-                           bcc  l_37    ; $BFDC  zp_decoder_dest_lo shifted-out bit was 0?
+l_13:                      asl  zp_decoder_dest_lo    ; $BFDA
+                           bcc  l_14    ; $BFDC  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BFDE
                            lda  sidTAB_staging_buffer_ext + $0B    ; $BFDF
                            sta  (zp_ptr1_lo),y    ; $BFE2
-l_37:                      asl  zp_decoder_dest_lo    ; $BFE4
-                           bcc  l_38    ; $BFE6  zp_decoder_dest_lo shifted-out bit was 0?
+l_14:                      asl  zp_decoder_dest_lo    ; $BFE4
+                           bcc  l_15    ; $BFE6  zp_decoder_dest_lo shifted-out bit was 0?
                            iny    ; $BFE8
                            lda  sidTAB_staging_buffer_ext + $0C    ; $BFE9
                            sta  (zp_ptr1_lo),y    ; $BFEC
                            iny    ; $BFEE
                            lda  sidTAB_staging_buffer_ext + $0D    ; $BFEF
                            sta  (zp_ptr1_lo),y    ; $BFF2
-l_38:                      rts    ; $BFF4
+l_15:                      rts    ; $BFF4
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -16308,7 +16456,7 @@ l_1:                       lda  sidtab_staging_field3    ; $C0DF
                            rts    ; $C0F0
 l_2:                       lda  sidtab_staging_field3    ; $C0F1
                            bne  l_3    ; $C0F4  sidtab_staging_field3 was non-zero?
-                           jsr  sidTAB_helper.l_1    ; $C0F6
+                           jsr  sidtab_row_decode_to_staging    ; $C0F6
                            clc    ; $C0F9
 l_3:                       rts    ; $C0FA
 l_4:                       lda  sidtab_staging_field3    ; $C0FB
@@ -16391,14 +16539,14 @@ l_5:                       sec    ; $C144
 ;   Fan-in via sidTAB_helper + pitch_lut_generator_inner_loop; then A^=$80 into sidTAB_staging,Y. Used for the column flags whose semantic is 'on/off' rather than a hex value.
 writer_sidtab_toggle .block
                            jsr  sidTAB_helper    ; $C146
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C149
+                           jsr  sidtab_staging_load    ; $C149
                            ldy  #$01    ; $C14C
                            jsr  sid2_v3_sidtab_row_apply    ; $C14E
                            bcs  l_1    ; $C151  sid2_v3_sidtab_row_apply returned carry set?
                            lda  sidTAB_staging,y    ; $C153
                            eor  #$80    ; $C156
                            sta  sidTAB_staging,y    ; $C158
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C15B
+                           jsr  sidtab_staging_store    ; $C15B
 l_1:                       rts    ; $C15E
 .bend
 
@@ -16413,8 +16561,8 @@ l_1:                       rts    ; $C15E
 ;   Fan-in: sidTAB_helper + pitch_lut_generator_inner_loop + sidTAB_shifted_helper (descriptor + mask). Looks up sidtab_cell_descriptor_lut,X to select first vs second nibble; merges A into sidTAB_staging,Y; calls advance / mask-paint helpers. Workhorse writer for the 30 hex-digit cells in a sidTAB row.
 writer_sidtab_digit .block
                            jsr  sidTAB_helper    ; $C15F
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C162
-                           jsr  sidTAB_shifted_helper.l_1    ; $C165
+                           jsr  sidtab_staging_load    ; $C162
+                           jsr  sidtab_field_at_cursor    ; $C165
                            jsr  sid2_v3_sidtab_row_apply    ; $C168
                            bcs  l_3    ; $C16B  sid2_v3_sidtab_row_apply returned carry set?
                            lda  sidtab_cell_descriptor_lut,x    ; $C16D
@@ -16434,7 +16582,7 @@ l_1:                       lda  sidTAB_staging,y    ; $C180
                            asl  a    ; $C18E
                            ora  sidTAB_staging,y    ; $C18F
                            sta  sidTAB_staging,y    ; $C192
-l_2:                       jsr  pitch_lut_generator_inner_loop.l_23    ; $C195
+l_2:                       jsr  sidtab_staging_store    ; $C195
 l_3:                       rts    ; $C198
 .bend
 
@@ -16449,11 +16597,11 @@ l_3:                       rts    ; $C198
 ;   Resets the staging cell to its default value and advances the cursor (via pitch_lut_generator_inner_loop). Default values per column (e.g. $2D '-' for value cells) come from the descriptor table at sidtab_cell_descriptor_lut.
 writer_sidtab_clear_advance .block
                            jsr  sidTAB_helper    ; $C199
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C19C
-                           jsr  sidTAB_shifted_helper.l_1    ; $C19F
+                           jsr  sidtab_staging_load    ; $C19C
+                           jsr  sidtab_field_at_cursor    ; $C19F
                            jsr  sid2_v4_sidtab_row_apply    ; $C1A2
                            bcs  l_1    ; $C1A5  sid2_v4_sidtab_row_apply returned carry set?
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C1A7
+                           jsr  sidtab_staging_store    ; $C1A7
 l_1:                       rts    ; $C1AA
 .bend
 
@@ -16468,8 +16616,8 @@ l_1:                       rts    ; $C1AA
 ;   Checks writer_loop_count: when ==1, advances cursor first; then increments the cell value (note:.
 writer_sidtab_inc .block
                            jsr  sidTAB_helper    ; $C1AB
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C1AE
-                           jsr  sidTAB_shifted_helper.l_1    ; $C1B1
+                           jsr  sidtab_staging_load    ; $C1AE
+                           jsr  sidtab_field_at_cursor    ; $C1B1
                            lda  writer_loop_count    ; $C1B4
                            cmp  #$01    ; $C1B7
                            bne  l_1    ; $C1B9  writer_loop_count was not $01?
@@ -16479,7 +16627,7 @@ l_1:                       lda  sidTAB_staging,y    ; $C1C0
                            clc    ; $C1C3
                            adc  super_arg    ; $C1C4
                            sta  sidTAB_staging,y    ; $C1C7
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C1CA
+                           jsr  sidtab_staging_store    ; $C1CA
 l_2:                       rts    ; $C1CD
 .bend
 
@@ -16494,8 +16642,8 @@ l_2:                       rts    ; $C1CD
 ;   Decrement-counterpart of writer_sidtab_inc. Same fan-in shape; A-=instead of adc.
 writer_sidtab_dec .block
                            jsr  sidTAB_helper    ; $C1CE
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C1D1
-                           jsr  sidTAB_shifted_helper.l_1    ; $C1D4
+                           jsr  sidtab_staging_load    ; $C1D1
+                           jsr  sidtab_field_at_cursor    ; $C1D4
                            lda  writer_loop_count    ; $C1D7
                            cmp  #$01    ; $C1DA
                            bne  l_1    ; $C1DC  writer_loop_count was not $01?
@@ -16505,7 +16653,7 @@ l_1:                       lda  sidTAB_staging,y    ; $C1E3
                            sec    ; $C1E6
                            sbc  super_arg    ; $C1E7
                            sta  sidTAB_staging,y    ; $C1EA
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C1ED
+                           jsr  sidtab_staging_store    ; $C1ED
 l_2:                       rts    ; $C1F0
 l_3:                       lda  seqlist_cursor_aux1    ; $C1F1
                            beq  l_4    ; $C1F4  seqlist_cursor_aux1 was zero?
@@ -16540,11 +16688,11 @@ writer_sidtab_supercmd .block
                            bne  l_1    ; $C217  super_arg was non-zero?
                            jmp  sidtab_writer_bare_return    ; $C219
 l_1:                       sta  sidtab_c2d7_smc    ; $C21C
-                           jsr  sidTAB_shifted_helper.l_2    ; $C21F
+                           jsr  sidtab_voice_mask_compute    ; $C21F
                            lda  seqlist_cursor_aux2    ; $C222
                            sta  sidTAB_staging_prefix    ; $C225
                            jsr  sidtab_row_decoder    ; $C228
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C22B
+                           jsr  sidtab_staging_load    ; $C22B
                            lda  sidtab_staging_field3    ; $C22E
                            beq  l_2    ; $C231  sidtab_staging_field3 was zero?
                            lda  sidTAB_staging_buffer_ext    ; $C233
@@ -16576,8 +16724,8 @@ l_4:                       ldx  seqlist_cursor_aux3    ; $C25E
                            stx  sidTAB_staging_prefix    ; $C273
                            jsr  sidtab_row_decoder    ; $C276
 l_5:                       cpx  #$FF    ; $C279  ; ← (SMC operand at $C27A, no name)
-                           beq  l_8    ; $C27B  pitch_lut_generator_inner_loop_5->X was $FF?
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C27D
+                           beq  l_8    ; $C27B  sidtab_row_ptr_prev->X was $FF?
+                           jsr  sidtab_staging_load    ; $C27D
                            lda  sidtab_staging_field3    ; $C280
                            bne  l_7    ; $C283  sidtab_staging_field3 was non-zero?
                            lda  sidTAB_staging    ; $C285
@@ -16590,24 +16738,24 @@ l_6:                       beq  l_7    ; $C28D  sidTAB_staging was seqlist_curso
                            inc  sidTAB_staging    ; $C28F
 l_7:                       inx    ; $C292
                            stx  sidTAB_staging_prefix    ; $C293
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C296
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C299
+                           jsr  sidtab_row_ptr_next    ; $C296
+                           jsr  sidtab_staging_store    ; $C299
                            dex    ; $C29C
                            dex    ; $C29D
                            stx  sidTAB_staging_prefix    ; $C29E
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C2A1
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C2A4
+                           jsr  sidtab_row_ptr_prev    ; $C2A1
+                           jsr  sidtab_row_ptr_prev    ; $C2A4
                            jmp  l_5    ; $C2A7
 l_8:                       ldx  seqlist_cursor_aux3    ; $C2AA
                            stx  sidTAB_staging_prefix    ; $C2AD
                            jsr  sidtab_row_decoder    ; $C2B0
-                           jsr  sidTAB_helper.l_1    ; $C2B3
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C2B6
+                           jsr  sidtab_row_decode_to_staging    ; $C2B3
+                           jsr  sidtab_staging_load    ; $C2B6
                            lda  #$00    ; $C2B9
                            sta  sidtab_staging_field1    ; $C2BB
                            sta  sidtab_staging_field2    ; $C2BE
                            sta  sidTAB_staging_buffer_ext    ; $C2C1
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C2C4
+                           jsr  sidtab_staging_store    ; $C2C4
                            dec  sidtab_c2d7_smc    ; $C2C7
                            bne  l_4    ; $C2CA  (sidtab_c2d7_smc − 1) was non-zero?
                            ldx  #$80    ; $C2CC
@@ -16653,7 +16801,7 @@ sidTAB_C2D8_dispatch_body .block
                            lda  super_arg    ; $C2DB
                            beq  sidTAB_dispatch_body_5    ; $C2DE  super_arg was zero?
                            sta  sidtab_dispatch_end    ; $C2E0
-                           jsr  sidTAB_shifted_helper.l_2    ; $C2E3
+                           jsr  sidtab_voice_mask_compute    ; $C2E3
 sidTAB_dispatch_body_1:    lda  seqlist_cursor_aux2    ; $C2E6
                            sta  sidTAB_C2D8_dispatch_body + $49    ; $C2E9
                            ldx  seqlist_cursor_aux3    ; $C2EC
@@ -16663,8 +16811,8 @@ sidTAB_dispatch_body_1:    lda  seqlist_cursor_aux2    ; $C2E6
                            jsr  sidtab_row_decoder    ; $C2F7
 sidTAB_dispatch_body_2:    inx    ; $C2FA
                            stx  sidTAB_staging_prefix    ; $C2FB
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C2FE
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C301
+                           jsr  sidtab_row_ptr_next    ; $C2FE
+                           jsr  sidtab_staging_load    ; $C301
                            lda  sidtab_staging_field3    ; $C304
                            bne  sidTAB_dispatch_body_3    ; $C307  sidtab_staging_field3 was non-zero?
                            lda  sidTAB_staging    ; $C309
@@ -16674,24 +16822,24 @@ sidTAB_dispatch_body_2:    inx    ; $C2FA
                            dec  sidTAB_staging    ; $C313
 sidTAB_dispatch_body_3:    dex    ; $C316
                            stx  sidTAB_staging_prefix    ; $C317
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C31A
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C31D
+                           jsr  sidtab_row_ptr_prev    ; $C31A
+                           jsr  sidtab_staging_store    ; $C31D
                            cpx  #$FF    ; $C320  ; ← (SMC operand at $C321, no name)
-                           beq  sidTAB_dispatch_body_4    ; $C322  pitch_lut_generator_inner_loop_23->X was $FF?
+                           beq  sidTAB_dispatch_body_4    ; $C322  sidtab_staging_store->X was $FF?
                            inx    ; $C324
                            stx  sidTAB_staging_prefix    ; $C325
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C328
+                           jsr  sidtab_row_ptr_next    ; $C328
                            jmp  sidTAB_dispatch_body_2    ; $C32B
 sidTAB_dispatch_body_4:    ldx  seqlist_cursor_aux2    ; $C32E
                            stx  sidTAB_staging_prefix    ; $C331
                            jsr  sidtab_row_decoder    ; $C334
-                           jsr  sidTAB_helper.l_1    ; $C337
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C33A
+                           jsr  sidtab_row_decode_to_staging    ; $C337
+                           jsr  sidtab_staging_load    ; $C33A
                            lda  #$00    ; $C33D
                            sta  sidtab_staging_field1    ; $C33F
                            sta  sidtab_staging_field2    ; $C342
                            sta  sidTAB_staging_buffer_ext    ; $C345
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C348
+                           jsr  sidtab_staging_store    ; $C348
                            dec  sidtab_dispatch_end    ; $C34B
                            bne  sidTAB_dispatch_body_1    ; $C34E  (sidtab_dispatch_end − 1) was non-zero?
 sidTAB_dispatch_body_5:    rts    ; $C350
@@ -16710,13 +16858,13 @@ sidTAB_dispatch_body_5:    rts    ; $C350
 ;   Bulk-clears the sidTAB staging at sidTAB_staging_prefix/sidTAB_staging_buffer_ext then runs pitch_lut_generator_inner_loop paint.
 writer_sidtab_cbm_shift_a .block
                            jsr  sidTAB_helper    ; $C352
-                           jsr  sidTAB_helper.l_1    ; $C355
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C358
+                           jsr  sidtab_row_decode_to_staging    ; $C355
+                           jsr  sidtab_staging_load    ; $C358
                            lda  #$00    ; $C35B
                            sta  sidtab_staging_field1    ; $C35D
                            sta  sidtab_staging_field2    ; $C360
                            sta  sidTAB_staging_buffer_ext    ; $C363
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C366
+                           jsr  sidtab_staging_store    ; $C366
                            rts    ; $C369
 .bend
 
@@ -16735,11 +16883,11 @@ writer_sidtab_inst_row .block
                            bne  l_1    ; $C370  super_arg was non-zero?
                            jmp  l_6    ; $C372
 l_1:                       sta  sid2_writer_tail_sentinel + $01    ; $C375
-                           jsr  sidTAB_shifted_helper.l_2    ; $C378
+                           jsr  sidtab_voice_mask_compute    ; $C378
                            lda  seqlist_cursor_aux2    ; $C37B
                            sta  sidTAB_staging_prefix    ; $C37E
                            jsr  sidtab_row_decoder    ; $C381
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C384
+                           jsr  sidtab_staging_load    ; $C384
                            ldx  seqlist_cursor_aux3    ; $C387
                            dex    ; $C38A
                            stx  writer_sidtab_inst_row + $3C    ; $C38B
@@ -16754,8 +16902,8 @@ l_1:                       sta  sid2_writer_tail_sentinel + $01    ; $C375
 l_2:                       ldx  sidTAB_staging_prefix    ; $C3A2
                            cpx  #$FF    ; $C3A5  ; ← (SMC operand at $C3A6, no name)
                            beq  l_5    ; $C3A7  sidTAB_staging_prefix was $FF?
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C3A9
-                           jsr  sidTAB_shifted_helper.l_1    ; $C3AC
+                           jsr  sidtab_staging_load    ; $C3A9
+                           jsr  sidtab_field_at_cursor    ; $C3AC
                            lda  sidTAB_staging,y    ; $C3AF
                            pha    ; $C3B2
                            jsr  sid2_v5_sidtab_row_apply    ; $C3B3
@@ -16763,9 +16911,9 @@ l_2:                       ldx  sidTAB_staging_prefix    ; $C3A2
                            ldx  sidTAB_staging_prefix    ; $C3B7
                            inx    ; $C3BA
                            stx  sidTAB_staging_prefix    ; $C3BB
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C3BE
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C3C1
-                           jsr  sidTAB_shifted_helper.l_1    ; $C3C4
+                           jsr  sidtab_row_ptr_next    ; $C3BE
+                           jsr  sidtab_staging_load    ; $C3C1
+                           jsr  sidtab_field_at_cursor    ; $C3C4
                            pla    ; $C3C7
                            beq  l_3    ; $C3C8
                            jsr  sid2_v3_sidtab_row_apply    ; $C3CA
@@ -16773,22 +16921,22 @@ l_2:                       ldx  sidTAB_staging_prefix    ; $C3A2
 l_3:                       jsr  sid2_v4_sidtab_row_apply    ; $C3D0
 l_4:                       pla    ; $C3D3
                            sta  sidTAB_staging,y    ; $C3D4
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C3D7
+                           jsr  sidtab_staging_store    ; $C3D7
                            lda  sidTAB_staging_prefix    ; $C3DA
                            sec    ; $C3DD
                            sbc  #$02    ; $C3DE
                            sta  sidTAB_staging_prefix    ; $C3E0
                            tax    ; $C3E3
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C3E4
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C3E7
+                           jsr  sidtab_row_ptr_prev    ; $C3E4
+                           jsr  sidtab_row_ptr_prev    ; $C3E7
                            jmp  l_2    ; $C3EA
 l_5:                       ldx  seqlist_cursor_aux3    ; $C3ED
                            stx  sidTAB_staging_prefix    ; $C3F0
                            jsr  sidtab_row_decoder    ; $C3F3
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C3F6
-                           jsr  sidTAB_shifted_helper.l_1    ; $C3F9
+                           jsr  sidtab_staging_load    ; $C3F6
+                           jsr  sidtab_field_at_cursor    ; $C3F9
                            jsr  sid2_v4_sidtab_row_apply    ; $C3FC
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C3FF
+                           jsr  sidtab_staging_store    ; $C3FF
 l_6:                       rts    ; $C402
         .byte $60, $FF    ; $C403
 l_7:                       rts    ; $C405
@@ -16807,7 +16955,7 @@ writer_sidtab_cbm_shift_b .block
                            lda  super_arg    ; $C409
                            beq  writer_sidtab_inst_row.l_7    ; $C40C  super_arg was zero?
                            sta  secondary_disk_region_sentinel    ; $C40E
-                           jsr  sidTAB_shifted_helper.l_2    ; $C411
+                           jsr  sidtab_voice_mask_compute    ; $C411
 l_1:                       lda  seqlist_cursor_aux2    ; $C414
                            sta  writer_sidtab_cbm_shift_b + $61    ; $C417
                            ldx  seqlist_cursor_aux3    ; $C41A
@@ -16818,9 +16966,9 @@ l_1:                       lda  seqlist_cursor_aux2    ; $C414
 l_2:                       ldx  sidTAB_staging_prefix    ; $C428
                            inx    ; $C42B
                            stx  sidTAB_staging_prefix    ; $C42C
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C42F
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C432
-                           jsr  sidTAB_shifted_helper.l_1    ; $C435
+                           jsr  sidtab_row_ptr_next    ; $C42F
+                           jsr  sidtab_staging_load    ; $C432
+                           jsr  sidtab_field_at_cursor    ; $C435
                            lda  sidTAB_staging,y    ; $C438
                            pha    ; $C43B
                            jsr  sid2_v5_sidtab_row_apply    ; $C43C
@@ -16828,9 +16976,9 @@ l_2:                       ldx  sidTAB_staging_prefix    ; $C428
                            ldx  sidTAB_staging_prefix    ; $C440
                            dex    ; $C443
                            stx  sidTAB_staging_prefix    ; $C444
-                           jsr  pitch_lut_generator_inner_loop.l_5    ; $C447
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C44A
-                           jsr  sidTAB_shifted_helper.l_1    ; $C44D
+                           jsr  sidtab_row_ptr_prev    ; $C447
+                           jsr  sidtab_staging_load    ; $C44A
+                           jsr  sidtab_field_at_cursor    ; $C44D
                            pla    ; $C450
                            beq  l_3    ; $C451
                            jsr  sid2_v3_sidtab_row_apply    ; $C453
@@ -16838,21 +16986,21 @@ l_2:                       ldx  sidTAB_staging_prefix    ; $C428
 l_3:                       jsr  sid2_v4_sidtab_row_apply    ; $C459
 l_4:                       pla    ; $C45C
                            sta  sidTAB_staging,y    ; $C45D
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C460
+                           jsr  sidtab_staging_store    ; $C460
                            ldx  sidTAB_staging_prefix    ; $C463
                            cpx  #$FF    ; $C466  ; ← (SMC operand at $C467, no name)
                            beq  l_5    ; $C468  sidTAB_staging_prefix was $FF?
                            inx    ; $C46A
                            stx  sidTAB_staging_prefix    ; $C46B
-                           jsr  pitch_lut_generator_inner_loop.l_3    ; $C46E
+                           jsr  sidtab_row_ptr_next    ; $C46E
                            jmp  l_2    ; $C471
 l_5:                       ldx  seqlist_cursor_aux2    ; $C474
                            stx  sidTAB_staging_prefix    ; $C477
                            jsr  sidtab_row_decoder    ; $C47A
-                           jsr  pitch_lut_generator_inner_loop.l_9    ; $C47D
-                           jsr  sidTAB_shifted_helper.l_1    ; $C480
+                           jsr  sidtab_staging_load    ; $C47D
+                           jsr  sidtab_field_at_cursor    ; $C480
                            jsr  sid2_v4_sidtab_row_apply    ; $C483
-                           jsr  pitch_lut_generator_inner_loop.l_23    ; $C486
+                           jsr  sidtab_staging_store    ; $C486
                            dec  secondary_disk_region_sentinel    ; $C489
                            bne  l_1    ; $C48C  (secondary_disk_region_sentinel − 1) was non-zero?
                            rts    ; $C48E
@@ -17066,7 +17214,7 @@ l_9:                       sta  player_play_body.l_1    ; $C5A6
                            ldy  #$D4    ; $C5B8
                            jmp  l_11    ; $C5BA
 l_10:                      lda  #$00    ; $C5BD
-                           sta  load_decoder_pat_base_walk.SID_V2_CTRL    ; $C5BF  ; SID_V2_CTRL := wave off
+                           sta  save_encode_clear_dedup.SID_V2_CTRL    ; $C5BF  ; SID_V2_CTRL := wave off
                            lda  #$4C    ; $C5C2
                            ldx  #$84    ; $C5C4
                            ldy  #$10    ; $C5C6
@@ -17110,7 +17258,7 @@ chipview_toggle_helper .block
                            inc  editor_col_delta    ; $C604
                            jsr  statusline_clear    ; $C607
                            lda  sid_chip_view    ; $C60A
-                           bne  stereo_enable_toggle.l_7    ; $C60D  sid_chip_view was not SID_VIEW_1?
+                           bne  sid2_base_advance.l_5    ; $C60D  sid_chip_view was not SID_VIEW_1?
                            ldx  #$85    ; $C60F
                            ldy  #$71    ; $C611
                            lda  #$05    ; $C613
@@ -17148,24 +17296,35 @@ l_1:                       ldx  #$99    ; $C63D
                            ldy  #$71    ; $C63F
                            lda  #$0A    ; $C641
                            jmp  statusline_print_zstring    ; $C643
-l_2:                       lda  sid2_base_lo    ; $C646
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $C646  sid2_base_advance
+; ──────────────────────────────────────────────────────────────────────
+; Advances the SID#2 base pointer (sid2_base_lo) by $20 and re-reads the secondary-disk data.
+;
+;   callers:             1 code sites: $8385
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+sid2_base_advance .block
+                           lda  sid2_base_lo    ; $C646
                            clc    ; $C649
                            adc  #$20    ; $C64A
                            sta  sid2_base_lo    ; $C64C
                            jsr  secondary_disk_data_reader    ; $C64F
-                           jmp  l_6    ; $C652
-l_3:                       ldx  #$04    ; $C655
-l_4:                       dex    ; $C657
-                           bmi  l_5    ; $C658  $04 walked back 2 and had bit 7 set?
+                           jmp  l_4    ; $C652
+l_1:                       ldx  #$04    ; $C655
+l_2:                       dex    ; $C657
+                           bmi  l_3    ; $C658  $04 walked back 2 and had bit 7 set?
                            lda  sid2_base_hi    ; $C65A
                            cmp  secondary_disk_key_action_lut,x    ; $C65D
-                           bne  l_4    ; $C660  sid2_base_hi was not secondary_disk_key_action_lut,X?
-l_5:                       lda  secondary_disk_key_action_lut + $01,x    ; $C662
+                           bne  l_2    ; $C660  sid2_base_hi was not secondary_disk_key_action_lut,X?
+l_3:                       lda  secondary_disk_key_action_lut + $01,x    ; $C662
                            sta  sid2_base_hi    ; $C665
                            jsr  secondary_disk_data_reader    ; $C668
-l_6:                       jmp  l_7    ; $C66B
+l_4:                       jmp  l_5    ; $C66B
         .byte $D4, $D5, $DE, $DF, $D4    ; $C66E
-l_7:                       jsr  statusline_clear    ; $C673
+l_5:                       jsr  statusline_clear    ; $C673
                            ldx  #$8A    ; $C676
                            ldy  #$71    ; $C678
                            lda  #$07    ; $C67A
@@ -18055,6 +18214,7 @@ l_1:                       rts    ; $CCEB
 ; SID#2 player_init body inside sid2_main_tick.
 ;
 ;   callers:             1 code sites: $CD44
+;   registers clobbered: A
 ;
 ;   Clears SID#2 state slots and installs SID#2 IRQ entry. Mirror of player_init_body for SID#2. Reached from sid2_main_tick call inside sid2_main_tick's startup sequence. Not a separate function — see sid2_main_tick.
 sid2_player_init_body .block
@@ -18744,11 +18904,11 @@ VIC_SP4_COL:               rts    ; $D02B
 ;
 ;   Sequence of `call load_decoder_setup_chain / save_encoder_pad_byte / decoder_xy_smc_pair / save_encoder_pad_byte` setting up the load-decoder context (reads CE71/CE6F → CE7A target ptr; CE72/CE70 → CE7B; CE78 minus CE7A → CE7F end ptr) before the decoder body fires. Boot-only LOAD-decoder path; reachable from load_decoder_tail_jump LOAD-tail fall-through and from disk_menu_return_handler load_tune chain.
 load_decoder_setup_chain .block
-                           jsr  l_4    ; $D02C
-                           jsr  l_24    ; $D02F
-                           jsr  load_decoder_pat_base_walk.load_decoder_patbody_13    ; $D032
-                           jsr  save_encoder_jp_chain_walker.l_4    ; $D035
-                           jsr  load_decoder_pat_base_walk.load_decoder_patbody_6    ; $D038
+                           jsr  save_encode_init    ; $D02C
+                           jsr  save_encode_copy_patterns    ; $D02F
+                           jsr  save_encode_clear_dedup    ; $D032
+                           jsr  save_encode_song_positions    ; $D035
+                           jsr  save_encode_pattern_stream    ; $D038
                            lda  sid2_self_modifier_padding + $02    ; $D03B
                            clc    ; $D03E
                            adc  sid2_self_modifier_padding    ; $D03F
@@ -18807,44 +18967,54 @@ l_2:                       dex    ; $D082
                            lda  arranger_v5_sid2    ; $D0C5
                            sta  high_mem_scratch_ff00,y    ; $D0C8
 l_3:                       rts    ; $D0CB
-l_4:                       lda  #$00    ; $D0CC
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D0CC  save_encode_init
+; ──────────────────────────────────────────────────────────────────────
+; Save/encode pipeline stage 1: clears the pattern-map page and seeds the arranger walk.
+;
+;   callers:             1 code sites: $D02C load_decoder_setup_chain
+;   registers clobbered: A, X, Y
+save_encode_init .block
+                           lda  #$00    ; $D0CC
                            tay    ; $D0CE
-l_5:                       sta  SCREEN_RAM_P3,y    ; $D0CF
+l_1:                       sta  SCREEN_RAM_P3,y    ; $D0CF
                            iny    ; $D0D2
-                           bne  l_5    ; $D0D3  ($00 + 1) was non-zero?
-l_6:                       lda  #$01    ; $D0D5
+                           bne  l_1    ; $D0D3  ($00 + 1) was non-zero?
+l_2:                       lda  #$01    ; $D0D5
                            ldx  arranger_v0_sid1,y    ; $D0D7
-                           bmi  l_7    ; $D0DA  arranger_v0_sid1,Y had bit 7 set?
+                           bmi  l_3    ; $D0DA  arranger_v0_sid1,Y had bit 7 set?
                            sta  SCREEN_RAM_P3,x    ; $D0DC
                            ldx  arranger_v1_sid1,y    ; $D0DF
                            sta  SCREEN_RAM_P3,x    ; $D0E2
                            ldx  arranger_v2_sid1,y    ; $D0E5
                            sta  SCREEN_RAM_P3,x    ; $D0E8
-l_7:                       lda  stereo_enable    ; $D0EB
-                           beq  l_8    ; $D0EE  stereo_enable was STEREO_OFF?
+l_3:                       lda  stereo_enable    ; $D0EB
+                           beq  l_4    ; $D0EE  stereo_enable was STEREO_OFF?
                            lda  #$01    ; $D0F0
                            ldx  arranger_v3_sid2,y    ; $D0F2
-                           bmi  l_8    ; $D0F5  arranger_v3_sid2,Y had bit 7 set?
+                           bmi  l_4    ; $D0F5  arranger_v3_sid2,Y had bit 7 set?
                            sta  SCREEN_RAM_P3,x    ; $D0F7
                            ldx  arranger_v4_sid2,y    ; $D0FA
                            sta  SCREEN_RAM_P3,x    ; $D0FD
                            ldx  arranger_v5_sid2,y    ; $D100
                            sta  SCREEN_RAM_P3,x    ; $D103
-l_8:                       iny    ; $D106
+l_4:                       iny    ; $D106
                            cpy  #$00    ; $D107
-                           bne  l_6    ; $D109  (($00 + 1) + 1) was not $00?
+                           bne  l_2    ; $D109  (($00 + 1) + 1) was not $00?
                            ldy  #$00    ; $D10B
-l_9:                       lda  SCREEN_RAM_P3,y    ; $D10D
-                           beq  l_10    ; $D110  SCREEN_RAM_P3,Y was zero?
-                           jmp  l_21    ; $D112
-l_10:                      sty  decoder_main_state_d11c    ; $D115
+l_5:                       lda  SCREEN_RAM_P3,y    ; $D10D
+                           beq  l_6    ; $D110  SCREEN_RAM_P3,Y was zero?
+                           jmp  l_17    ; $D112
+l_6:                       sty  decoder_main_state_d11c    ; $D115
                            ldx  #$80    ; $D118
-l_11:                      dex    ; $D11A
+l_7:                       dex    ; $D11A
                            cpx  #$FF    ; $D11B  ; ← decoder_main_state_d11c
-                           bne  l_12    ; $D11D  ($80 − 1) was not $FF?
-                           jmp  l_22    ; $D11F
-l_12:                      lda  SCREEN_RAM_P3,x    ; $D122
-                           beq  l_11    ; $D125  SCREEN_RAM_P3,X was zero?
+                           bne  l_8    ; $D11D  ($80 − 1) was not $FF?
+                           jmp  l_18    ; $D11F
+l_8:                       lda  SCREEN_RAM_P3,x    ; $D122
+                           beq  l_7    ; $D125  SCREEN_RAM_P3,X was zero?
                            sta  SCREEN_RAM_P3,y    ; $D127
                            lda  #$00    ; $D12A
                            sta  SCREEN_RAM_P3,x    ; $D12C
@@ -18857,58 +19027,70 @@ l_12:                      lda  SCREEN_RAM_P3,x    ; $D122
                            lda  pat_base_hi,y    ; $D13E
                            sta  zp_scratch_9f    ; $D141
                            ldy  #$00    ; $D143
-l_13:                      lda  arranger_v0_sid1,y    ; $D145
-                           bmi  l_19    ; $D148  arranger_v0_sid1,Y had bit 7 set?
+l_9:                       lda  arranger_v0_sid1,y    ; $D145
+                           bmi  l_15    ; $D148  arranger_v0_sid1,Y had bit 7 set?
                            txa    ; $D14A
                            cmp  arranger_v0_sid1,y    ; $D14B
-                           bne  l_14    ; $D14E  ($80 − 1) was not arranger_v0_sid1,Y?
+                           bne  l_10    ; $D14E  ($80 − 1) was not arranger_v0_sid1,Y?
                            lda  decoder_main_state_d11c    ; $D150
                            sta  arranger_v0_sid1,y    ; $D153
                            txa    ; $D156
-l_14:                      cmp  arranger_v1_sid1,y    ; $D157
-                           bne  l_15    ; $D15A  ($80 − 1) was not arranger_v1_sid1,Y?
+l_10:                      cmp  arranger_v1_sid1,y    ; $D157
+                           bne  l_11    ; $D15A  ($80 − 1) was not arranger_v1_sid1,Y?
                            lda  decoder_main_state_d11c    ; $D15C
                            sta  arranger_v1_sid1,y    ; $D15F
                            txa    ; $D162
-l_15:                      cmp  arranger_v2_sid1,y    ; $D163
-                           bne  l_16    ; $D166  ($80 − 1) was not arranger_v2_sid1,Y?
+l_11:                      cmp  arranger_v2_sid1,y    ; $D163
+                           bne  l_12    ; $D166  ($80 − 1) was not arranger_v2_sid1,Y?
                            lda  decoder_main_state_d11c    ; $D168
                            sta  arranger_v2_sid1,y    ; $D16B
                            txa    ; $D16E
-l_16:                      lda  stereo_enable    ; $D16F
-                           beq  l_19    ; $D172  stereo_enable was STEREO_OFF?
+l_12:                      lda  stereo_enable    ; $D16F
+                           beq  l_15    ; $D172  stereo_enable was STEREO_OFF?
                            txa    ; $D174
                            cmp  arranger_v3_sid2,y    ; $D175
-                           bne  l_17    ; $D178  ($80 − 1) was not arranger_v3_sid2,Y?
+                           bne  l_13    ; $D178  ($80 − 1) was not arranger_v3_sid2,Y?
                            lda  decoder_main_state_d11c    ; $D17A
                            sta  arranger_v3_sid2,y    ; $D17D
                            txa    ; $D180
-l_17:                      cmp  arranger_v4_sid2,y    ; $D181
-                           bne  l_18    ; $D184  ($80 − 1) was not arranger_v4_sid2,Y?
+l_13:                      cmp  arranger_v4_sid2,y    ; $D181
+                           bne  l_14    ; $D184  ($80 − 1) was not arranger_v4_sid2,Y?
                            lda  decoder_main_state_d11c    ; $D186
                            sta  arranger_v4_sid2,y    ; $D189
                            txa    ; $D18C
-l_18:                      cmp  arranger_v5_sid2,y    ; $D18D
-                           bne  l_19    ; $D190  ($80 − 1) was not arranger_v5_sid2,Y?
+l_14:                      cmp  arranger_v5_sid2,y    ; $D18D
+                           bne  l_15    ; $D190  ($80 − 1) was not arranger_v5_sid2,Y?
                            lda  decoder_main_state_d11c    ; $D192
                            sta  arranger_v5_sid2,y    ; $D195
                            txa    ; $D198
-l_19:                      iny    ; $D199
+l_15:                      iny    ; $D199
                            cpy  #$00    ; $D19A
-                           bne  l_13    ; $D19C  ($00 + 1) was not $00?
+                           bne  l_9    ; $D19C  ($00 + 1) was not $00?
                            ldy  #$7F    ; $D19E
-l_20:                      lda  (zp_decoder_dest_lo),y    ; $D1A0
+l_16:                      lda  (zp_decoder_dest_lo),y    ; $D1A0
                            sta  (zp_scratch_9e),y    ; $D1A2
                            dey    ; $D1A4
-                           bpl  l_20    ; $D1A5  $7F walked back 1 and had bit 7 clear?
+                           bpl  l_16    ; $D1A5  $7F walked back 1 and had bit 7 clear?
                            ldy  decoder_main_state_d11c    ; $D1A7
-l_21:                      iny    ; $D1AA
+l_17:                      iny    ; $D1AA
                            cpy  #$80    ; $D1AB
-                           beq  l_22    ; $D1AD
-                           jmp  l_9    ; $D1AF
-l_22:                      sty  save_chain_counter    ; $D1B2
+                           beq  l_18    ; $D1AD
+                           jmp  l_5    ; $D1AF
+l_18:                      sty  save_chain_counter    ; $D1B2
                            rts    ; $D1B5
-l_23:                      lda  #$0A    ; $D1B6
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D1B6  load_arm_voice_gates
+; ──────────────────────────────────────────────────────────────────────
+; Arms the per-voice sidcall/note smc_branch gates by writing their branch offsets at load time.
+;
+;   callers:             1 code sites: $D3DB
+;   registers clobbered: A
+;
+;   Sets the gate offsets at the per-voice smc_branch sites so the player skips or runs each voice's SID/note writes per the loaded tune.
+load_arm_voice_gates .block
+                           lda  #$0A    ; $D1B6
                            sta  row_read_body_v0 + $05    ; $D1B8
                            lda  #$0A    ; $D1BB
                            sta  row_read_body_v0 + $13    ; $D1BD
@@ -18927,8 +19109,18 @@ l_23:                      lda  #$0A    ; $D1B6
                            lda  #$13    ; $D1DE
                            sta  row_read_body_v2 + $21    ; $D1E0
                            rts    ; $D1E3
-l_24:                      ldx  #$00    ; $D1E4
-l_25:                      lda  pat_base_lo,x    ; $D1E6
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D1E4  save_encode_copy_patterns
+; ──────────────────────────────────────────────────────────────────────
+; Save/encode pipeline stage 2: copies the live pattern bodies (from pat_base) into the encode work area.
+;
+;   callers:             1 code sites: $D02F
+;   registers clobbered: A, X, Y
+save_encode_copy_patterns .block
+                           ldx  #$00    ; $D1E4
+l_1:                       lda  pat_base_lo,x    ; $D1E6
                            sta  zp_decoder_dest_lo    ; $D1E9
                            lda  pat_base_hi,x    ; $D1EB
                            sta  zp_decoder_dest_hi    ; $D1EE
@@ -18936,7 +19128,7 @@ l_25:                      lda  pat_base_lo,x    ; $D1E6
                            sty  pat_num_occupancy_d30b    ; $D1F2
                            sty  pat_num_occupancy_d30a    ; $D1F5
                            sty  load_decoder_continuation_d28c + $51    ; $D1F8
-l_26:                      lda  (zp_decoder_dest_lo),y    ; $D1FB
+l_2:                       lda  (zp_decoder_dest_lo),y    ; $D1FB
                            and  #$0F    ; $D1FD
                            clc    ; $D1FF
                            adc  #$02    ; $D200
@@ -18958,22 +19150,22 @@ l_26:                      lda  (zp_decoder_dest_lo),y    ; $D1FB
                            lda  (zp_decoder_dest_lo),y    ; $D21F
                            and  #$F0    ; $D221
                            sta  pat_num_occupancy_table_d309    ; $D223
-                           bpl  l_27    ; $D226  ((zp_decoder_dest_lo),Y & $F0) had bit 7 clear?
+                           bpl  l_3    ; $D226  ((zp_decoder_dest_lo),Y & $F0) had bit 7 clear?
                            inc  load_decoder_continuation_d28c + $51    ; $D228
-                           jmp  l_28    ; $D22B
-l_27:                      jsr  save_encoder_y_plus_4_stride    ; $D22E
+                           jmp  l_4    ; $D22B
+l_3:                       jsr  save_encoder_y_plus_4_stride    ; $D22E
                            cpy  #$80    ; $D231
-                           beq  l_28    ; $D233  save_encoder_y_plus_4_stride->Y was $80?
+                           beq  l_4    ; $D233  save_encoder_y_plus_4_stride->Y was $80?
                            lda  (zp_decoder_dest_lo),y    ; $D235
                            and  #$F0    ; $D237
-                           bne  l_28    ; $D239  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
+                           bne  l_4    ; $D239  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
                            lda  (zp_decoder_dest_lo),y    ; $D23B
                            and  #$0F    ; $D23D
                            jsr  save_encoder_byte_counter_acc    ; $D23F
                            lda  #$02    ; $D242
                            jsr  save_encoder_byte_counter_acc    ; $D244
-                           jmp  l_27    ; $D247
-l_28:                      sty  pat_num_occupancy_d30a    ; $D24A
+                           jmp  l_3    ; $D247
+l_4:                       sty  pat_num_occupancy_d30a    ; $D24A
                            ldy  pat_num_occupancy_d30b    ; $D24D
                            iny    ; $D250
                            lda  pat_num_occupancy_table + $05    ; $D251
@@ -18993,7 +19185,7 @@ l_28:                      sty  pat_num_occupancy_d30a    ; $D24A
 ; ──────────────────────────────────────────────────────────────────────
 ; End-of-span marker for the load_decoder_setup_chain-load_decoder_main_entry_chain_end LOAD-decoder main entry chain.
 ;
-;   code edges:          fall-through from $D263 in load_decoder_setup_chain_28 (1 bytes earlier)
+;   code edges:          fall-through from $D263 in save_encode_copy_patterns_4 (1 bytes earlier)
 ;
 ;   The byte at load_decoder_main_entry_chain_end is the tail of the chain; the next annotated address at save_encoder_bytes_remaining_check begins the post-decoder region.
 load_decoder_main_entry_chain_end .block
@@ -19079,11 +19271,11 @@ load_decoder_commit_arm_5: lda  pat_num_occupancy_table    ; $D2C5
                            ldy  pat_num_occupancy_d30a    ; $D2E0
                            cpy  #$80    ; $D2E3
                            beq  load_decoder_commit_arm_6    ; $D2E5  pat_num_occupancy_d30a was $80?
-                           jmp  load_decoder_setup_chain.l_26    ; $D2E7
+                           jmp  save_encode_copy_patterns.l_2    ; $D2E7
 load_decoder_commit_arm_6: inx    ; $D2EA
                            cpx  save_chain_counter    ; $D2EB
                            beq  load_decoder_commit_arm_7    ; $D2EE  save_encoder_y_plus_4_stride->X was save_chain_counter?
-                           jmp  load_decoder_setup_chain.l_25    ; $D2F0
+                           jmp  save_encode_copy_patterns.l_1    ; $D2F0
 load_decoder_commit_arm_7: rts    ; $D2F3
 .bend
 
@@ -19092,7 +19284,7 @@ load_decoder_commit_arm_7: rts    ; $D2F3
 ; ──────────────────────────────────────────────────────────────────────
 ; Save-encoder Y += 4 stride helper.
 ;
-;   callers:             4 code sites: $D22E load_decoder_setup_chain_27, $D298, $D2B3, $D2D6
+;   callers:             4 code sites: $D22E save_encode_copy_patterns_3, $D298, $D2B3, $D2D6
 ;   inputs:              Y
 ;   outputs:             Y
 ;   registers clobbered: A, Y
@@ -19183,12 +19375,22 @@ load_decoder_patbody_5:    inx    ; $D35D
                            bne  load_decoder_patbody_1    ; $D361  ($00 + 1) was not save_chain_counter?
                            rts    ; $D363
         .byte $00    ; $D364
-load_decoder_patbody_6:    ldx  pat_base_lo    ; $D365
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D365  save_encode_pattern_stream
+; ──────────────────────────────────────────────────────────────────────
+; Save/encode pipeline stage 5: emits the pattern bodies via the configurable emitter.
+;
+;   callers:             1 code sites: $D038
+;   registers clobbered: A, X, Y
+save_encode_pattern_stream .block
+                           ldx  pat_base_lo    ; $D365
                            ldy  pat_base_hi    ; $D368
                            jsr  configurable_emitter_target_setup    ; $D36B
                            jsr  configurable_emitter_post_write_hook_advance    ; $D36E
                            ldx  #$00    ; $D371
-load_decoder_patbody_7:    lda  pat_base_lo,x    ; $D373
+l_1:                       lda  pat_base_lo,x    ; $D373
                            sta  zp_decoder_dest_lo    ; $D376
                            lda  pat_base_hi,x    ; $D378
                            sta  zp_decoder_dest_hi    ; $D37B
@@ -19197,36 +19399,36 @@ load_decoder_patbody_7:    lda  pat_base_lo,x    ; $D373
                            lda  selfmod_emitter_target_hi    ; $D383
                            sta  pat_base_hi,x    ; $D386
                            ldy  #$00    ; $D389
-load_decoder_patbody_8:    lda  (zp_decoder_dest_lo),y    ; $D38B
+l_2:                       lda  (zp_decoder_dest_lo),y    ; $D38B
                            iny    ; $D38D
                            sta  zp_scratch_9e    ; $D38E
                            jsr  self_modifying_byte_emitter    ; $D390
                            lda  zp_scratch_9e    ; $D393
                            and  #$40    ; $D395
-                           beq  load_decoder_patbody_9    ; $D397  (zp_scratch_9e & $40) was zero?
+                           beq  l_3    ; $D397  (zp_scratch_9e & $40) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D399
                            jsr  self_modifying_byte_emitter    ; $D39B
-load_decoder_patbody_9:    iny    ; $D39E
+l_3:                       iny    ; $D39E
                            lda  zp_scratch_9e    ; $D39F
                            and  #$20    ; $D3A1
-                           beq  load_decoder_patbody_10    ; $D3A3  (zp_scratch_9e & $20) was zero?
+                           beq  l_4    ; $D3A3  (zp_scratch_9e & $20) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D3A5
                            jsr  self_modifying_byte_emitter    ; $D3A7
-load_decoder_patbody_10:   iny    ; $D3AA
+l_4:                       iny    ; $D3AA
                            lda  zp_scratch_9e    ; $D3AB
                            and  #$10    ; $D3AD
-                           beq  load_decoder_patbody_11    ; $D3AF  (zp_scratch_9e & $10) was zero?
+                           beq  l_5    ; $D3AF  (zp_scratch_9e & $10) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D3B1
                            jsr  self_modifying_byte_emitter    ; $D3B3
-load_decoder_patbody_11:   iny    ; $D3B6
+l_5:                       iny    ; $D3B6
                            lda  zp_scratch_9e    ; $D3B7
                            and  #$80    ; $D3B9
-                           bne  load_decoder_patbody_12    ; $D3BB  (zp_scratch_9e & $80) was non-zero?
+                           bne  l_6    ; $D3BB  (zp_scratch_9e & $80) was non-zero?
                            cpy  #$80    ; $D3BD
-                           bne  load_decoder_patbody_8    ; $D3BF  self_modifying_byte_emitter->Y was not $80?
-load_decoder_patbody_12:   inx    ; $D3C1
+                           bne  l_2    ; $D3BF  self_modifying_byte_emitter->Y was not $80?
+l_6:                       inx    ; $D3C1
                            cpx  save_chain_counter    ; $D3C2
-                           bne  load_decoder_patbody_7    ; $D3C5  self_modifying_byte_emitter->X was not save_chain_counter?
+                           bne  l_1    ; $D3C5  self_modifying_byte_emitter->X was not save_chain_counter?
                            lda  selfmod_emitter_target_lo    ; $D3C7
                            sec    ; $D3CA
                            sbc  pat_base_lo    ; $D3CB
@@ -19235,20 +19437,30 @@ load_decoder_patbody_12:   inx    ; $D3C1
                            sec    ; $D3D4
                            sbc  pat_base_hi    ; $D3D5
                            sta  save_chain_state_ce70    ; $D3D8
-                           jsr  load_decoder_setup_chain.l_23    ; $D3DB
+                           jsr  load_arm_voice_gates    ; $D3DB
                            rts    ; $D3DE
-load_decoder_patbody_13:   ldx  #$00    ; $D3DF
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D3DF  save_encode_clear_dedup
+; ──────────────────────────────────────────────────────────────────────
+; Save/encode pipeline stage 3: clears the pattern-dedup table before the emit pass.
+;
+;   callers:             1 code sites: $D032
+;   registers clobbered: A, X, Y
+save_encode_clear_dedup .block
+                           ldx  #$00    ; $D3DF
                            txa    ; $D3E1
-load_decoder_patbody_14:   sta  KERNAL_KEYBUF_SCRATCH,x    ; $D3E2
+l_1:                       sta  KERNAL_KEYBUF_SCRATCH,x    ; $D3E2
                            dex    ; $D3E5
-                           bne  load_decoder_patbody_14    ; $D3E6  ($00 − 1) was non-zero?
+                           bne  l_1    ; $D3E6  ($00 − 1) was non-zero?
                            ldx  #$00    ; $D3E8
-load_decoder_patbody_15:   lda  pat_base_lo,x    ; $D3EA
+l_2:                       lda  pat_base_lo,x    ; $D3EA
                            sta  zp_decoder_dest_lo    ; $D3ED
                            lda  pat_base_hi,x    ; $D3EF
                            sta  zp_decoder_dest_hi    ; $D3F2
                            ldy  #$00    ; $D3F4
-load_decoder_patbody_16:   lda  (zp_decoder_dest_lo),y    ; $D3F6
+l_3:                       lda  (zp_decoder_dest_lo),y    ; $D3F6
                            iny    ; $D3F8
                            sta  decoder_xy_smc_pair    ; $D3F9
                            and  #$40    ; $D3FC
@@ -19274,32 +19486,32 @@ SID_V3_FREQ_HI:            iny    ; $D40F
 SID_V3_PW_LO:              lda  decoder_xy_smc_pair    ; $D410
 SID_V3_AD:                 bmi  SID_POT_X    ; $D413  decoder_xy_smc_pair had bit 7 set?
 SID_FC_LO:                 cpy  #$80    ; $D415  ; ← SID_FC_HI
-SID_FILTER_RES:            bne  load_decoder_patbody_16    ; $D417  save_encoder_jp_chain_walker->Y was not $80?
+SID_FILTER_RES:            bne  l_3    ; $D417  save_encoder_jp_chain_walker->Y was not $80?
 SID_POT_X:                 inx    ; $D419
 SID_POT_Y:                 cpx  save_chain_counter    ; $D41A
-                           bne  load_decoder_patbody_15    ; $D41D  save_encoder_jp_chain_walker->X was not save_chain_counter?
+                           bne  l_2    ; $D41D  save_encoder_jp_chain_walker->X was not save_chain_counter?
                            ldx  #$00    ; $D41F
-load_decoder_patbody_17:   dex    ; $D421
-                           beq  load_decoder_patbody_18    ; $D422  (($00 − 1) − 1) was zero?
+l_4:                       dex    ; $D421
+                           beq  l_5    ; $D422  (($00 − 1) − 1) was zero?
                            lda  KERNAL_KEYBUF_SCRATCH,x    ; $D424
-                           beq  load_decoder_patbody_17    ; $D427  KERNAL_KEYBUF_SCRATCH,X was zero?
-load_decoder_patbody_18:   stx  song_end_pointer_pre    ; $D429
-load_decoder_patbody_19:   dex    ; $D42C
+                           beq  l_4    ; $D427  KERNAL_KEYBUF_SCRATCH,X was zero?
+l_5:                       stx  song_end_pointer_pre    ; $D429
+l_6:                       dex    ; $D42C
                            cpx  #$FF    ; $D42D
-                           bne  load_decoder_patbody_20    ; $D42F
-                           jmp  load_decoder_patbody_32    ; $D431
-load_decoder_patbody_20:   lda  song_end_pointer_pre    ; $D434
+                           bne  l_7    ; $D42F
+                           jmp  l_19    ; $D431
+l_7:                       lda  song_end_pointer_pre    ; $D434
                            sta  screen_ram    ; $D437
                            lda  KERNAL_KEYBUF_SCRATCH,x    ; $D43A
-                           bne  load_decoder_patbody_19    ; $D43D  KERNAL_KEYBUF_SCRATCH,X was non-zero?
+                           bne  l_6    ; $D43D  KERNAL_KEYBUF_SCRATCH,X was non-zero?
                            stx  decoder_xy_smc_d51d    ; $D43F
-load_decoder_patbody_21:   lda  sidtab_row_hi_byte1,x    ; $D442
-                           bne  load_decoder_patbody_22    ; $D445  sidtab_row_hi_byte1,X was non-zero?
+l_8:                       lda  sidtab_row_hi_byte1,x    ; $D442
+                           bne  l_9    ; $D445  sidtab_row_hi_byte1,X was non-zero?
                            sta  song_position_arrays_hi,x    ; $D447
                            lda  sidtab_row_lo_byte1,x    ; $D44A
                            sta  song_position_arrays_lo,x    ; $D44D
-                           jmp  load_decoder_patbody_24    ; $D450
-load_decoder_patbody_22:   lda  sidTAB_staging_prefix    ; $D453
+                           jmp  l_11    ; $D450
+l_9:                       lda  sidTAB_staging_prefix    ; $D453
                            pha    ; $D456
                            stx  sidTAB_staging_prefix    ; $D457
                            jsr  sidtab_row_decoder    ; $D45A
@@ -19319,61 +19531,61 @@ load_decoder_patbody_22:   lda  sidTAB_staging_prefix    ; $D453
                            adc  #$00    ; $D47A
                            sta  zp_scratch_9f    ; $D47C
                            ldy  #$0E    ; $D47E
-load_decoder_patbody_23:   lda  (zp_scratch_9e),y    ; $D480
+l_10:                      lda  (zp_scratch_9e),y    ; $D480
                            sta  (zp_decoder_dest_lo),y    ; $D482
                            dey    ; $D484
-                           bpl  load_decoder_patbody_23    ; $D485  $0E walked back 1 and had bit 7 clear?
+                           bpl  l_10    ; $D485  $0E walked back 1 and had bit 7 clear?
                            lda  dl_per_step_counters_byte1,x    ; $D487
                            sta  dl_per_step_counters,x    ; $D48A
-load_decoder_patbody_24:   lda  SCREEN_RAM + $F1,x    ; $D48D
+l_11:                      lda  SCREEN_RAM + $F1,x    ; $D48D
                            sta  KERNAL_KEYBUF_SCRATCH,x    ; $D490
                            inx    ; $D493
                            cpx  song_end_pointer_pre    ; $D494
-                           bne  load_decoder_patbody_21    ; $D497  sidtab_row_decoder->X was not song_end_pointer_pre?
+                           bne  l_8    ; $D497  sidtab_row_decoder->X was not song_end_pointer_pre?
                            ldx  #$00    ; $D499
-load_decoder_patbody_25:   lda  pat_base_lo,x    ; $D49B
+l_12:                      lda  pat_base_lo,x    ; $D49B
                            sta  zp_decoder_dest_lo    ; $D49E
                            lda  pat_base_hi,x    ; $D4A0
                            sta  zp_decoder_dest_hi    ; $D4A3
                            ldy  #$00    ; $D4A5
-load_decoder_patbody_26:   lda  (zp_decoder_dest_lo),y    ; $D4A7
+l_13:                      lda  (zp_decoder_dest_lo),y    ; $D4A7
                            iny    ; $D4A9
                            sta  decoder_xy_smc_pair    ; $D4AA
                            lda  (zp_decoder_dest_lo),y    ; $D4AD
                            cmp  decoder_xy_smc_d51d    ; $D4AF
-                           bcc  load_decoder_patbody_27    ; $D4B2  (zp_decoder_dest_lo),Y was below decoder_xy_smc_d51d?
+                           bcc  l_14    ; $D4B2  (zp_decoder_dest_lo),Y was below decoder_xy_smc_d51d?
                            sec    ; $D4B4
                            sbc  #$01    ; $D4B5
                            sta  (zp_decoder_dest_lo),y    ; $D4B7
-load_decoder_patbody_27:   iny    ; $D4B9
+l_14:                      iny    ; $D4B9
                            lda  (zp_decoder_dest_lo),y    ; $D4BA
                            cmp  decoder_xy_smc_d51d    ; $D4BC
-                           bcc  load_decoder_patbody_28    ; $D4BF  (zp_decoder_dest_lo),Y was below decoder_xy_smc_d51d?
+                           bcc  l_15    ; $D4BF  (zp_decoder_dest_lo),Y was below decoder_xy_smc_d51d?
                            sec    ; $D4C1
                            sbc  #$01    ; $D4C2
                            sta  (zp_decoder_dest_lo),y    ; $D4C4
-load_decoder_patbody_28:   iny    ; $D4C6
+l_15:                      iny    ; $D4C6
                            iny    ; $D4C7
                            lda  decoder_xy_smc_pair    ; $D4C8
-                           bmi  load_decoder_patbody_29    ; $D4CB  decoder_xy_smc_pair had bit 7 set?
+                           bmi  l_16    ; $D4CB  decoder_xy_smc_pair had bit 7 set?
                            cpy  #$80    ; $D4CD
-                           bne  load_decoder_patbody_26    ; $D4CF  (((($00 + 1) + 1) + 1) + 1) was not $80?
-load_decoder_patbody_29:   inx    ; $D4D1
+                           bne  l_13    ; $D4CF  (((($00 + 1) + 1) + 1) + 1) was not $80?
+l_16:                      inx    ; $D4D1
                            cpx  save_chain_counter    ; $D4D2
-                           bne  load_decoder_patbody_25    ; $D4D5  ($00 + 1) was not save_chain_counter?
+                           bne  l_12    ; $D4D5  ($00 + 1) was not save_chain_counter?
                            ldx  #$00    ; $D4D7
-load_decoder_patbody_30:   lda  song_position_arrays_hi,x    ; $D4D9
-                           bne  load_decoder_patbody_31    ; $D4DC  song_position_arrays_hi,X was non-zero?
+l_17:                      lda  song_position_arrays_hi,x    ; $D4D9
+                           bne  l_18    ; $D4DC  song_position_arrays_hi,X was non-zero?
                            lda  song_position_arrays_lo,x    ; $D4DE
                            cmp  decoder_xy_smc_d51d    ; $D4E1
-                           bcc  load_decoder_patbody_31    ; $D4E4  song_position_arrays_lo,X was below decoder_xy_smc_d51d?
+                           bcc  l_18    ; $D4E4  song_position_arrays_lo,X was below decoder_xy_smc_d51d?
                            dec  song_position_arrays_lo,x    ; $D4E6
-load_decoder_patbody_31:   dex    ; $D4E9
-                           bne  load_decoder_patbody_30    ; $D4EA  ($00 − 1) was non-zero?
+l_18:                      dex    ; $D4E9
+                           bne  l_17    ; $D4EA  ($00 − 1) was non-zero?
                            dec  song_end_pointer_pre    ; $D4EC
                            ldx  decoder_xy_smc_d51d    ; $D4EF
-                           jmp  load_decoder_patbody_19    ; $D4F2
-load_decoder_patbody_32:   rts    ; $D4F5
+                           jmp  l_6    ; $D4F2
+l_19:                      rts    ; $D4F5
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -19416,14 +19628,24 @@ l_2:                       pla    ; $D519
                            tax    ; $D51A
 l_3:                       rts    ; $D51B
         .byte $00, $00    ; $D51C
-l_4:                       ldx  song_position_arrays_lo    ; $D51E
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D51E  save_encode_song_positions
+; ──────────────────────────────────────────────────────────────────────
+; Save/encode pipeline stage 4: emits the per-voice song-position chains via the configurable emitter.
+;
+;   callers:             1 code sites: $D035
+;   registers clobbered: A, X, Y
+save_encode_song_positions .block
+                           ldx  song_position_arrays_lo    ; $D51E
                            ldy  song_position_arrays_hi    ; $D521
                            jsr  configurable_emitter_target_setup    ; $D524
                            jsr  configurable_emitter_post_write_hook_advance    ; $D527
                            ldx  #$FF    ; $D52A
-l_5:                       inx    ; $D52C
+l_1:                       inx    ; $D52C
                            lda  song_position_arrays_hi,x    ; $D52D
-                           beq  l_6    ; $D530  song_position_arrays_hi,X was zero?
+                           beq  l_2    ; $D530  song_position_arrays_hi,X was zero?
                            sta  zp_decoder_dest_hi    ; $D532
                            lda  song_position_arrays_lo,x    ; $D534
                            sta  zp_decoder_dest_lo    ; $D537
@@ -19431,9 +19653,9 @@ l_5:                       inx    ; $D52C
                            sta  song_position_arrays_lo,x    ; $D53C
                            lda  selfmod_emitter_target_hi    ; $D53F
                            sta  song_position_arrays_hi,x    ; $D542
-                           jsr  l_7    ; $D545
-l_6:                       cpx  song_end_pointer_pre    ; $D548
-                           bne  l_5    ; $D54B  save_encoder_jp_chain_walker_7->X was not song_end_pointer_pre?
+                           jsr  save_encode_emit_flagged_row    ; $D545
+l_2:                       cpx  song_end_pointer_pre    ; $D548
+                           bne  l_1    ; $D54B  save_encode_emit_flagged_row->X was not song_end_pointer_pre?
                            lda  selfmod_emitter_target_lo    ; $D54D
                            sec    ; $D550
                            sbc  song_position_arrays_lo    ; $D551
@@ -19443,91 +19665,101 @@ l_6:                       cpx  song_end_pointer_pre    ; $D548
                            sbc  song_position_arrays_hi    ; $D55B
                            sta  sid2_self_modifier_padding + $08    ; $D55E
                            rts    ; $D561
-l_7:                       ldy  #$00    ; $D562
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D562  save_encode_emit_flagged_row
+; ──────────────────────────────────────────────────────────────────────
+; Emits a pattern-row entry via self_modifying_byte_emitter, appending the extra bytes selected by the row's continuation-flag bits.
+;
+;   callers:             1 code sites: $D545
+;   registers clobbered: A, Y
+save_encode_emit_flagged_row .block
+                           ldy  #$00    ; $D562
                            lda  (zp_decoder_dest_lo),y    ; $D564
                            iny    ; $D566
                            sta  zp_scratch_9e    ; $D567
                            jsr  self_modifying_byte_emitter    ; $D569
                            lda  zp_scratch_9e    ; $D56C
                            and  #$40    ; $D56E
-                           beq  l_8    ; $D570  (zp_scratch_9e & $40) was zero?
+                           beq  l_1    ; $D570  (zp_scratch_9e & $40) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D572
                            iny    ; $D574
                            jsr  self_modifying_byte_emitter    ; $D575
-l_8:                       lda  zp_scratch_9e    ; $D578
+l_1:                       lda  zp_scratch_9e    ; $D578
                            and  #$80    ; $D57A
-                           beq  l_9    ; $D57C  (zp_scratch_9e & $80) was zero?
+                           beq  l_2    ; $D57C  (zp_scratch_9e & $80) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D57E
                            iny    ; $D580
                            jsr  self_modifying_byte_emitter    ; $D581
-l_9:                       lda  zp_scratch_9e    ; $D584
+l_2:                       lda  zp_scratch_9e    ; $D584
                            and  #$20    ; $D586
-                           beq  l_10    ; $D588  (zp_scratch_9e & $20) was zero?
+                           beq  l_3    ; $D588  (zp_scratch_9e & $20) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D58A
                            iny    ; $D58C
                            jsr  self_modifying_byte_emitter    ; $D58D
-l_10:                      lda  zp_scratch_9e    ; $D590
+l_3:                       lda  zp_scratch_9e    ; $D590
                            and  #$10    ; $D592
-                           beq  l_11    ; $D594  (zp_scratch_9e & $10) was zero?
+                           beq  l_4    ; $D594  (zp_scratch_9e & $10) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D596
                            iny    ; $D598
                            jsr  self_modifying_byte_emitter    ; $D599
-l_11:                      lda  zp_scratch_9e    ; $D59C
+l_4:                       lda  zp_scratch_9e    ; $D59C
                            and  #$08    ; $D59E
-                           beq  l_12    ; $D5A0  (zp_scratch_9e & $08) was zero?
+                           beq  l_5    ; $D5A0  (zp_scratch_9e & $08) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5A2
                            iny    ; $D5A4
                            jsr  self_modifying_byte_emitter    ; $D5A5
-l_12:                      lda  zp_scratch_9e    ; $D5A8
+l_5:                       lda  zp_scratch_9e    ; $D5A8
                            and  #$04    ; $D5AA
-                           beq  l_13    ; $D5AC  (zp_scratch_9e & $04) was zero?
+                           beq  l_6    ; $D5AC  (zp_scratch_9e & $04) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5AE
                            iny    ; $D5B0
                            jsr  self_modifying_byte_emitter    ; $D5B1
-l_13:                      lda  zp_scratch_9e    ; $D5B4
+l_6:                       lda  zp_scratch_9e    ; $D5B4
                            and  #$02    ; $D5B6
-                           beq  l_14    ; $D5B8  (zp_scratch_9e & $02) was zero?
+                           beq  l_7    ; $D5B8  (zp_scratch_9e & $02) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5BA
                            iny    ; $D5BC
                            jsr  self_modifying_byte_emitter    ; $D5BD
-l_14:                      lda  (zp_decoder_dest_lo),y    ; $D5C0
+l_7:                       lda  (zp_decoder_dest_lo),y    ; $D5C0
                            iny    ; $D5C2
                            sta  zp_scratch_9e    ; $D5C3
                            jsr  self_modifying_byte_emitter    ; $D5C5
                            lda  zp_scratch_9e    ; $D5C8
                            and  #$80    ; $D5CA
-                           beq  l_15    ; $D5CC  (zp_scratch_9e & $80) was zero?
+                           beq  l_8    ; $D5CC  (zp_scratch_9e & $80) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5CE
                            iny    ; $D5D0
                            jsr  self_modifying_byte_emitter    ; $D5D1
-l_15:                      lda  zp_scratch_9e    ; $D5D4
+l_8:                       lda  zp_scratch_9e    ; $D5D4
                            and  #$40    ; $D5D6
-                           beq  l_16    ; $D5D8  (zp_scratch_9e & $40) was zero?
+                           beq  l_9    ; $D5D8  (zp_scratch_9e & $40) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5DA
                            iny    ; $D5DC
                            jsr  self_modifying_byte_emitter    ; $D5DD
-l_16:                      lda  zp_scratch_9e    ; $D5E0
+l_9:                       lda  zp_scratch_9e    ; $D5E0
                            and  #$20    ; $D5E2
-                           beq  l_17    ; $D5E4  (zp_scratch_9e & $20) was zero?
+                           beq  l_10    ; $D5E4  (zp_scratch_9e & $20) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5E6
                            iny    ; $D5E8
                            jsr  self_modifying_byte_emitter    ; $D5E9
-l_17:                      lda  zp_scratch_9e    ; $D5EC
+l_10:                      lda  zp_scratch_9e    ; $D5EC
                            and  #$10    ; $D5EE
-                           beq  l_18    ; $D5F0  (zp_scratch_9e & $10) was zero?
+                           beq  l_11    ; $D5F0  (zp_scratch_9e & $10) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5F2
                            iny    ; $D5F4
                            jsr  self_modifying_byte_emitter    ; $D5F5
-l_18:                      lda  zp_scratch_9e    ; $D5F8
+l_11:                      lda  zp_scratch_9e    ; $D5F8
                            and  #$08    ; $D5FA
-                           beq  l_19    ; $D5FC  (zp_scratch_9e & $08) was zero?
+                           beq  l_12    ; $D5FC  (zp_scratch_9e & $08) was zero?
                            lda  (zp_decoder_dest_lo),y    ; $D5FE
                            iny    ; $D600
                            jsr  self_modifying_byte_emitter    ; $D601
                            lda  (zp_decoder_dest_lo),y    ; $D604
                            iny    ; $D606
                            jsr  self_modifying_byte_emitter    ; $D607
-l_19:                      rts    ; $D60A
+l_12:                      rts    ; $D60A
         .byte $00, $00, $00, $00, $00, $00    ; $D60B
 .bend
 
@@ -20300,7 +20532,7 @@ l_6:                       lda  ui_mode    ; $E113
                            lda  (zp_ptr1_lo),y    ; $E132
                            eor  #$80    ; $E134
                            sta  (zp_ptr1_lo),y    ; $E136
-l_7:                       jsr  vic_sprite_init_internal.l_91    ; $E138
+l_7:                       jsr  statusline_reverse_fill    ; $E138
                            rts    ; $E13B
         .byte $FF, $FF    ; $E13C
 .bend
@@ -20344,7 +20576,18 @@ l_2:                       ldx  #$01    ; $E157
                            ldy  #$00    ; $E159
                            jsr  seqLIST_cursor_step_body    ; $E15B
                            rts    ; $E15E
-l_3:                       ldx  #$FF    ; $E15F
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E15F  seqlist_cursor_step_wrap
+; ──────────────────────────────────────────────────────────────────────
+; Steps the seqLIST cursor one row (down/wrap) via seqLIST_cursor_step_body.
+;
+;   callers:             2 code sites: $E690, $E6B1 seqLIST_handler_30
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+seqlist_cursor_step_wrap .block
+                           ldx  #$FF    ; $E15F
                            ldy  #$00    ; $E161
                            jsr  seqLIST_cursor_step_body    ; $E163
                            rts    ; $E166
@@ -21200,7 +21443,7 @@ l_26:                      cpx  #KBD_MOD_SHIFT    ; $E681
                            jmp  writer_seqlist_advance.l_1    ; $E689
 l_27:                      cpy  #KEY_CRSRLR    ; $E68C
                            bne  l_28    ; $E68E  kbd_decoded_key was not KEY_CRSRLR?
-                           jmp  writer_seqlist_advance.l_3    ; $E690
+                           jmp  seqlist_cursor_step_wrap    ; $E690
 l_28:                      cpy  #KEY_A    ; $E693
                            bcc  l_31    ; $E695  kbd_decoded_key was below KEY_A?
                            cpy  #KEY_G    ; $E697
@@ -21215,7 +21458,7 @@ l_29:                      ldx  #$11    ; $E69F
                            ldy  cursor_state_728d,x    ; $E6A9
                            bmi  l_30    ; $E6AC  cursor_state_728d,X had bit 7 set?
                            jmp  writer_seqlist_advance.l_2    ; $E6AE
-l_30:                      jsr  writer_seqlist_advance.l_3    ; $E6B1
+l_30:                      jsr  seqlist_cursor_step_wrap    ; $E6B1
                            jmp  writer_seqlist_advance    ; $E6B4
 l_31:                      cpy  #KEY_0    ; $E6B7
                            bcc  l_32    ; $E6B9  kbd_decoded_key was below KEY_0?
@@ -21271,7 +21514,7 @@ l_39:                      cpy  #KEY_LEFTARROW    ; $E714
                            lda  stereo_enable    ; $E718
                            beq  l_40    ; $E71B  stereo_enable was STEREO_OFF?
                            jsr  chipview_toggle_helper    ; $E71D
-                           jmp  vic_sprite_init.l_5    ; $E720
+                           jmp  chip_view_voice_cells_paint    ; $E720
 l_40:                      jmp  defmon_image_end    ; $E723
 l_41:                      cpx  #$30    ; $E726
                            bne  l_46    ; $E728  kbd_modifiers was not $30?
