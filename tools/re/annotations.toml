@@ -6535,3 +6535,48 @@ role = "Raster-synchronises, then writes the SID#2 filter registers."
 name = "save_encode_emit_flagged_row"
 role = "Emits a pattern-row entry via self_modifying_byte_emitter, appending the extra bytes selected by the row's continuation-flag bits."
 
+
+[region."$7200"]
+name = "seqed_scratch_buffer"
+role = "128-byte seqED scratch buffer, cleared on entry to several seqED handlers."
+
+[function."$78B0"]
+name = "savename_from_dir_entry"
+role = "Copies a filename out of a directory entry into the save-name buffer, skipping quotes and stopping at the shifted-space terminator."
+
+[function."$79C1"]
+name = "save_setnam_prep"
+role = "Prepares the save filename pointer and length (from the entered name) before the disk save SETNAM."
+
+[function."$B596"]
+name = "seqed_scratch_clear"
+role = "Clears the 128-byte seqed_scratch_buffer to zero."
+
+[function."$D626"]
+name = "load_decode_chain_walk"
+role = "Decode-time pass that re-inits the decoder pointer and walks the source chain, accumulating each entry's delta."
+
+[function."$E308"]
+name = "seqlist_v0_arranger_store"
+role = "Conditionally writes the V0 arranger entry (arranger_v0_sid1), gated on the super-command parity flag and the SID chip view."
+
+[function."$E1FD"]
+name = "seqlist_col_left_pair_flag"
+role = "Returns A=1 when the seqLIST column cursor is on one of the two left (V0/V1) columns."
+
+[function."$C912"]
+name = "sid2_pattern_base_setup"
+role = "Loads the three SID#2 voices' pattern-base pointers (from arranger_v3_sid2/arranger_v4_sid2/arranger_v5_sid2) into the SID#2 player's self-modified operands."
+
+[function."$D24A"]
+name = "save_encode_emit_triple"
+role = "Writes a 3-byte event (from the decode scratch triple) into the encode destination at the running offset."
+
+[function."$D22E"]
+name = "save_encode_pattern_loop"
+role = "Save-encode inner loop over a pattern's bytes, masking each nibble and accumulating byte counts via the save-encoder helpers until the row end."
+
+[function."$C655"]
+name = "sid2_base_select_next"
+role = "Cycles the SID#2 base address to the next entry in the secondary-disk base table and re-reads its data."
+
