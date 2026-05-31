@@ -203,12 +203,14 @@ reproducing the build.)
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
 
-5. **3,234 of 11,500 code-starts are statically unreachable.** Run
-   `make unreachable-triage` to bucket them. ~96% sit inside a single
-   `paint_page_*` data span — screen data that decodes as instructions,
-   not dead code — so the headline number overstates the gap. The
-   actionable residue is the `isolated` starts outside data regions and
-   the `smc_io_band` bucket (reached via SMC / RAM-under-I/O banking).
+5. **100 of ~11,520 code-starts are statically unreachable** (`make
+   unreachable-triage`). This was 3,234 until the `OPS` table learned
+   the LAX-abs / SAX-abs undocumented opcodes defMON uses: those were
+   rendering as `.byte`, fragmenting the callgraph's fall-through graph
+   so large stretches of genuine code (the unrolled `paint_page` paint
+   routine, the row-timer SAX stores) looked disconnected. The
+   remaining 100 are the `smc_io_band` RAM-under-I/O encoder (reached
+   via SMC / banking) plus a handful of `isolated` starts.
 
 6. **SMC catalogue is curated** (dispatch + opcode + branch). 11
    genuine `smc_opcode` flips and the 9 `smc_branch` gate sites at
