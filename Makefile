@@ -51,11 +51,12 @@ SHELL        := /bin/bash
 PYTHON       ?= python3
 DOCKER       ?= docker
 TASS         ?= 64tass
+KICKASS_JAR  ?= /usr/local/kickass/KickAss.jar
 
 GHIDRA_FRESH := $(BUILD_DIR)/ghidra-fresh
 
-.PHONY: all defmon.s fetch-static roundtrip ghidra-export sweep \
-        probe-list probe-disasm lint callgraph unreachable-triage \
+.PHONY: all defmon.s fetch-static roundtrip roundtrip-kickass ghidra-export \
+        sweep probe-list probe-disasm lint callgraph unreachable-triage \
         reg-effects verify clean distclean
 
 all: $(OUT)
@@ -89,6 +90,18 @@ roundtrip: $(OUT) $(STATIC_BIN)
 	$(PYTHON) -m tools.roundtrip_check \
 	    --static $(STATIC_BIN) \
 	    --reassembled $(BUILD_DIR)/defmon-reassembled.bin
+
+# PROTOTYPE: emit a Kick Assembler source (tools/re/emit_kickass.py) and
+# round-trip it byte-exact through Kick Assembler. Unlike 64tass, KickAss
+# emits every illegal opcode from a mnemonic — including the $2B/$EB
+# duplicate encodings (anc2 / sbc2) that 64tass canonicalises, so no
+# `.byte` fallback is needed. Opt-in (needs Java + KICKASS_JAR); not a CI
+# gate. The prototype source is unlabelled (raw-hex operands) — a full
+# labelled KickAss dialect would build on the emit_defmon_source layers.
+roundtrip-kickass: $(STATIC_BIN) | $(BUILD_DIR)
+	$(PYTHON) -m tools.re.emit_kickass --roundtrip \
+	    --bin $(STATIC_BIN) --jar $(KICKASS_JAR) \
+	    --out $(BUILD_DIR)/defmon_kickass.asm
 
 # Run Ghidra in Docker to reproduce artefacts/ghidra/*.json. The build
 # is heavy (~5-10 min cold; cached fast); the output lives under
