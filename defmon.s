@@ -462,8 +462,6 @@ SCREEN_RAM_END           = $07FF
 
 ; ── BOOT + MAIN LOOP + NMI PLAYER ($0800-$0FFF) ────────────────────────
 cold_boot_origin         = $0800
-;   code edges:          none
-;   apparent (from data): $D92F in color_ram_row07
 cold_boot_prelude_midbyte = $080D
 ;   notes: At cold_boot_prelude_midbyte sits the $9B operand of A←$9B at cold_boot_origin (VIC-blank loader). Also the SYS target of the original packed PRG's BASIC-2061 stub (the packed loader's stage-1 decompressor lives at cold_boot_prelude_midbyte after the BASIC line terminators). Once decompression completes the packed loader JMPs to the unpacked image's cold_boot_origin entry — so the address has two distinct meanings: packed-PRG decompressor entry vs static-image mid-instruction.
 post_load_startup        = $0889
@@ -1390,6 +1388,7 @@ color_ram_row08          = $D940
 color_ram_row09          = $D968
 color_ram_row10          = $D990
 color_ram_row11          = $D9B8
+io_overlay_ram_tail      = $D9C8
 color_ram_row12          = $D9E0
 color_ram_row13          = $DA08
 color_ram_row14          = $DA30
@@ -1638,6 +1637,8 @@ editor_frame_barrier .block
                            beq  editor_frame_barrier    ; $08AC  editor_busy_wait_counter was zero?
                            lda  border_color_state_a    ; $08AE
                            sta  VIC_BORDER    ; $08B1
+; ──── SMC-patched JSR (targets uncatalogued) ────
+;   Patched at: $D92F
                            jsr  statusline_tick    ; $08B4
                            lda  super_cmd_extra    ; $08B7
                            beq  l_1    ; $08BA  super_cmd_extra was zero?
@@ -2225,6 +2226,7 @@ boot_init_band_end .block
 ;
 ;   callers:             5 sites in the disk-band LOAD chain: disk_menu_return_handler, save_overwrite_body, save_overwrite_body, disk_menu_ui_band_end (all part of disk_menu_return_handler load_tune + post-LOAD secondary-pass dispatch). Lets callers invoke the RAM-with-I/O LOAD-decoder without exposing the bank-swap dance.
 ;   inputs:              X = target addr lo, Y = target addr hi.
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Caller passes (X = target lo, Y = target hi); jsr_with_ram_helper self-mods the call operand at jsr_with_ram_helper, raises IRQ-off, saves $01 banking byte, sets $01=#$30 (RAM visible at ram_under_io-ram_under_io_end, KERNAL/CHARGEN/I/O all banked out), JSRs the target, restores $01, IRQ-on, return.
@@ -2442,6 +2444,9 @@ super_cmd_load_fallthrough .block
                            sta  super_arg_slot_r    ; $0C45
                            lda  super_cmd_save_slot_c,x    ; $0C48
                            sta  super_arg_slot_q    ; $0C4B
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D95B
+;   LDA writer-source inconclusive (register-sourced or chained — curate me)
                            lda  super_cmd_save_slot_d,x    ; $0C4E
                            sta  super_arg_slot_swr_hi    ; $0C51
                            lda  super_cmd_save_slot_e,x    ; $0C54
@@ -2488,6 +2493,9 @@ l_2:                       cmp  #$04    ; $0C6F
 ;
 ;   Reached only via ui_mode_to_slot_idx fall-through when ui_mode is not UI_MODE_SEQED / UI_MODE_SEQLIST / UI_MODE_SIDTAB — a should-never-happen panic. Three border-color INCs per iteration produce a fast colour-cycle on screen until reset. Only reference is the panic_color_loop JMP panic_color_loop self-jump — no external entry points. The cold-boot path always passes A=UI_MODE_SEQED through ui_mode_to_slot_idx's first arm, so this panic is unreachable from a clean boot.
 panic_color_loop .block
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D974
+;   INC writer-source inconclusive (register-sourced or chained — curate me)
                            inc  VIC_BORDER    ; $0C76
                            jmp  panic_color_loop    ; $0C79
         .byte $60    ; $0C7C
@@ -2518,22 +2526,27 @@ sid_silence_and_reinit .block
                            lda  #$00    ; $0C96
 l_1:                       sta  save_encode_clear_dedup.SID_V1_FREQ_LO,x    ; $0C98
                            ldy  stereo_enable    ; $0C9B
-                           beq  l_2    ; $0C9E  stereo_enable was STEREO_OFF?
-                           sta  sid2_base_default,x    ; $0CA0
-l_2:                       dex    ; $0CA3
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D983
+;   BEQ writer-source inconclusive (register-sourced or chained — curate me)
+; ──── SMC-patched branch — static target is the unpatched default ────
+;   Patched at: $D983
+                           beq  l_3    ; $0C9E  stereo_enable was STEREO_OFF?
+l_2:                       sta  sid2_base_default,x    ; $0CA0
+l_3:                       dex    ; $0CA3
                            bpl  l_1    ; $0CA4  $11 walked back 1 and had bit 7 clear?
                            lda  #$08    ; $0CA6
                            sta  SID_V1_CTRL    ; $0CA8  ; SID_V1_CTRL := wave off TEST
                            sta  save_encode_clear_dedup.SID_V2_CTRL    ; $0CAB
                            sta  SID_V3_CTRL    ; $0CAE
                            ldy  stereo_enable    ; $0CB1
-                           beq  l_3    ; $0CB4  stereo_enable was STEREO_OFF?
+                           beq  l_4    ; $0CB4  stereo_enable was STEREO_OFF?
                            sta  sid2_alias_d504    ; $0CB6
                            sta  save_encoder_jp_chain_walker.sid2_alias_d50b    ; $0CB9
                            sta  save_encoder_jp_chain_walker.decoder_state_d512    ; $0CBC
                            lda  #$0F    ; $0CBF
                            sta  sid2_master_volume    ; $0CC1  ; sid2_master_volume := vol=15
-l_3:                       rts    ; $0CC4
+l_4:                       rts    ; $0CC4
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -2547,6 +2560,9 @@ l_3:                       rts    ; $0CC4
 ;   Zero playback_state (player tick-enable flag) and CIA2_PRB (CIA2 user-port byte = ScannerBoy sync output).
 stop_playback .block
                            lda  #PLAYBACK_OFF    ; $0CC5
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D992
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
                            sta  playback_state    ; $0CC7
                            lda  #$00    ; $0CCA
                            sta  CIA2_PRB    ; $0CCC
@@ -2643,6 +2659,9 @@ l_2:                       lda  ui_state_716e    ; $0D0A
                            lda  v0_row_timer    ; $0D0F
                            bne  l_5    ; $0D12  v0_row_timer was non-zero?
                            jsr  seqLIST_step_auto_advance    ; $0D14
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D9BC
+;   LDX writer-source inconclusive (register-sourced or chained — curate me)
                            ldx  current_arranger_row    ; $0D17
                            lda  sid_chip_view    ; $0D1A
                            beq  l_3    ; $0D1D  sid_chip_view was SID_VIEW_1?
@@ -2674,7 +2693,7 @@ l_5:                       rts    ; $0D3B
 speedadj_bump_up .block
                            clc    ; $0D3C
                            adc  cia2_timer_lo    ; $0D3D
-                           sta  cia2_timer_lo    ; $0D40
+l_1:                       sta  cia2_timer_lo    ; $0D40
                            bcc  speedadj_writeback_tail    ; $0D43
                            inc  cia2_timer_hi    ; $0D45
                            jmp  speedadj_writeback_tail    ; $0D48
@@ -2711,6 +2730,11 @@ speedadj_shift_left .block
                            sec    ; $0D5F
 l_1:                       rol  cia2_timer_lo    ; $0D60
                            rol  cia2_timer_hi    ; $0D63
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D971
+;   JMP writer-source inconclusive (register-sourced or chained — curate me)
+; ──── SMC-patched JMP (targets uncatalogued) ────
+;   Patched at: $D971
                            jmp  speedadj_writeback_tail    ; $0D66
 .bend
 
@@ -2768,6 +2792,9 @@ l_1:                       iny    ; $0D7C
                            lda  speedadj_preset_timer_hi_lut,y    ; $0D86
                            sta  cia2_timer_hi    ; $0D89
                            ldy  #$F9    ; $0D8C
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D980
+;   CPY writer-source inconclusive (register-sourced or chained — curate me)
 l_2:                       cpy  VIC_RASTER    ; $0D8E
                            bne  l_2    ; $0D91  $F9 was not VIC_RASTER?
                            iny    ; $0D93
@@ -2796,7 +2823,7 @@ speedadj_writeback_tail .block
                            sta  CIA2_TA_LO    ; $0DAF
                            lda  cia2_timer_hi    ; $0DB2
                            sta  CIA2_TA_HI    ; $0DB5
-                           jsr  statusline_clear    ; $0DB8
+l_1:                       jsr  statusline_clear    ; $0DB8
 ;     $14 = 'T' (Timer status-line column glyph)
                            lda  #$14    ; $0DBB
                            jsr  statusline_print_char    ; $0DBD
@@ -2828,7 +2855,7 @@ speedadj_subframe_up .block
                            cmp  #SUB_FRAME_8X    ; $0DD9
                            beq  speedadj_status_repaint    ; $0DDB  sub_frame_count was SUB_FRAME_8X?
                            inc  sub_frame_count    ; $0DDD
-                           jmp  speedadj_status_repaint    ; $0DE0
+l_1:                       jmp  speedadj_status_repaint    ; $0DE0
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -2925,6 +2952,9 @@ l_1:                       pla    ; $0E27
                            beq  l_2    ; $0E28  A was zero?
                            lda  #$02    ; $0E2A
 l_2:                       sta  COLOR_RAM,x    ; $0E2C
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D955
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
                            sta  COLOR_RAM + $01,x    ; $0E2F
                            sta  COLOR_RAM + $02,x    ; $0E32
                            sta  COLOR_RAM + $03,x    ; $0E35
@@ -2965,6 +2995,11 @@ l_1:                       lda  CIA1_PRB    ; $0E4C
                            cmp  CIA1_PRB    ; $0E4F
                            bne  l_1    ; $0E52  CIA1_PRB was not CIA1_PRB?
                            cmp  #$FF    ; $0E54
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D96E
+;   BNE writer-source inconclusive (register-sourced or chained — curate me)
+; ──── SMC-patched branch — static target is the unpatched default ────
+;   Patched at: $D96E
                            bne  l_3    ; $0E56  CIA1_PRB was not $FF?
 l_2:                       lda  #$01    ; $0E58
                            sta  kbd_debounce_counter    ; $0E5A
@@ -2981,7 +3016,12 @@ l_4:                       lda  CIA1_PRB    ; $0E73
                            cmp  CIA1_PRB    ; $0E76
                            bne  l_4    ; $0E79  CIA1_PRB was not CIA1_PRB?
                            cmp  #$FF    ; $0E7B
+; ──── SMC-patched branch — static target is the unpatched default ────
+;   Patched at: $D97D
                            bne  l_2    ; $0E7D  CIA1_PRB was not $FF?
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D97D
+;   LDA writer-source inconclusive (register-sourced or chained — curate me)
                            lda  kbd_decoded_key    ; $0E7F
                            sta  kbd_decoded_key_prev    ; $0E82
                            lda  kbd_modifiers    ; $0E85
@@ -2998,28 +3038,33 @@ l_6:                       lda  CIA1_PRB    ; $0E97
                            sta  kbd_matrix_mirror,x    ; $0EA1
                            sec    ; $0EA4
                            rol  kbd_scan + $4C    ; $0EA5
-                           dex    ; $0EA8
+l_7:                       dex    ; $0EA8
                            bpl  l_5    ; $0EA9  $07 walked back 1 and had bit 7 clear?
                            ldx  #$00    ; $0EAB
                            stx  kbd_modifiers    ; $0EAD
                            stx  kbd_voice_mute    ; $0EB0
                            lda  #$FF    ; $0EB3
                            sta  CIA1_PRA    ; $0EB5
-l_7:                       lda  CIA1_PRB    ; $0EB8
+l_8:                       lda  CIA1_PRB    ; $0EB8
                            cmp  CIA1_PRB    ; $0EBB
-                           bne  l_7    ; $0EBE  CIA1_PRB was not CIA1_PRB?
+                           bne  l_8    ; $0EBE  CIA1_PRB was not CIA1_PRB?
                            cmp  #$FF    ; $0EC0
                            bne  l_2    ; $0EC2  CIA1_PRB was not $FF?
                            lda  #$00    ; $0EC4
                            sta  kbd_scan + $89    ; $0EC6
                            ldy  #$3F    ; $0EC9
-l_8:                       cpy  #$FF    ; $0ECB
+l_9:                       cpy  #$FF    ; $0ECB
+; ──── SMC-patched branch — static target is the unpatched default ────
+;   Patched at: $D99B
                            beq  kbd_scan_inner_continue.l_1    ; $0ECD  ($3F − 1) was $FF?
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D99B
+;   LDX writer-source inconclusive (register-sourced or chained — curate me)
                            ldx  #$FF    ; $0ECF  ; ← (SMC operand at $0ED0, no name)
                            lda  kbd_matrix_mirror,x    ; $0ED1
                            inc  kbd_scan + $89    ; $0ED4
                            ldx  #$07    ; $0ED7
-l_9:                       ror  a    ; $0ED9
+l_10:                      ror  a    ; $0ED9
                            bcs  kbd_scan_inner_continue.l_2    ; $0EDA
 .bend
 
@@ -3034,8 +3079,8 @@ l_9:                       ror  a    ; $0ED9
 kbd_scan_inner_continue .block
                            dey    ; $0EDC
                            dex    ; $0EDD
-                           bpl  kbd_scan.l_9    ; $0EDE  $07 walked back 1 and had bit 7 clear?
-                           bmi  kbd_scan.l_8    ; $0EE0  $07 walked back 1 and had bit 7 set?
+                           bpl  kbd_scan.l_10    ; $0EDE  $07 walked back 1 and had bit 7 clear?
+                           bmi  kbd_scan.l_9    ; $0EE0  $07 walked back 1 and had bit 7 set?
 l_1:                       jsr  modifier_extract    ; $0EE2
                            lda  #KEY_NONE    ; $0EE5
                            sta  kbd_decoded_key    ; $0EE7
@@ -3045,6 +3090,9 @@ l_2:                       sta  kbd_scan_inner_continue + $1A    ; $0EEB
                            cmp  #$FF    ; $0EF1
                            bne  l_3    ; $0EF3  kbd_scancode_lut,Y was not $FF?
                            lda  #KEY_NONE    ; $0EF5  ; ← (SMC operand at $0EF6, no name)
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D9B6
+;   JMP can flip to: JSR
                            jmp  kbd_scan_inner_continue    ; $0EF7
 l_3:                       sta  kbd_decoded_key    ; $0EFA
                            jsr  modifier_extract    ; $0EFD
@@ -3077,7 +3125,7 @@ kbd_scan_samekey_branch .block
 ;
 ;   Reached when the held-key bytes match but the modifier mask may have flipped. Internal label of kbd_scan.
 kbd_scan_samemod_branch .block
-                           bne  retry_counter_reload.l_1    ; $0F0E  kbd_modifiers_prev was not kbd_modifiers?
+                           bne  retry_counter_reload.l_2    ; $0F0E  kbd_modifiers_prev was not kbd_modifiers?
 l_1:                       dec  kbd_debounce_counter    ; $0F10
                            beq  retry_counter_reload    ; $0F13  (kbd_debounce_counter − 1) was zero?
                            lda  #$FF    ; $0F15
@@ -3097,10 +3145,13 @@ l_2:                       ldy  #$0C    ; $0F18
 ;
 ;   Resets the keyboard-state retry counter at kbd_debounce_counter to 2. Reached by →retry_counter_reload when zero from kbd_scan_samemod_branch (the retry-budget-exhausted branch of kbd_dead_trampoline's dead path).
 retry_counter_reload .block
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D952
+;   LDY can flip to: JSR
                            ldy  #$02    ; $0F1E
-                           sty  kbd_debounce_counter    ; $0F20
+l_1:                       sty  kbd_debounce_counter    ; $0F20
                            rts    ; $0F23
-l_1:                       cmp  #KEY_CRSRLR    ; $0F24
+l_2:                       cmp  #KEY_CRSRLR    ; $0F24
                            beq  kbd_scan_samemod_branch.l_1    ; $0F26  kbd_decoded_key was KEY_CRSRLR?
                            cmp  #KEY_CRSRUD    ; $0F28
                            beq  kbd_scan_samemod_branch.l_1    ; $0F2A  kbd_decoded_key was KEY_CRSRUD?
@@ -3128,6 +3179,9 @@ modifier_extract .block
                            sta  kbd_modifiers    ; $0F3E
 l_1:                       lda  kbd_matrix_row1    ; $0F41
                            and  #$10    ; $0F44
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D96B
+;   ORA can flip to: JSR
                            ora  kbd_modifiers    ; $0F46
                            sta  kbd_modifiers    ; $0F49
                            lda  kbd_matrix_mirror    ; $0F4C
@@ -3143,6 +3197,9 @@ l_1:                       lda  kbd_matrix_row1    ; $0F41
                            beq  l_2    ; $0F67  (paint_selection_glyph_write_$18 & $20) was zero?
                            lda  kbd_voice_mute    ; $0F69
                            ora  #$01    ; $0F6C
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $D97A
+;   STA can flip to: BVC
                            sta  kbd_voice_mute    ; $0F6E
 l_2:                       lda  kbd_matrix_row1    ; $0F71
                            and  #$04    ; $0F74
@@ -7839,7 +7896,7 @@ statusline_print_bare_return .block
 ; ──────────────────────────────────────────────────────────────────────
 ; push A / A←X / push A, clear statusline_scratch (status-line col cursor) to 0, write space ($20) to statusline_buffer,X for X=0..13.
 ;
-;   callers:             10 code sites: $0DB8, $0DED speedadj_status_repaint, $81A5, $8368 super_cmd_arg_prompt, $83AF statusline_tick_1, $8601, $8639 super_arg_buffer_init_1, $C607, +2 more
+;   callers:             10 code sites: $0DB8 speedadj_writeback_tail_1, $0DED speedadj_status_repaint, $81A5, $8368 super_cmd_arg_prompt, $83AF statusline_tick_1, $8601, $8639 super_arg_buffer_init_1, $C607, +2 more
 ;   inputs:              A, X
 ;   outputs:             X
 ;   registers clobbered: A, X
@@ -13037,10 +13094,10 @@ l_3:                       lda  seqED_header_color_template,x    ; $AAE9
                            sta  color_ram_row05,x    ; $AAF5
                            sta  color_ram_row06,x    ; $AAF8
                            sta  color_ram_row07,x    ; $AAFB
-                           sta  color_ram_row08,x    ; $AAFE
-                           sta  color_ram_row09,x    ; $AB01
-                           sta  color_ram_row10,x    ; $AB04
-                           sta  color_ram_row11,x    ; $AB07
+                           sta  COLOR_RAM + $140,x    ; $AAFE
+                           sta  COLOR_RAM + $168,x    ; $AB01
+                           sta  COLOR_RAM + $190,x    ; $AB04
+                           sta  COLOR_RAM + $1B8,x    ; $AB07
                            sta  color_ram_row12,x    ; $AB0A
                            sta  color_ram_row13,x    ; $AB0D
                            sta  color_ram_row14,x    ; $AB10
@@ -14944,10 +15001,10 @@ l_41:                      lda  seqED_arm_dispatch_lut,x    ; $BA8A
                            sta  color_ram_row05,x    ; $BA99
                            sta  color_ram_row06,x    ; $BA9C
                            sta  color_ram_row07,x    ; $BA9F
-                           sta  color_ram_row08,x    ; $BAA2
-                           sta  color_ram_row09,x    ; $BAA5
-                           sta  color_ram_row10,x    ; $BAA8
-                           sta  color_ram_row11,x    ; $BAAB
+                           sta  COLOR_RAM + $140,x    ; $BAA2
+                           sta  COLOR_RAM + $168,x    ; $BAA5
+                           sta  COLOR_RAM + $190,x    ; $BAA8
+                           sta  COLOR_RAM + $1B8,x    ; $BAAB
                            sta  color_ram_row12,x    ; $BAAE
                            sta  color_ram_row13,x    ; $BAB1
                            sta  color_ram_row14,x    ; $BAB4
@@ -18560,6 +18617,7 @@ sid2_self_modifier_setup .block
 ; ──────────────────────────────────────────────────────────────────────
 ; pre-save preparation chain.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Calls save_prep_markers (write $11 markers into empty song-position slots), save_prep_arranger_scan (arranger pat-num scan), save_prep_zero_pat_base (zero pat_base_lo/hi tables), then continues with the SAVE setup beyond save_prep_orchestrator.
@@ -18592,6 +18650,7 @@ save_prep_orchestrator .block
 ; ──────────────────────────────────────────────────────────────────────
 ; patches the decoder's end-of-stream bound from KERNAL_LOAD_END_LO/KERNAL_LOAD_END_HI (KERNAL LOAD's end-of-program pointer).
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Sets $02/$03 src start to ($AE-3, $AF) so decoder_block_helper walks backward from there. Called immediately after KERNAL LOAD completes, before JMP decoder_block_helper to run the decoder. The SBC #$03 backs the pointer up by 3 bytes so the first read at offset +0/+1/+2 examines the last 3 bytes of the loaded body.
@@ -18623,6 +18682,7 @@ decoder_load_setup .block
 ; ──────────────────────────────────────────────────────────────────────
 ; LOAD-decoder src-floor patcher — sets the sbc-immediate operand bytes at decoder_term_lo_smc / decoder_term_hi_smc to lo/hi of the src_floor (typically $00 / $18 = sidtab_row_lo).
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $CED4 in decoder_load_setup (3 bytes earlier)
@@ -19869,6 +19929,7 @@ decoder_pointer_init .block
 ; Decode-time pass that re-inits the decoder pointer and walks the source chain, accumulating each entry's delta.
 ;
 ;   callers:             1 code sites: $CEA4
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 load_decode_chain_walk .block
                            lda  #$00    ; $D626
@@ -20076,6 +20137,7 @@ l_2:                       ldy  #$00    ; $D701
 ; Decoder Path A/C single-byte emit.
 ;
 ;   callers:             3 code sites: $D6E7, $D6F1, $D6FE
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Reached after the path-selector at decoder_term_gate decides src+1 != $FF
@@ -20109,6 +20171,7 @@ decoder_fill_jump .block
 ; Decoder RLE-fill path.
 ;
 ;   callers:             1 code sites: $D707
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Reads count via read A=X=($02),Y at decoder_rle_lax_indy_site; src -= 3; fall into decoder_emit_byte_dec descending fill.
@@ -20155,6 +20218,7 @@ l_2:                       pla    ; $D731
 ;
 ;   callers:             2 code sites: $D712 decoder_fill_jump, $D746
 ;   inputs:              A, X, Y
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Loops X+1 times, writing the next source byte through the ($FD/$FE) destination pointer and decrementing both src and dest after each write. Exits when X wraps past $FF. Entered by the path-A/C/RLE-fill decoder arms after they've loaded the count into X and the byte (or count) into the indirect pointers.
@@ -20423,16 +20487,122 @@ decoder_context_struct_setup .block
         .byte $2C, $0D, $DD, $58, $4C, $89, $08, $A9, $07, $8D, $21, $D0, $8D, $20, $D0, $A9    ; $D8F8
         .byte $01, $D0, $05, $A9, $00, $8D, $95, $08, $CE, $95, $08, $F0, $06, $20, $06, $10    ; $D908
         .byte $4C, $AB, $08, $20, $03, $10, $A9, $00, $8D, $21, $D0, $8D, $20, $D0, $2C, $0D    ; $D918
-        .byte $DD, $40, $A2, $B6, $BD, $73, $D8, $9D, $00, $08, $CA, $D0, $F7, $AD, $5C, $71    ; $D928
-        .byte $8D, $99, $08, $AD, $5A, $71, $8D, $68, $08, $AD, $5B, $71, $8D, $6D, $08, $A2    ; $D938
-        .byte $27, $BD, $00, $73, $C9, $42, $D0, $02, $A9, $20, $9D, $F8, $0E, $9D, $08, $0E    ; $D948
-        .byte $9D, $18, $0D, $9D, $28, $0C, $BD, $28, $73, $C9, $43, $F0, $04, $C9, $4B, $D0    ; $D958
-        .byte $02, $A9, $20, $9D, $20, $0F, $9D, $30, $0E, $9D, $40, $0D, $9D, $50, $0C, $BD    ; $D968
-        .byte $50, $73, $9D, $48, $0F, $9D, $58, $0E, $9D, $68, $0D, $9D, $78, $0C, $BD, $78    ; $D978
-        .byte $73, $9D, $70, $0F, $9D, $80, $0E, $9D, $90, $0D, $9D, $A0, $0C, $BD, $A0, $73    ; $D988
-        .byte $9D, $98, $0F, $9D, $A8, $0E, $9D, $B8, $0D, $9D, $C8, $0C, $BD, $C8, $73, $9D    ; $D998
-        .byte $C0, $0F, $C9, $08, $D0, $02, $A9, $61, $C9, $14, $D0, $02, $A9, $20, $9D, $D0    ; $D9A8
-        .byte $0E, $9D, $E0, $0D, $9D, $F0, $0C, $A9, $20, $9D, $00, $0C, $CA, $10, $82, $60    ; $D9B8
+        .byte $DD, $40    ; $D928
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D92A  ram_screen_repaint
+; ──────────────────────────────────────────────────────────────────────
+; RAM-under-I/O screen repaint, reached only through the jsr_with_ram_helper trampoline.
+;
+;   outputs:             X
+;   registers clobbered: A, X
+;
+;   Runs with RAM banked in under I/O, so its operands in the colour-RAM address range read RAM/code, not the COLOR_RAM overlay. Copies the load screen template into screen RAM and stamps per-pattern markers. The bank=ram flag tells the emitter to resolve its colour-RAM-range operands as code/RAM rather than COLOR_RAM.
+ram_screen_repaint .block
+                           ldx  #$B6    ; $D92A
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $912E
+;   LDA writer-source inconclusive (register-sourced or chained — curate me)
+l_1:                       lda  $D873,x    ; $D92C
+                           sta  cold_boot_origin,x    ; $D92F
+                           dex    ; $D932
+                           bne  l_1    ; $D933  ($B6 − 1) was non-zero?
+                           lda  sub_frame_count    ; $D935
+                           sta  post_load_startup + $10    ; $D938
+                           lda  cia2_timer_lo    ; $D93B
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $AAFB, $BA9F
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+                           sta  post_load_init_decoder + $42    ; $D93E
+                           lda  cia2_timer_hi    ; $D941
+                           sta  post_load_init_decoder + $47    ; $D944
+                           ldx  #$27    ; $D947
+l_2:                       lda  sidtab_dispatch_lut1,x    ; $D949
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $923D
+;   CMP writer-source inconclusive (register-sourced or chained — curate me)
+l_3:                       cmp  #$42    ; $D94C
+                           bne  l_4    ; $D94E  sidtab_dispatch_lut1,X was not $42?
+                           lda  #$20    ; $D950
+l_4:                       sta  kbd_scan_inner_continue + $1C,x    ; $D952
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $92B3
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_5:                       sta  kbd_scan_modifier_operand_bytes + $04,x    ; $D955
+                           sta  playhead_follows_cursor + $2F,x    ; $D958
+                           sta  super_cmd_state_save + $17,x    ; $D95B
+                           lda  sidtab_dispatch_lut2,x    ; $D95E
+                           cmp  #$43    ; $D961
+                           beq  l_6    ; $D963  sidtab_dispatch_lut2,X was $43?
+                           cmp  #$4B    ; $D965
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $AAFE, $BAA2
+;   BNE writer-source inconclusive (register-sourced or chained — curate me)
+                           bne  l_7    ; $D967  sidtab_dispatch_lut2,X was not $4B?
+l_6:                       lda  #$20    ; $D969  ; ← (SMC operand at $D96A, no name)
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $934A
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_7:                       sta  retry_counter_reload.l_1,x    ; $D96B
+                           sta  paint_selection_glyph_write + $0D,x    ; $D96E
+                           sta  speedadj_bump_up.l_1,x    ; $D971
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $93BF
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_8:                       sta  super_cmd_load_fallthrough + $0E,x    ; $D974
+                           lda  sidtab_dispatch_lut3,x    ; $D977
+                           sta  modifier_extract + $16,x    ; $D97A
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $9435
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_9:                       sta  kbd_scan.l_2,x    ; $D97D
+                           sta  speedadj_shift_left + $09,x    ; $D980
+                           sta  panic_color_loop + $02,x    ; $D983
+                           lda  sidtab_dispatch_lut4,x    ; $D986
+                           sta  modifier_extract + $3E,x    ; $D989
+                           sta  kbd_scan + $39,x    ; $D98C
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $AB01, $BAA5
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+                           sta  speedadj_preset_loader + $17,x    ; $D98F
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $94C9
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_10:                      sta  sid_silence_and_reinit.l_2,x    ; $D992
+                           lda  sidtab_dispatch_lut5,x    ; $D995
+                           sta  kbd_scancode_lut + $08,x    ; $D998
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $953E
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_11:                      sta  kbd_scan.l_7,x    ; $D99B
+                           sta  speedadj_writeback_tail.l_1,x    ; $D99E
+                           sta  stop_playback + $03,x    ; $D9A1
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $95B4
+;   LDA writer-source inconclusive (register-sourced or chained — curate me)
+l_12:                      lda  sidtab_dispatch_lut6,x    ; $D9A4
+                           sta  splash_status_template_data + $1E,x    ; $D9A7
+                           cmp  #$08    ; $D9AA
+                           bne  l_13    ; $D9AC  sidtab_dispatch_lut6,X was not $08?
+                           lda  #$61    ; $D9AE
+l_13:                      cmp  #$14    ; $D9B0
+                           bne  l_14    ; $D9B2
+                           lda  #$20    ; $D9B4
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $AB04, $BAA8
+;   STA writer-source inconclusive (register-sourced or chained — curate me)
+l_14:                      sta  kbd_scan + $89,x    ; $D9B6
+                           sta  speedadj_subframe_up.l_1,x    ; $D9B9
+                           sta  playhead_follows_cursor + $07,x    ; $D9BC
+                           lda  #$20    ; $D9BF
+                           sta  mode_transition_color_arm + $30,x    ; $D9C1
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $96C3
+;   DEX writer-source inconclusive (register-sourced or chained — curate me)
+l_15:                      dex    ; $D9C4
+                           bpl  l_2    ; $D9C5  $27 walked back 1 and had bit 7 clear?
+                           rts    ; $D9C7
         .fill 1592, $00    ; $D9C8-$DFFF
 ; ─── end segment ram_under_io ───
 

@@ -6580,3 +6580,14 @@ role = "Save-encode inner loop over a pattern's bytes, masking each nibble and a
 name = "sid2_base_select_next"
 role = "Cycles the SID#2 base address to the next entry in the secondary-disk base table and re-reads its data."
 
+
+[function."$D92A"]
+name = "ram_screen_repaint"
+role = "RAM-under-I/O screen repaint, reached only through the jsr_with_ram_helper trampoline."
+bank = "ram"
+notes = "Runs with RAM banked in under I/O, so its operands in the colour-RAM address range read RAM/code, not the COLOR_RAM overlay. Copies the load screen template into screen RAM and stamps per-pattern markers. The bank=ram flag tells the emitter to resolve its colour-RAM-range operands as code/RAM rather than COLOR_RAM."
+
+[region."$D9C8"]
+name = "io_overlay_ram_tail"
+role = "Zero-fill RAM beneath the colour-RAM / CIA I/O overlay, after ram_screen_repaint; not used as code or data."
+notes = "Exposed as a distinct span once ram_screen_repaint is decoded as code; the bytes are all zero in the static image."

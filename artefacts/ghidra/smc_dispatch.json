@@ -1,4 +1,15 @@
 {
+  "$08B4": {
+    "jsr_pc": 2228,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55599
+    ],
+    "targets": [],
+    "annotated": false,
+    "discovered": true
+  },
   "$0BB2": {
     "jsr_pc": 2994,
     "description": "Banking trampoline (jsr_with_ram_helper) \u2014 the caller supplies the target in (X = low byte, Y = high byte), which the helper stores into this JSR operand before banking RAM in over the I/O area and calling. All 5 call sites are in the disk load/save path and pass an immediate target, so the dispatch set is statically complete: the four RAM-under-I/O routines below.",
@@ -33,6 +44,17 @@
       }
     ],
     "annotated": true,
+    "discovered": true
+  },
+  "$0D66": {
+    "jsr_pc": 3430,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55665
+    ],
+    "targets": [],
+    "annotated": false,
     "discovered": true
   },
   "$8575": {

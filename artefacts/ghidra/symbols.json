@@ -4483,9 +4483,27 @@
       "is_primary": true
     },
     {
+      "addr": "$0868",
+      "name": "LAB_0867+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$086D",
+      "name": "LAB_086c+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0889",
       "name": "post_load_startup",
       "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$0899",
+      "name": "LAB_0898+1",
+      "source": "DEFAULT",
       "is_primary": true
     },
     {
@@ -4497,6 +4515,18 @@
     {
       "addr": "$08AB",
       "name": "LAB_08aa+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$08B5",
+      "name": "LAB_08b4+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$08B6",
+      "name": "LAB_08b4+2",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -4933,8 +4963,26 @@
       "is_primary": true
     },
     {
+      "addr": "$0C27",
+      "name": "LAB_0c26+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0C39",
       "name": "FUN_0c39",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0C4E",
+      "name": "LAB_0c4e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0C4F",
+      "name": "LAB_0c4e+1",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -4959,6 +5007,12 @@
     {
       "addr": "$0C76",
       "name": "LAB_0c76",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0C77",
+      "name": "LAB_0c76+1",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5011,6 +5065,18 @@
       "is_primary": true
     },
     {
+      "addr": "$0C9E",
+      "name": "LAB_0c9e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0C9F",
+      "name": "LAB_0c9e+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0CA3",
       "name": "LAB_0ca3",
       "source": "DEFAULT",
@@ -5025,6 +5091,18 @@
     {
       "addr": "$0CC5",
       "name": "FUN_0cc5",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0CC6",
+      "name": "FUN_0cc5+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0CC7",
+      "name": "LAB_0cc7",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5053,6 +5131,12 @@
       "is_primary": true
     },
     {
+      "addr": "$0CEF",
+      "name": "LAB_0cee+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0CF9",
       "name": "LAB_0cf9",
       "source": "DEFAULT",
@@ -5061,6 +5145,12 @@
     {
       "addr": "$0D0A",
       "name": "LAB_0d0a",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0D17",
+      "name": "LAB_0d17",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5089,6 +5179,18 @@
       "is_primary": true
     },
     {
+      "addr": "$0D3E",
+      "name": "LAB_0d3d+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0D3F",
+      "name": "LAB_0d3d+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0D4B",
       "name": "speedadj_bump_down",
       "source": "USER_DEFINED",
@@ -5113,6 +5215,18 @@
       "is_primary": true
     },
     {
+      "addr": "$0D66",
+      "name": "LAB_0d66",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0D67",
+      "name": "LAB_0d66+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0D69",
       "name": "speedadj_shift_right",
       "source": "USER_DEFINED",
@@ -5133,6 +5247,12 @@
     {
       "addr": "$0D8E",
       "name": "LAB_0d8e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0D8F",
+      "name": "LAB_0d8e+1",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5173,9 +5293,27 @@
       "is_primary": true
     },
     {
+      "addr": "$0DB6",
+      "name": "LAB_0db5+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0DB7",
+      "name": "LAB_0db5+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0DD6",
       "name": "speedadj_subframe_up",
       "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$0DDF",
+      "name": "LAB_0ddd+2",
+      "source": "DEFAULT",
       "is_primary": true
     },
     {
@@ -5193,6 +5331,12 @@
     {
       "addr": "$0DF2",
       "name": "LAB_0df2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E07",
+      "name": "DAT_0e07",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5229,6 +5373,18 @@
     {
       "addr": "$0E2C",
       "name": "LAB_0e2c",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E2E",
+      "name": "LAB_0e2c+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E2F",
+      "name": "LAB_0e2f",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5311,6 +5467,18 @@
       "is_primary": true
     },
     {
+      "addr": "$0E56",
+      "name": "LAB_0e56",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E57",
+      "name": "LAB_0e56+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0E58",
       "name": "LAB_0e58",
       "source": "DEFAULT",
@@ -5325,6 +5493,18 @@
     {
       "addr": "$0E73",
       "name": "LAB_0e73",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E7E",
+      "name": "LAB_0e7d+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0E7F",
+      "name": "LAB_0e7f",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5347,6 +5527,18 @@
       "is_primary": true
     },
     {
+      "addr": "$0EA6",
+      "name": "LAB_0ea5+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0EA7",
+      "name": "LAB_0ea5+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0EB8",
       "name": "LAB_0eb8",
       "source": "DEFAULT",
@@ -5355,6 +5547,18 @@
     {
       "addr": "$0ECB",
       "name": "LAB_0ecb",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0ECE",
+      "name": "LAB_0ecd+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0ECF",
+      "name": "LAB_0ecf",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5395,6 +5599,12 @@
       "is_primary": true
     },
     {
+      "addr": "$0EF7",
+      "name": "LAB_0ef7",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0EFA",
       "name": "LAB_0efa",
       "source": "DEFAULT",
@@ -5419,6 +5629,12 @@
       "is_primary": true
     },
     {
+      "addr": "$0F1F",
+      "name": "retry_counter_reload+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0F24",
       "name": "LAB_0f24",
       "source": "DEFAULT",
@@ -5439,6 +5655,30 @@
     {
       "addr": "$0F41",
       "name": "LAB_0f41",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0F46",
+      "name": "LAB_0f46",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0F47",
+      "name": "LAB_0f46+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0F6E",
+      "name": "LAB_0f6e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0F6F",
+      "name": "LAB_0f6e+1",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -5467,8 +5707,38 @@
       "is_primary": true
     },
     {
+      "addr": "$0F96",
+      "name": "DAT_0f96",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0F97",
+      "name": "DAT_0f97",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0FBE",
+      "name": "DAT_0fbe",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0FBF",
+      "name": "DAT_0fbf",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0FCD",
       "name": "DAT_0fcd",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0FE7",
+      "name": "DAT_0fe7",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -19915,200 +20185,236 @@
       "is_primary": true
     },
     {
-      "addr": "$D92A",
-      "name": "BYTE_d92a",
+      "addr": "$D928",
+      "name": "BYTE_d928",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
+      "addr": "$D929",
+      "name": "BYTE_d929",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D92A",
+      "name": "ram_screen_repaint",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$D92C",
-      "name": "BYTE_d92c",
+      "name": "LAB_d92c",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D92D",
-      "name": "BYTE_d92d",
+      "name": "LAB_d92c+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D93E",
-      "name": "BYTE_d93e",
+      "name": "LAB_d93e",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D93F",
-      "name": "BYTE_d93f",
+      "name": "LAB_d93e+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D942",
-      "name": "BYTE_d942",
+      "name": "LAB_d941+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D943",
-      "name": "BYTE_d943",
+      "name": "LAB_d941+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D949",
+      "name": "LAB_d949",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D94B",
-      "name": "BYTE_d94b",
+      "name": "LAB_d949+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D94C",
-      "name": "BYTE_d94c",
+      "name": "LAB_d94c",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D952",
+      "name": "LAB_d952",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D954",
-      "name": "BYTE_d954",
+      "name": "LAB_d952+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D955",
-      "name": "BYTE_d955",
+      "name": "LAB_d955",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D966",
-      "name": "BYTE_d966",
+      "name": "LAB_d965+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D967",
-      "name": "BYTE_d967",
+      "name": "LAB_d967",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D969",
+      "name": "LAB_d969",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D96A",
-      "name": "BYTE_d96a",
+      "name": "LAB_d969+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D96B",
-      "name": "BYTE_d96b",
+      "name": "LAB_d96b",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D973",
-      "name": "BYTE_d973",
+      "name": "LAB_d971+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D974",
-      "name": "BYTE_d974",
+      "name": "LAB_d974",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D97C",
-      "name": "BYTE_d97c",
+      "name": "LAB_d97a+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D97D",
-      "name": "BYTE_d97d",
+      "name": "LAB_d97d",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D98E",
-      "name": "BYTE_d98e",
+      "name": "LAB_d98c+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D98F",
-      "name": "BYTE_d98f",
+      "name": "LAB_d98f",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D992",
-      "name": "BYTE_d992",
+      "name": "LAB_d992",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D993",
-      "name": "BYTE_d993",
+      "name": "LAB_d992+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D99B",
-      "name": "BYTE_d99b",
+      "name": "LAB_d99b",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D99C",
-      "name": "BYTE_d99c",
+      "name": "LAB_d99b+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9A4",
-      "name": "BYTE_d9a4",
+      "name": "LAB_d9a4",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9A5",
-      "name": "BYTE_d9a5",
+      "name": "LAB_d9a4+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D9B0",
+      "name": "LAB_d9b0",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9B6",
-      "name": "BYTE_d9b6",
+      "name": "LAB_d9b6",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9B7",
-      "name": "BYTE_d9b7",
+      "name": "LAB_d9b6+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9BA",
-      "name": "BYTE_d9ba",
+      "name": "LAB_d9b9+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9BB",
-      "name": "BYTE_d9bb",
+      "name": "LAB_d9b9+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9C3",
-      "name": "BYTE_d9c3",
+      "name": "LAB_d9c1+2",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$D9C4",
-      "name": "BYTE_d9c4",
+      "name": "LAB_d9c4",
       "source": "DEFAULT",
       "is_primary": true
     },
