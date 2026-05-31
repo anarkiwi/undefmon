@@ -1,7 +1,7 @@
 {
   "$1026": {
     "host_pc": 4134,
-    "description": "STX -> JMP: skip voice-0's SID writes. $C5A6 writes `jmp $1053` here (jump to the V1 write band) when V0's wave is off. Restored to STX when the voice plays again.",
+    "description": "STX -> JMP: when voice 0's wave is off, the SID-write band entry is overwritten with a jump that skips V0's SID writes; restored to STX when the voice plays again.",
     "patch_sources_annotated": [
       50598
     ],
@@ -14,6 +14,13 @@
     ],
     "candidate_opcodes_discovered": [
       "BPL"
+    ],
+    "targets": [
+      {
+        "addr": "$1053",
+        "name": "v1_sid_write_band",
+        "context": "skip V0 SID writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -21,7 +28,7 @@
   },
   "$1057": {
     "host_pc": 4183,
-    "description": "STX -> JMP: skip voice-1's SID writes. $C5C8 writes `jmp $1084` here (jump to the V2 write band) when V1's wave is off.",
+    "description": "STX -> JMP: skips voice 1's SID writes when V1's wave is off.",
     "patch_sources_annotated": [
       50632
     ],
@@ -34,6 +41,13 @@
     ],
     "candidate_opcodes_discovered": [
       "BPL"
+    ],
+    "targets": [
+      {
+        "addr": "$1084",
+        "name": "v2_sid_write_band",
+        "context": "skip V1 SID writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -41,7 +55,7 @@
   },
   "$1088": {
     "host_pc": 4232,
-    "description": "STX -> JMP: skip voice-2's SID writes. $C5EA writes `jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is off.",
+    "description": "STX -> JMP: skips voice 2's SID writes when V2's wave is off.",
     "patch_sources_annotated": [
       50666
     ],
@@ -54,6 +68,13 @@
     ],
     "candidate_opcodes_discovered": [
       "BPL"
+    ],
+    "targets": [
+      {
+        "addr": "$10A9",
+        "name": "sid1_globals_tail",
+        "context": "skip V2 SID writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -77,6 +98,7 @@
     "candidate_opcodes_discovered": [
       "SBC"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": true,
     "discovered": true
@@ -97,6 +119,7 @@
       "SBC"
     ],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": true,
     "discovered": true
@@ -117,6 +140,7 @@
     "candidate_opcodes_discovered": [
       "NOP"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": true,
     "discovered": true
@@ -139,6 +163,7 @@
     "candidate_opcodes_discovered": [
       "RTS"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": true,
     "discovered": true
@@ -155,6 +180,7 @@
     "candidate_opcodes_discovered": [
       "BIT"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -173,6 +199,7 @@
     "current_mnem": "BRK",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -187,13 +214,14 @@
     "current_mnem": "BEQ",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
   },
   "$C826": {
     "host_pc": 51238,
-    "description": "STX -> JMP: SID#2 analogue of $1026 \u2014 skip SID#2 voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave is off.",
+    "description": "STX -> JMP: SID#2 analogue of the V0 voice-skip \u2014 skips SID#2 voice 0's writes when its wave is off.",
     "patch_sources_annotated": [
       50493
     ],
@@ -206,6 +234,13 @@
     ],
     "candidate_opcodes_discovered": [
       "INY"
+    ],
+    "targets": [
+      {
+        "addr": "$C853",
+        "name": "sid2_v1_sid_write_band",
+        "context": "skip SID#2 V0 writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -213,7 +248,7 @@
   },
   "$C857": {
     "host_pc": 51287,
-    "description": "STX -> JMP: skip SID#2 voice-1's writes. $C55F writes `jmp $C884` here when the voice's wave is off.",
+    "description": "STX -> JMP: skips SID#2 voice 1's writes when its wave is off.",
     "patch_sources_annotated": [
       50527
     ],
@@ -226,6 +261,13 @@
     ],
     "candidate_opcodes_discovered": [
       "INY"
+    ],
+    "targets": [
+      {
+        "addr": "$C884",
+        "name": "sid2_v2_sid_write_band",
+        "context": "skip SID#2 V1 writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -233,7 +275,7 @@
   },
   "$C888": {
     "host_pc": 51336,
-    "description": "STX -> JMP: skip SID#2 voice-2's writes. $C581 writes `jmp $C8A9` here when the voice's wave is off.",
+    "description": "STX -> JMP: skips SID#2 voice 2's writes when its wave is off.",
     "patch_sources_annotated": [
       50561
     ],
@@ -246,6 +288,13 @@
     ],
     "candidate_opcodes_discovered": [
       "INY"
+    ],
+    "targets": [
+      {
+        "addr": "$C8A9",
+        "name": "sid2_globals_tail",
+        "context": "skip SID#2 V2 writes"
+      }
     ],
     "inconclusive": false,
     "annotated": true,
@@ -267,6 +316,7 @@
     "candidate_opcodes_discovered": [
       "NOP"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": true,
     "discovered": true
@@ -283,6 +333,7 @@
     "candidate_opcodes_discovered": [
       "BIT"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -297,6 +348,7 @@
     "current_mnem": "RTS",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -313,6 +365,7 @@
     "candidate_opcodes_discovered": [
       "STY"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -329,6 +382,7 @@
     "candidate_opcodes_discovered": [
       "LDY"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -345,6 +399,7 @@
     "candidate_opcodes_discovered": [
       "CPY"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -361,6 +416,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -379,6 +435,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -394,6 +451,7 @@
     "current_mnem": "ADC",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -408,6 +466,7 @@
     "current_mnem": "STA",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -422,6 +481,7 @@
     "current_mnem": "BCC",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -444,6 +504,7 @@
       "ASL",
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -458,6 +519,7 @@
     "current_mnem": "STA",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -472,6 +534,7 @@
     "current_mnem": "RTS",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -488,6 +551,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -502,6 +566,7 @@
     "current_mnem": "LDA",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -516,6 +581,7 @@
     "current_mnem": "INY",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -532,6 +598,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -548,6 +615,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -566,6 +634,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -583,6 +652,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -598,6 +668,7 @@
     "current_mnem": "INY",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -615,6 +686,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -629,6 +701,7 @@
     "current_mnem": "BMI",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true
@@ -646,6 +719,7 @@
     "candidate_opcodes_discovered": [
       "BRK"
     ],
+    "targets": [],
     "inconclusive": false,
     "annotated": false,
     "discovered": true
@@ -660,6 +734,7 @@
     "current_mnem": "BEQ",
     "candidate_opcodes_annotated": [],
     "candidate_opcodes_discovered": [],
+    "targets": [],
     "inconclusive": true,
     "annotated": false,
     "discovered": true

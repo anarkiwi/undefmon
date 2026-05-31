@@ -6220,43 +6220,47 @@ targets = []  # register-sourced; not statically enumerable
 # STA <here>` — the auto-tracer reads the adjacent `LDY #hi` immediate
 # and mis-guesses the flip target, so curate candidate_opcodes = JMP.
 [smc_opcode."$1026"]
-description = """STX -> JMP: skip voice-0's SID writes. $C5A6 writes \
-`jmp $1053` here (jump to the V1 write band) when V0's wave is off. \
-Restored to STX when the voice plays again."""
+description = """STX -> JMP: when voice 0's wave is off, the SID-write \
+band entry is overwritten with a jump that skips V0's SID writes; \
+restored to STX when the voice plays again."""
 patch_sources = ["$C5A6"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$1053", name = "v1_sid_write_band", context = "skip V0 SID writes" }]
 
 [smc_opcode."$1057"]
-description = """STX -> JMP: skip voice-1's SID writes. $C5C8 writes \
-`jmp $1084` here (jump to the V2 write band) when V1's wave is off."""
+description = """STX -> JMP: skips voice 1's SID writes when V1's wave \
+is off."""
 patch_sources = ["$C5C8"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$1084", name = "v2_sid_write_band", context = "skip V1 SID writes" }]
 
 [smc_opcode."$1088"]
-description = """STX -> JMP: skip voice-2's SID writes. $C5EA writes \
-`jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is \
-off."""
+description = """STX -> JMP: skips voice 2's SID writes when V2's wave \
+is off."""
 patch_sources = ["$C5EA"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$10A9", name = "sid1_globals_tail", context = "skip V2 SID writes" }]
 
 [smc_opcode."$C826"]
-description = """STX -> JMP: SID#2 analogue of $1026 — skip SID#2 \
-voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave \
-is off."""
+description = """STX -> JMP: SID#2 analogue of the V0 voice-skip — \
+skips SID#2 voice 0's writes when its wave is off."""
 patch_sources = ["$C53D"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$C853", name = "sid2_v1_sid_write_band", context = "skip SID#2 V0 writes" }]
 
 [smc_opcode."$C857"]
-description = """STX -> JMP: skip SID#2 voice-1's writes. $C55F writes \
-`jmp $C884` here when the voice's wave is off."""
+description = """STX -> JMP: skips SID#2 voice 1's writes when its wave \
+is off."""
 patch_sources = ["$C55F"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$C884", name = "sid2_v2_sid_write_band", context = "skip SID#2 V1 writes" }]
 
 [smc_opcode."$C888"]
-description = """STX -> JMP: skip SID#2 voice-2's writes. $C581 writes \
-`jmp $C8A9` here when the voice's wave is off."""
+description = """STX -> JMP: skips SID#2 voice 2's writes when its wave \
+is off."""
 patch_sources = ["$C581"]
 candidate_opcodes = ["JMP"]
+targets = [{ addr = "$C8A9", name = "sid2_globals_tail", context = "skip SID#2 V2 writes" }]
 
 # Filter cutoff-slide direction. The accumulator's ADC opcode is flipped
 # to SBC to ramp the cutoff down instead of up. Both the lo-byte step

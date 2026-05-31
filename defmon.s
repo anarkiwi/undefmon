@@ -1944,7 +1944,7 @@ l_5:                       cmp  #$30    ; $09BF
                            clc    ; $09CF
                            adc  voice_selector_lut_v4,x    ; $09D0
                            cmp  voice_selector    ; $09D3
-                           bne  l_8    ; $09D6
+                           bne  l_8    ; $09D6  A was not voice_selector?
                            jmp  main_loop_close    ; $09D8
 l_6:                       cmp  #$24    ; $09DB
                            bne  l_7    ; $09DD  kbd_modifiers was not $24?
@@ -3196,7 +3196,9 @@ player_play_body .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5A6
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-0's SID writes. $C5A6 writes `jmp $1053` here (jump to the V1 write band) when V0's wave is off. Restored to STX when the voice plays again.
+;   When patched, jumps to:
+;     $1053  v1_sid_write_band             [skip V0 SID writes]
+;   STX -> JMP: when voice 0's wave is off, the SID-write band entry is overwritten with a jump that skips V0's SID writes; restored to STX when the voice plays again.
 l_1:                       stx  SID_V1_PW_LO    ; $1026
                            sta  save_encoder_byte_counter_acc.SID_V1_PW_HI    ; $1029
                            ldx  #$00    ; $102C  ; ← slide_acc_commit_lo
@@ -3228,7 +3230,9 @@ v1_sid_write_band .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5C8
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-1's SID writes. $C5C8 writes `jmp $1084` here (jump to the V2 write band) when V1's wave is off.
+;   When patched, jumps to:
+;     $1084  v2_sid_write_band             [skip V1 SID writes]
+;   STX -> JMP: skips voice 1's SID writes when V1's wave is off.
 l_1:                       stx  save_encoder_byte_counter_acc.SID_V2_PW_LO    ; $1057
                            sta  SID_V2_PW_HI    ; $105A
                            ldx  #$00    ; $105D
@@ -3260,7 +3264,9 @@ v2_sid_write_band .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5EA
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-2's SID writes. $C5EA writes `jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is off.
+;   When patched, jumps to:
+;     $10A9  sid1_globals_tail             [skip V2 SID writes]
+;   STX -> JMP: skips voice 2's SID writes when V2's wave is off.
 l_1:                       stx  save_encoder_byte_counter_acc.SID_V3_PW_LO    ; $1088
                            sta  SID_V3_PW_HI    ; $108B
                            ldx  #$00    ; $108E
@@ -3322,9 +3328,9 @@ filter_cutoff_slide_adc_opcode_smc2: adc  #$00    ; $10BF  ; ← filter_cutoff_s
                            lda  filter_cutoff_slide_threshold_reload    ; $10C3
 l_1:                       sta  filter_cutoff_slide_acc_hi    ; $10C6
                            adc  #$00    ; $10C9  ; ← filter_cutoff_slide_saturation_step
-                           bmi  l_2    ; $10CB
+                           bmi  l_2    ; $10CB  (A + $00) had bit 7 set?
                            cmp  #$02    ; $10CD  ; ← filter_cutoff_slide_threshold_reload
-                           bcs  filter_slide_output_opcode    ; $10CF
+                           bcs  filter_slide_output_opcode    ; $10CF  A was $02 or above?
 l_2:                       lda  filter_cutoff_slide_threshold_reload    ; $10D1
 .bend
 
@@ -6437,7 +6443,7 @@ l_5:                       cpx  filename_prompt_row_smc    ; $793E
                            sta  save_name_buf_marker,x    ; $794C
                            inc  save_name_buf_len    ; $794F
 l_6:                       cmp  #$3F    ; $7952
-                           bcs  l_7    ; $7954
+                           bcs  l_7    ; $7954  A was $3F or above?
                            sta  SCREEN_RAM_ROW0_COL1,x    ; $7956
                            sta  save_name_buf_marker,x    ; $7959
                            inc  save_name_buf_len    ; $795C
@@ -8702,9 +8708,9 @@ l_2:                       lda  hex_digit_hi_lut,x    ; $8809
                            lda  hex_digit_lo_lut,x    ; $880F
                            sta  SCREEN_RAM_ROW0_COL39    ; $8812
                            tya    ; $8815
-                           bmi  l_3    ; $8816
+                           bmi  l_3    ; $8816  A had bit 7 set?
                            cmp  filter_cutoff_slide_threshold_reload    ; $8818
-                           bcs  l_4    ; $881B
+                           bcs  l_4    ; $881B  A was filter_cutoff_slide_threshold_reload or above?
 l_3:                       lda  filter_cutoff_slide_threshold_reload    ; $881D
 l_4:                       tax    ; $8820
                            lda  hex_digit_hi_lut,x    ; $8821
@@ -12510,7 +12516,7 @@ l_89:                      jsr  l_91    ; $A9DF
 l_90:                      inx    ; $A9E7
                            sec    ; $A9E8
                            sbc  #$0C    ; $A9E9
-                           bpl  l_90    ; $A9EB
+                           bpl  l_90    ; $A9EB  (A − $0C) had bit 7 clear?
                            lda  hex_digit_rvs_screencode,x    ; $A9ED
                            sta  SCREEN_RAM + $3E7    ; $A9F0
                            rts    ; $A9F3
@@ -13425,7 +13431,7 @@ seqED_step_cursor_increment .block
                            adc  step_cursor    ; $B268
 ;     compare = $20 → →skip when no-carry.
                            cmp  #$20    ; $B26B
-                           bcc  l_1    ; $B26D
+                           bcc  l_1    ; $B26D  A was below $20?
 ;     increment Y (wrap to next page) / compare Y = page_offset (page limit) / →skip when zero-inc.
                            iny    ; $B26F
 l_1:                       cpy  super_cmd_state_71d0    ; $B270
@@ -13507,7 +13513,7 @@ l_1:                       lda  voice_selector    ; $B2CA
                            clc    ; $B2CD
                            adc  #$09    ; $B2CE
                            cmp  #$1D    ; $B2D0
-                           bcs  post_write_paint_tail.l_1    ; $B2D2
+                           bcs  post_write_paint_tail.l_1    ; $B2D2  A was $1D or above?
                            sta  voice_selector    ; $B2D4
                            inc  super_cmd_state_71cf    ; $B2D7
                            rts    ; $B2DA
@@ -13562,12 +13568,12 @@ seqED_cursor_walk_dispatcher .block
                            adc  step_cursor    ; $B31C
                            ldy  page_pair_counter    ; $B31F
                            cmp  #$20    ; $B322
-                           bcc  l_1    ; $B324
+                           bcc  l_1    ; $B324  A was below $20?
                            iny    ; $B326
 l_1:                       cpy  #$FF    ; $B327
                            bne  l_2    ; $B329  page_pair_counter was not $FF?
                            cmp  #$1F    ; $B32B
-                           bne  l_2    ; $B32D
+                           bne  l_2    ; $B32D  A was not $1F?
                            jsr  post_write_paint_tail.l_2    ; $B32F
 l_2:                       lda  cursor_walk_x_offset_smc    ; $B332
                            cmp  #$08    ; $B335
@@ -13607,7 +13613,7 @@ l_2:                       lda  step_cursor    ; $B36B
                            clc    ; $B36E
                            adc  #$01    ; $B36F
                            cmp  #$20    ; $B371
-                           bne  l_3    ; $B373
+                           bne  l_3    ; $B373  A was not $20?
                            inc  page_pair_counter    ; $B375
                            lda  #$00    ; $B378
 l_3:                       sta  step_cursor    ; $B37A
@@ -15309,7 +15315,7 @@ sidtab_row_decoder .block
 ;   during the decode window.
 pitch_lut_generator_inner_loop .block
                            adc  #$0F    ; $BE53
-                           bcc  l_1    ; $BE55
+                           bcc  l_1    ; $BE55  (A + $0F) shifted-out bit was 0?
                            inc  zp_ptr1_hi    ; $BE57
                            clc    ; $BE59
 l_1:                       dex    ; $BE5A
@@ -15604,7 +15610,7 @@ l_1:                       lda  chipview_cursor_x_save    ; $C023
                            bpl  l_2    ; $C02A  (chipview_cursor_x_save + $C061) had bit 7 clear?
                            lda  #$21    ; $C02C
 l_2:                       cmp  #$22    ; $C02E
-                           bcc  l_3    ; $C030
+                           bcc  l_3    ; $C030  A was below $22?
                            lda  #$00    ; $C032
 l_3:                       sta  chipview_cursor_x_save    ; $C034
                            tax    ; $C037
@@ -15617,7 +15623,7 @@ l_3:                       sta  chipview_cursor_x_save    ; $C034
                            sta  chipview_cursor_y_save    ; $C046
                            bmi  cursor_redraw_request.l_2    ; $C049  (chipview_cursor_y_save + $C062) had bit 7 set?
                            cmp  #$10    ; $C04B
-                           bcs  cursor_redraw_request.l_1    ; $C04D
+                           bcs  cursor_redraw_request.l_1    ; $C04D  A was $10 or above?
                            lda  chipview_cursor_x_save    ; $C04F
                            sta  chip_view_cursor_x    ; $C052
                            lda  chipview_cursor_y_save    ; $C055
@@ -16651,7 +16657,9 @@ sid2_register_write_body .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C53D
 ;   STX can flip to: JMP
-;   STX -> JMP: SID#2 analogue of $1026 — skip SID#2 voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C853  sid2_v1_sid_write_band        [skip SID#2 V0 writes]
+;   STX -> JMP: SID#2 analogue of the V0 voice-skip — skips SID#2 voice 0's writes when its wave is off.
 l_1:                       stx  save_encoder_jp_chain_walker.SID2_V1_PW_LO    ; $C826
                            sta  SID2_V1_PW_HI    ; $C829
                            ldx  #$00    ; $C82C  ; ← sid2_v0_voice_record_slide_lo
@@ -16672,7 +16680,9 @@ l_2:                       ldx  #$00    ; $C853
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C55F
 ;   STX can flip to: JMP
-;   STX -> JMP: skip SID#2 voice-1's writes. $C55F writes `jmp $C884` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C884  sid2_v2_sid_write_band        [skip SID#2 V1 writes]
+;   STX -> JMP: skips SID#2 voice 1's writes when its wave is off.
 l_3:                       stx  SID2_V2_PW_LO    ; $C857
                            sta  SID2_V2_PW_HI    ; $C85A
                            ldx  #$00    ; $C85D
@@ -16693,7 +16703,9 @@ l_4:                       ldx  #$00    ; $C884
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C581
 ;   STX can flip to: JMP
-;   STX -> JMP: skip SID#2 voice-2's writes. $C581 writes `jmp $C8A9` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C8A9  sid2_globals_tail             [skip SID#2 V2 writes]
+;   STX -> JMP: skips SID#2 voice 2's writes when its wave is off.
 l_5:                       stx  SID2_V3_PW_LO    ; $C888
                            sta  SID2_V3_PW_HI    ; $C88B
                            ldx  #$00    ; $C88E
@@ -16722,9 +16734,9 @@ l_5:                       stx  SID2_V3_PW_LO    ; $C888
                            lda  sid2_v1_voice_record_slot_a    ; $C8C3
 l_6:                       sta  sid2_frame_state_c8be    ; $C8C6
                            adc  #$00    ; $C8C9  ; ← sid2_cascade_pre_counter
-                           bmi  l_7    ; $C8CB
+                           bmi  l_7    ; $C8CB  (A + $00) had bit 7 set?
                            cmp  #$02    ; $C8CD  ; ← sid2_v1_voice_record_slot_a
-                           bcs  l_8    ; $C8CF
+                           bcs  l_8    ; $C8CF  A was $02 or above?
 l_7:                       lda  sid2_v1_voice_record_slot_a    ; $C8D1
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $CD1D
@@ -18192,7 +18204,7 @@ l_8:                       lda  pat_num_occupancy_table    ; $D2C5
                            sbc  #$02    ; $D2C9
                            bcc  l_6    ; $D2CB  (pat_num_occupancy_table − $02) shifted-out bit was 0?
                            cmp  #$10    ; $D2CD
-                           bcs  l_7    ; $D2CF
+                           bcs  l_7    ; $D2CF  A was $10 or above?
                            ora  pat_num_occupancy_table_d309    ; $D2D1
                            sta  (zp_decoder_dest_lo),y    ; $D2D4
                            jsr  save_encoder_y_plus_4_stride    ; $D2D6
@@ -18259,10 +18271,10 @@ l_4:                       lda  (zp_decoder_dest_lo),y    ; $D31D
                            adc  #$04    ; $D323
                            tay    ; $D325
                            cpy  #$80    ; $D326
-                           bne  l_4    ; $D328
-                           beq  l_6    ; $D32A
+                           bne  l_4    ; $D328  A was not $80?
+                           beq  l_6    ; $D32A  A was $80?
 l_5:                       and  #$70    ; $D32C
-                           bne  l_6    ; $D32E
+                           bne  l_6    ; $D32E  (A & $70) was non-zero?
                            lda  (zp_decoder_dest_lo),y    ; $D330
                            and  #$0F    ; $D332
                            sta  save_encoder_pad_byte    ; $D334
@@ -18277,7 +18289,7 @@ l_5:                       and  #$70    ; $D32C
                            adc  save_encoder_pad_byte    ; $D343
                            adc  #$02    ; $D346
                            cmp  #$10    ; $D348
-                           bcs  l_6    ; $D34A
+                           bcs  l_6    ; $D34A  A was $10 or above?
                            pha    ; $D34C
                            lda  (zp_decoder_dest_lo),y    ; $D34D
                            and  #$F0    ; $D34F
@@ -18681,7 +18693,7 @@ l_6:                       lda  #$FF    ; $D64A  ; ← decoder_save_state_d64b
                            sbc  zp_ptr1_lo    ; $D64D
                            eor  #$FF    ; $D64F
                            sta  decoder_pointer_init + $53    ; $D651
-                           beq  l_7    ; $D654
+                           beq  l_7    ; $D654  (A ^ $FF) was zero?
                            dec  decoder_pointer_init + $53    ; $D656
 l_7:                       bcs  l_8    ; $D659
                            lda  #$FF    ; $D65B  ; ← decoder_save_state_d65c
@@ -19298,14 +19310,14 @@ seqLIST_cursor_step_body .block
                            sta  seqlist_step_row_smc    ; $E180
                            bmi  l_3    ; $E183  (seqlist_step_row_smc + seqlist_step_dx_smc) had bit 7 set?
                            cmp  #$06    ; $E185
-                           bcs  l_1    ; $E187
+                           bcs  l_1    ; $E187  A was $06 or above?
                            lda  seqlist_step_col_smc    ; $E189
                            clc    ; $E18C
                            adc  seqlist_step_dy_smc    ; $E18D
                            sta  seqlist_step_col_smc    ; $E190
                            bmi  l_5    ; $E193  (seqlist_step_col_smc + seqlist_step_dy_smc) had bit 7 set?
                            cmp  #$09    ; $E195
-                           bcs  l_4    ; $E197
+                           bcs  l_4    ; $E197  A was $09 or above?
                            lda  seqlist_step_row_smc    ; $E199
                            sta  seqlist_col_cursor    ; $E19C
                            lda  seqlist_step_col_smc    ; $E19F
@@ -19354,7 +19366,7 @@ l_1:                       pha    ; $E1E3
                            clc    ; $E1E7
                            adc  #$15    ; $E1E8
                            cmp  super_cmd_state_71d0    ; $E1EA
-                           bcs  l_2    ; $E1ED
+                           bcs  l_2    ; $E1ED  A was super_cmd_state_71d0 or above?
                            lda  super_cmd_state_71d0    ; $E1EF
                            sec    ; $E1F2
                            sbc  #$15    ; $E1F3
@@ -19614,25 +19626,25 @@ writer_seqlist_row_insert .block
 l_1:                       ldy  #$00    ; $E44A
                            clc    ; $E44C
                            adc  #$01    ; $E44D
-                           bmi  l_5    ; $E44F
+                           bmi  l_5    ; $E44F  (A + $01) had bit 7 set?
 l_2:                       ldx  arranger_v0_sid1,y    ; $E451
                            bmi  l_3    ; $E454  arranger_v0_sid1,Y had bit 7 set?
                            cmp  arranger_v0_sid1,y    ; $E456
-                           beq  l_1    ; $E459
+                           beq  l_1    ; $E459  A was arranger_v0_sid1,Y?
                            cmp  arranger_v1_sid1,y    ; $E45B
-                           beq  l_1    ; $E45E
+                           beq  l_1    ; $E45E  A was arranger_v1_sid1,Y?
                            cmp  arranger_v2_sid1,y    ; $E460
-                           beq  l_1    ; $E463
+                           beq  l_1    ; $E463  A was arranger_v2_sid1,Y?
 l_3:                       ldx  stereo_enable    ; $E465
                            beq  l_4    ; $E468  stereo_enable was STEREO_OFF?
                            ldx  arranger_v0_sid1,y    ; $E46A
                            bmi  l_4    ; $E46D  arranger_v0_sid1,Y had bit 7 set?
                            cmp  arranger_v3_sid2,y    ; $E46F
-                           beq  l_1    ; $E472
+                           beq  l_1    ; $E472  A was arranger_v3_sid2,Y?
                            cmp  arranger_v4_sid2,y    ; $E474
-                           beq  l_1    ; $E477
+                           beq  l_1    ; $E477  A was arranger_v4_sid2,Y?
                            cmp  arranger_v5_sid2,y    ; $E479
-                           beq  l_1    ; $E47C
+                           beq  l_1    ; $E47C  A was arranger_v5_sid2,Y?
 l_4:                       iny    ; $E47E
                            bne  l_2    ; $E47F  ($00 + 1) was non-zero?
                            ldy  #$00    ; $E481

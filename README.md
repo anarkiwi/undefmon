@@ -94,11 +94,12 @@ Annotation catalogue (`tools/re/annotations.toml`):
   sites, 11 SMC-opcode-flip sites, 9 SMC-branch sites, 1
   refuted-hypothesis entry
 
-Comparison-site dataflow (`build/cmp_facts.json`, 1,629 branches):
+Comparison-site dataflow (`build/cmp_facts.json`, 1,630 branches):
 
-- 1,499 resolved (92.0%) — operand-based, var-load, indirect-load,
-  immediate, transformed, or carried from the JSR caller
-- 81 unknown (5.0%)
+- 1,533 with a renderable lhs (94.0%) — operand-based, var-load,
+  indirect-load, immediate, transformed, carried from the JSR caller,
+  or a register-level lhs (`A < #imm?`) for ALU-computed values
+- 48 unknown (2.9%) — 33 JSR-return, 15 stack-pull (PLA)
 - 39 with no flag-setter in range
 - 10 multi-source (flag-setter reachable from multiple lhs values)
 
@@ -178,21 +179,26 @@ reproducing the build.)
    floor — those `role`s already explain the bytes, so further `notes`
    would restate rather than inform.
 
-2. **81 branches have `unknown` lhs** in `cmp_facts.json` (down from 92
-   once the `izy` indirect-load setters were modelled). The remainder
-   need harder analysis — `unmodeled_jsr` (33, value is a JSR return),
-   `clobber_adc/sbc/ora` (33, value computed by arithmetic before a
-   `CMP #imm`), and `pla`-from-stack (15). Extend
-   `tools/re/cmp_facts.py` with cross-call/arithmetic dataflow, or add
+2. **48 branches have `unknown` lhs** in `cmp_facts.json` (down from 92:
+   the `izy` indirect-load setters and the 33 ALU-computed `CMP`
+   operands are now modelled — the latter render a register-level
+   condition like `A < #imm?`). The remainder need harder analysis —
+   `unmodeled_jsr` (33, value is a JSR return) and `pla`-from-stack
+   (15). Extend `tools/re/cmp_facts.py` with cross-call dataflow, or add
    manual `[branch."$XXXX"]` overrides. List them with:
 
         python3 -c "import json; cf=json.load(open('build/cmp_facts.json'));\
         print('\n'.join(pc for pc,f in cf['facts'].items() \
         if f.get('lhs',{}).get('kind')=='unknown'))"
 
-3. **Ghidra symbol table is 3,580 entries but only 187 are merged**
-   into `defmon.s`. The rest are `DAT_xxxx` / `BYTE_xxxx`
-   placeholders. Promote interesting ones via `annotations.toml`.
+3. **Ghidra's symbol table has ~3,370 `DAT_`/`BYTE_` placeholders, but
+   `defmon.s` does not use them.** The emitter names addresses from its
+   own layers (annotations + `SEED_LANDMARKS` + state/equate labels), so
+   essentially every operand in `defmon.s` already resolves to a label —
+   a grep for bare `$XXXX` operands finds none. The placeholder count is
+   Ghidra's internal view, not a `defmon.s` readability gap; promoting a
+   Ghidra `DAT_xxxx` only matters where it would feed the export's
+   symbol table, not the disassembly the reader sees.
 
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.

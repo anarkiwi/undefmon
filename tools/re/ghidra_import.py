@@ -718,10 +718,28 @@ def _load_smc_opcode_annotations(path: Path) -> dict[int, dict]:
                     pass
         candidates_raw = body.get("candidate_opcodes") or []
         candidates = [c for c in candidates_raw if isinstance(c, str)]
+        # Optional structured JMP/branch targets (same shape as
+        # [smc_dispatch].targets) for sites whose flip is to a JMP — keeps
+        # the landing address out of the free-text description.
+        targets_raw = body.get("targets") or []
+        targets: list[dict] = []
+        for t in targets_raw:
+            if not isinstance(t, dict) or not isinstance(t.get("addr"), str):
+                continue
+            try:
+                taddr = int(t["addr"].lstrip("$"), 16)
+            except ValueError:
+                continue
+            targets.append({
+                "addr": taddr,
+                "name": str(t.get("name", "")),
+                "context": str(t.get("context", "")),
+            })
         out[pc] = {
             "description": str(body.get("description", "")),
             "patch_sources": sources,
             "candidate_opcodes": candidates,
+            "targets": targets,
         }
     return out
 
@@ -815,6 +833,11 @@ def _export_smc_opcode(out_path: Path,
             "current_mnem": disc.get("current_mnem", ""),
             "candidate_opcodes_annotated": ann.get("candidate_opcodes") or [],
             "candidate_opcodes_discovered": disc.get("candidate_mnems") or [],
+            "targets": [
+                {"addr": f"${t['addr']:04X}", "name": t["name"],
+                 "context": t["context"]}
+                for t in (ann.get("targets") or [])
+            ],
             "inconclusive": disc.get("inconclusive", False),
             "annotated": pc in annotated,
             "discovered": pc in discovered,

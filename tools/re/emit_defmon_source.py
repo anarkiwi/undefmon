@@ -231,6 +231,12 @@ def _render_lhs_expr(lhs: dict,
         # Register parameter from caller. Bare register letter is the
         # honest rendering — we don't know what the caller loaded.
         expr = lhs.get("reg", "?")
+    elif kind == "computed_reg":
+        # Register holds a value computed in-function by an ALU op
+        # (ADC/SBC/ORA/EOR/AND) we can't name. The register letter is
+        # the honest lhs — the condition still surfaces the comparison
+        # (e.g. `A < #$XX?`) even though the operand isn't a variable.
+        expr = lhs.get("reg", "?")
     else:
         return None
 
@@ -2925,6 +2931,15 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         elif inconclusive:
             lines.append(f";   {cur} writer-source inconclusive "
                          f"(register-sourced or chained — curate me)\n")
+        # Structured flip targets (e.g. the JMP landing of a STX->JMP
+        # voice-skip) — rendered from the annotation so the address stays
+        # out of the free-text description.
+        targets = entry.get("targets") or []
+        if targets:
+            lines.append(";   When patched, jumps to:\n")
+            for t in targets:
+                ctx = f"  [{t['context']}]" if t.get("context") else ""
+                lines.append(f";     ${t['addr']:04X}  {t.get('name', ''):<28}{ctx}\n")
         desc = (entry.get("description") or "").strip()
         if desc:
             for line in desc.split("\n"):
@@ -5343,11 +5358,23 @@ def load_smc_opcode_catalogue(path: Path) -> dict[int, dict]:
         candidates = list(body.get("candidate_opcodes_annotated") or [])
         if not candidates:
             candidates = list(body.get("candidate_opcodes_discovered") or [])
+        targets: list[dict] = []
+        for t in body.get("targets") or []:
+            addr = t.get("addr")
+            if isinstance(addr, str):
+                try:
+                    addr = int(addr.lstrip("$"), 16)
+                except ValueError:
+                    continue
+            if isinstance(addr, int):
+                targets.append({"addr": addr, "name": t.get("name", ""),
+                                "context": t.get("context", "")})
         out[pc] = {
             "description": body.get("description", ""),
             "patch_sources": sorted(sources),
             "current_mnem": body.get("current_mnem", ""),
             "candidate_opcodes": candidates,
+            "targets": targets,
             "inconclusive": bool(body.get("inconclusive")),
         }
     return out
