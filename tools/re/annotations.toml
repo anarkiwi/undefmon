@@ -6189,11 +6189,19 @@ targets = [
 ]
 
 [smc_dispatch."$0BB2"]
-description = """Trampoline — caller supplies target address in \
-(X = low byte, Y = high byte). Used by the kbd-modifier dispatch chain \
-at $0B9A-$0BB2 to call into per-modifier handlers without a switch."""
+description = """Banking trampoline (jsr_with_ram_helper) — the caller \
+supplies the target in (X = low byte, Y = high byte), which the helper \
+stores into this JSR operand before banking RAM in over the I/O area and \
+calling. All 5 call sites are in the disk load/save path and pass an \
+immediate target, so the dispatch set is statically complete: the four \
+RAM-under-I/O routines below."""
 patch_sources = ["$0BA4", "$0BA7"]
-targets = []  # caller-supplied; not statically enumerable
+targets = [
+    { addr = "$CEB2", name = "decoder_load_setup", context = "load ($76D5, $7731)" },
+    { addr = "$CE81", name = "save_prep_orchestrator", context = "save ($771F)" },
+    { addr = "$D02C", name = "save_encode_orchestrator", context = "save ($783A)" },
+    { addr = "$D92A", name = "ram_screen_repaint", context = "post-load screen ($7856)" },
+]
 
 [smc_dispatch."$B251"]
 description = """Auto-advance dispatch — 4 (lo, hi) pairs at \

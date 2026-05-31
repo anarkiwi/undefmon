@@ -241,6 +241,30 @@ class TestAnalyze(unittest.TestCase):
         self.assertFalse(out["$1000"]["uncertain"])
         self.assertIn("Y", out["$1000"]["clobbers"])
 
+    def test_smc_dispatch_with_unclassified_target_stays_uncertain(self):
+        """A dispatch site is resolved only when every annotated target is
+        classified code. If one target is not (e.g. still a .byte run),
+        resolving from the rest could drop its effects, so the site stays
+        opaque and the function remains conservatively uncertain."""
+        mem = _img(
+            {
+                0x1000: bytes([0x20, 0xFF, 0xFF, 0x60]),
+                0x2000: bytes([0xA0, 0x00, 0x60]),
+            }
+        )
+        instr = _instr(
+            [
+                (0x1000, ("JSR", "abs", 3)),
+                (0x1003, ("RTS", "imp", 1)),
+                (0x2000, ("LDY", "imm", 2)),
+                (0x2002, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(
+            mem, instr, frozenset({0x1000}), smc={0x1000: frozenset({0x2000, 0x9999})}
+        )
+        self.assertTrue(out["$1000"]["uncertain"])
+
     def test_unmodelled_opaque_call_stays_uncertain(self):
         """A call to an address that is neither program code nor a known
         KERNAL vector ($FFFF) remains conservatively uncertain -> A/X/Y."""
