@@ -33,7 +33,11 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
-from tools.re.dasm6502 import OPS, emit_64tass_instruction
+from tools.re.dasm6502 import (
+    OPS,
+    ROUND_TRIP_UNSAFE_OPCODES,
+    emit_64tass_instruction,
+)
 
 
 # ── Branch condition rendering ──────────────────────────────────────────
@@ -4497,7 +4501,20 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 else:
                     lbl_name = labels.get(pc)
                 lbl_prefix = f"{lbl_name}:" if lbl_name else ""
-            line = f"{lbl_prefix:<26} {mnem_lower:<4} {operand:<28}"
+            # Duplicate-encoding undocumented opcodes ($2B ANC, $EB SBC)
+            # can't round-trip through the mnemonic (64tass canonicalises
+            # to $0B/$E9), so render them as `.byte` for byte-exactness
+            # with the decoded instruction in the tail comment. They are
+            # still classified as instructions, so the fall-through this
+            # produces keeps the downstream run reachable.
+            unsafe_instr_note = None
+            if mem[pc] in ROUND_TRIP_UNSAFE_OPCODES:
+                byte_list = ", ".join(f"${mem[pc + i]:02X}" for i in range(n))
+                line = f"{lbl_prefix:<26} .byte {byte_list}"
+                unsafe_instr_note = (f"; {mnem_lower} {operand.strip()} "
+                                     f"(undocumented opcode ${mem[pc]:02X})")
+            else:
+                line = f"{lbl_prefix:<26} {mnem_lower:<4} {operand:<28}"
 
             # Branch-condition comment is now driven by the cmp_facts
             # table (precomputed CFG dataflow, see tools/re/cmp_facts.py).
@@ -4550,6 +4567,8 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                                     f"${operand_byte_addr:04X}, no name)")
 
             tail_parts: list[str] = []
+            if unsafe_instr_note:
+                tail_parts.append(unsafe_instr_note)
             if cond_text:
                 tail_parts.append(cond_text)
             if hw_text:

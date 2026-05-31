@@ -812,18 +812,12 @@ v2_sc2_counter           = $13D5
 v2_sc2_cascade_slot_triple = $13E0
 ;   notes: Mirror of v0_sc2_cascade_slot_triple / v1_sc2_cascade_slot_triple.
 v2_sc2_row_idx           = $13E4
-ps_sweep_anc_imm_smc     = $149D
-;   notes: Followed by ps_sweep_anc_imm_smc continuing the same instruction stream.
 ps_sweep_tail            = $14E2
-pitch_oscillator_loop_tail_smc = $14E4
-;   notes: The X-loop walks voices by A-=$31 stride, so pitch_oscillator_loop_tail_smc hold the LUT base after the stride-back.
 groove_compare_slot      = $14EC
 ;   notes: Implements the groove/swing per arranger row.
 groove_repeat_counter    = $14ED
 slide_dec_lut_lo         = $14F8
 ;   notes: Tables overlap in addressing — slide_dec_lut_lo sits $24 bytes before note_pitch_lut_lo so the same Y index walks different segments of the same exponential pitch ramp.
-pitch_oscillator_anc_smc_mirror = $156E
-;   notes: Same stride-back semantics.
 pitch_lut_band           = $1578
 ;   notes: Indexed by current note (current_note_v0,X) or by the slide-mode byte (slide_mode_v0,X asl). Tables are sized 128 entries each but overlap in addressing — the increment/target lo bases at pitch_lut_band vs note_pitch_lut_lo differ by $24, so the same y index walks different segments of the same exponential pitch ramp. slide_dec_lut_lo sits just before pitch_lut_band because it shares the same backing storage at a negative offset for the subtractive path.
 interval_lut_lo_a        = $1583
@@ -839,8 +833,6 @@ pitch_lut_band_padding   = $1642
 ;   code edges:          none
 ;   apparent (from data): $AE50 in seqED_header_color_template
 sidtab_cascade_marker_end = $16AF
-pitch_lut_tail_smc       = $174E
-player_irq_tail_anc_smc  = $1799
 player_irq_band_nop_padding = $17A7
 ;   notes: Unreached at runtime; bytes are emitted as $EA fill so any accidental fall-through behaves as a no-op slide.
 
@@ -1305,26 +1297,10 @@ sid2_cascade_v0_sc2_silence_counter = $CBB3
 sid2_v1_sc2_counter      = $CBD5
 sid2_v1_sc2_cascade_slot_triple = $CBE0
 sid2_cascade_v1_sc2_silence_counter = $CBE4
-sid2_pitch_pw_clamp_commit = $CC9D
-sid2_pitch_oscillator_wrap_tail = $CCE4
 sid2_player_init_stride  = $CCEC
 sid2_player_init_stride_counter = $CCED
-sid2_player_init_tail    = $CD6E
-sid2_sidtab_ctrl_accumulator = $CE16
-sid2_self_modifier_setup = $CE5E
-;   notes:
-;     Sequence:
-;       - X→sid2_voice_record_v2.
-;       - .byte $4B $7F (= ALR #$7F, undocumented AND-then-LSR-A on the 6510).
-;       - write sid2_voice_record_v2.
-;       - A←$E9 / write sid2_voice_record_v2 / write sid2_voice_record_v2.
-;       - return.
-;
-;     Reached from sid2_sidtab_ctrl_accumulator (bmi).
-;   code edges:          none
-;   apparent (from data): $CE4C in sid2_sidtab_ctrl_accumulator
 sid2_self_modifier_padding = $CE6F
-;   notes: Bytes `00 40 00 1F 00 1F 00...` — interleaved zeros and constants. Sits adjacent to the sid2_self_modifier_setup body; the address is the tail of that routine's footprint and isn't referenced from named code.
+;   notes: Bytes `00 40 00 1F 00 1F 00...` — interleaved zeros and constants.
 save_chain_state_ce70    = $CE70
 save_chain_counter       = $CE75
 save_chain_state_lo      = $CE78
@@ -1496,11 +1472,7 @@ CIA2_CRB                 = $DD0F
 ram_under_io_end         = $DFFF
 
 ; ── seqLIST WRITER BAND + POST-LOAD TAIL ($E000-$E786) ─────────────────
-seqLIST_hex_byte_paint   = $E036
-;   notes: Per-voice arranger byte X → 2 screen-code bytes at ($02),Y: read A=X=arranger_v0_sid1,X / arranger_v1_sid1,X / arranger_v2_sid1,X (reads arranger entry for V0/V1/V2 via undocumented $BF opcode LAX abs,Y); read hex_digit_hi_lut,X (hi-nibble screen code) / write ($02),Y; increment Y; read hex_digit_lo_lut,X (lo-nibble screen code) / write ($02),Y. Three voice arms (seqLIST_hex_byte_paint) write at Y=2/4/6 — 3 columns of 2 hex digits each = the V0/V1/V2 pattern numbers in the seqLIST row. Reads from arrangers arranger_v0_sid1/arranger_v1_sid1/arranger_v2_sid1 (SID#1 view).
-seqLIST_paint_loop_tail  = $E0A5
-;   code edges:          none
-;   apparent (from data): $E06C in seqLIST_hex_byte_paint
+seqlist_helper_pad       = $E13C
 seqlist_paint_loop_end   = $E13D
 ;   notes: Boundary marker for the loop range.
 seqlist_step_row_smc     = $E1A8
@@ -4256,10 +4228,21 @@ ps_sweep_entry .block
                            beq  pitch_oscillator_loop_tail    ; $1498  ps_depth_v0,X was zero?
                            bpl  ps_sweep_sub_path    ; $149A  ps_depth_v0,X had bit 7 clear?
 ps_sweep_add_path_smc:     tya    ; $149C
-        .byte $2B, $7F    ; $149D
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $149D  ps_sweep_anc_imm_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $2B (immediate): masks A with #$7F and copies bit 7 into carry, in the PS-sweep add path; rendered as .byte because 64tass emits the $0B encoding for that mnemonic.
+;
+;   code edges:          fall-through from $149C ps_sweep_add_path_smc (1 bytes earlier)
+;
+;   Continues the ps_sweep_add_path_smc instruction stream; the $2B byte is one of two ANC encodings (the other is $0B).
+ps_sweep_anc_imm_smc .block
+                           .byte $2B, $7F    ; $149D  ; anc #$7F (undocumented opcode $2B)
                            adc  pw_lo_patch_v0,x    ; $149F
                            sta  pw_lo_patch_v0,x    ; $14A2
-                           bcc  pitch_oscillator_loop_tail    ; $14A5  pw_lo_patch_v0 no carry
+                           bcc  pitch_oscillator_loop_tail    ; $14A5
                            lda  pw_hi_patch_v0,x    ; $14A7
                            cmp  #$0F    ; $14AA
                            beq  ps_sweep_hi_clamp    ; $14AC  pw_hi_patch_v0,X was $0F?
@@ -4340,7 +4323,18 @@ PS_sweep_sbc_c_in_uncontrolled .block
 ;   At entry X=$62 → X-$31 = $31 (V1 next); X=$31 → X-$31 = $00 (V0 next); X=$00 → wrap (→fires) when negative → return at groove_song_position. The AXS opcode is unusual — `X := (A and X) - #imm` in a single 2-byte instruction without clobbering A. Reading defmon.s, expect to see the `.byte $CB, $31` block in place of an `axs` mnemonic.
 pitch_oscillator_loop_tail .block
                            txa    ; $14E3
-        .byte $CB, $31    ; $14E4
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $14E4  pitch_oscillator_loop_tail_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $CB (immediate): X is set to (A & X) minus #$31, at the tail of pitch_slide_oscillator.
+;
+;   code edges:          fall-through from $14E3 pitch_oscillator_loop_tail (1 bytes earlier)
+;
+;   Subtracts the $31 per-voice record stride as the loop walks voices.
+pitch_oscillator_loop_tail_smc .block
+                           axs  #$31    ; $14E4
                            bmi  pitch_oscillator_voice_loop_tail.groove_song_position    ; $14E6
 .bend
 
@@ -4430,8 +4424,19 @@ l_2:                       lda  #$00    ; $1549
                            lda  #$FF    ; $1566
                            sta  v0_sc1_counter,x    ; $1568
                            sta  v0_sc2_counter,x    ; $156B
-        .byte $CB, $31    ; $156E
-                           bpl  l_2    ; $1570
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $156E  pitch_oscillator_anc_smc_mirror
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $CB (immediate): X is set to (A & X) minus #$31, a parallel-branch mirror of pitch_oscillator_loop_tail_smc.
+;
+;   code edges:          fall-through from $156B in player_init_body_2 (3 bytes earlier)
+;
+;   Same $31 stride-subtract semantics.
+pitch_oscillator_anc_smc_mirror .block
+                           axs  #$31    ; $156E
+                           bpl  player_init_body.l_2    ; $1570
                            lda  #SILENCE_FLAG_QUIET    ; $1572
                            sta  silence_or_endsong_flag    ; $1574
                            rts    ; $1577
@@ -4568,7 +4573,7 @@ l_2:                       lda  zp_scratch_96    ; $1701
                            sta  pw_lo_patch_v0,x    ; $170F
 l_3:                       iny    ; $1712
                            lda  (zp_sidtab_row_lo),y    ; $1713
-                           beq  l_11    ; $1715  (zp_sidtab_row_lo),Y was zero?
+                           beq  pitch_lut_tail_smc.l_4    ; $1715  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $1717
                            sta  zp_scratch_96    ; $1718
                            bcc  l_4    ; $171A  (zp_sidtab_row_lo),Y shifted-out bit was 0?
@@ -4576,7 +4581,7 @@ l_3:                       iny    ; $1712
                            lda  (zp_sidtab_row_lo),y    ; $171D
                            sta  ps_depth_v0,x    ; $171F
 l_4:                       lda  zp_scratch_96    ; $1722
-                           beq  l_11    ; $1724  zp_scratch_96 was zero?
+                           beq  pitch_lut_tail_smc.l_4    ; $1724  zp_scratch_96 was zero?
                            and  #$80    ; $1726
                            beq  pitch_lut_tail_smc    ; $1728  (zp_scratch_96 & $80) was zero?
                            iny    ; $172A
@@ -4594,44 +4599,62 @@ l_6:                       lda  filter_resonance_routing    ; $1741
                            ora  (zp_sidtab_row_lo),y    ; $1746
                            ora  v0_voice_bit_mask,x    ; $1748
 l_7:                       sta  filter_resonance_routing    ; $174B
-        .byte $A7, $96    ; $174E
-                           beq  l_11    ; $1750
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $174E  pitch_lut_tail_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $A7 (zp): loads A and X together from a zero-page slot, in the late pitch-LUT tail.
+;
+;   callers:             1 code sites: $1728
+pitch_lut_tail_smc .block
+                           lax  zp_scratch_96    ; $174E
+                           beq  l_4    ; $1750
                            and  #$40    ; $1752
-                           beq  l_8    ; $1754  (A & $40) was zero?
+                           beq  l_1    ; $1754  (zp_scratch_96 & $40) was zero?
                            iny    ; $1756
                            lda  (zp_sidtab_row_lo),y    ; $1757
                            sta  filter_volume_or_mode    ; $1759
-l_8:                       txa    ; $175C
+l_1:                       txa    ; $175C
                            and  #$20    ; $175D
-                           beq  l_9    ; $175F  (X & $20) was zero?
+                           beq  l_2    ; $175F  (zp_scratch_96 & $20) was zero?
                            iny    ; $1761
                            lda  (zp_sidtab_row_lo),y    ; $1762
                            sta  filter_cutoff_slide_saturation_step    ; $1764
-l_9:                       txa    ; $1767
+l_2:                       txa    ; $1767
                            and  #$10    ; $1768
-                           beq  l_11    ; $176A  (X & $10) was zero?
+                           beq  l_4    ; $176A  (zp_scratch_96 & $10) was zero?
                            iny    ; $176C
                            lax  (zp_sidtab_row_lo),y    ; $176D
                            iny    ; $176F
                            lda  (zp_sidtab_row_lo),y    ; $1770
-                           bmi  l_10    ; $1772  (zp_sidtab_row_lo),Y had bit 7 set?
+                           bmi  l_3    ; $1772  (zp_sidtab_row_lo),Y had bit 7 set?
                            stx  filter_cutoff_acc_lo    ; $1774
                            sta  filter_cutoff_slide_acc_hi    ; $1777
                            lda  #$00    ; $177A
                            sta  filter_cutoff_slide_step_lo_smc    ; $177C
                            sta  filter_cutoff_slide_step_hi_smc    ; $177F
                            rts    ; $1782
-l_10:                      asl  a    ; $1783
-                           bmi  l_12    ; $1784  (zp_sidtab_row_lo),Y had bit 7 set?
+l_3:                       asl  a    ; $1783
+                           bmi  l_5    ; $1784  (zp_sidtab_row_lo),Y had bit 7 set?
                            stx  filter_cutoff_slide_step_lo_smc    ; $1786
                            lsr  a    ; $1789
                            sta  filter_cutoff_slide_step_hi_smc    ; $178A
                            lda  #$69    ; $178D
                            sta  filter_cutoff_slide_accumulator.filter_cutoff_slide_adc_opcode_smc    ; $178F
                            sta  filter_cutoff_slide_accumulator.filter_cutoff_slide_adc_opcode_smc2    ; $1792
-l_11:                      rts    ; $1795
-l_12:                      stx  filter_cutoff_slide_step_lo_smc    ; $1796
-        .byte $4B, $7F    ; $1799
+l_4:                       rts    ; $1795
+l_5:                       stx  filter_cutoff_slide_step_lo_smc    ; $1796
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $1799  player_irq_tail_anc_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $4B (immediate): masks A with #$7F then shifts it right one bit, in the player-IRQ tail before player_irq_band_nop_padding.
+;
+;   code edges:          fall-through from $1796 pitch_lut_tail_smc_5 (3 bytes earlier)
+player_irq_tail_anc_smc .block
+                           alr  #$7F    ; $1799
                            sta  filter_cutoff_slide_step_hi_smc    ; $179B
                            lda  #$E9    ; $179E
                            sta  filter_cutoff_slide_accumulator.filter_cutoff_slide_adc_opcode_smc    ; $17A0
@@ -13489,7 +13512,7 @@ l_3:                       jmp  post_write_paint_tail    ; $B25E
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED step-cursor increment.
 ;
-;   callers:             9 code sites: $8165, $8885, $B0CA, $B0F0, $B107, $B11E, $B1E3, $B27D seqED_voice_selector_check, +1 more
+;   callers:             10 code sites: $8165, $8885, $B0CA, $B0F0, $B107, $B11E, $B1E3, $B27D seqED_voice_selector_check, +2 more
 ;   inputs:              page_offset/page_pair_counter/step_cursor = current cursor state; page_offset = page boundary.
 ;   outputs:             page_offset advanced; editor_col_delta INCed unless we just crossed a page boundary.
 ;
@@ -16799,26 +16822,26 @@ l_5:                       stx  SID2_V3_PW_LO    ; $C888
                            sta  sid2_master_volume    ; $C8B2
                            lda  #$00    ; $C8B5  ; ← sid2_frame_state_c8b6
                            clc    ; $C8B7
-                           adc  #$00    ; $C8B8  ; ← (SMC operand at $C8B9, no name)
+l_6:                       adc  #$00    ; $C8B8  ; ← (SMC operand at $C8B9, no name)
                            sta  sid2_frame_state_c8b6    ; $C8BA
                            lda  #$00    ; $C8BD  ; ← sid2_frame_state_c8be
-                           adc  #$00    ; $C8BF  ; ← (SMC operand at $C8C0, no name)
-                           bpl  l_6    ; $C8C1  ($00 + $00) had bit 7 clear?
+l_7:                       adc  #$00    ; $C8BF  ; ← (SMC operand at $C8C0, no name)
+                           bpl  l_8    ; $C8C1  ($00 + $00) had bit 7 clear?
                            lda  sid2_v1_voice_record_slot_a    ; $C8C3
-l_6:                       sta  sid2_frame_state_c8be    ; $C8C6
+l_8:                       sta  sid2_frame_state_c8be    ; $C8C6
                            adc  #$00    ; $C8C9  ; ← sid2_cascade_pre_counter
-                           bmi  l_7    ; $C8CB  (A + $00) had bit 7 set?
+                           bmi  l_9    ; $C8CB  (A + $00) had bit 7 set?
                            cmp  #$02    ; $C8CD  ; ← sid2_v1_voice_record_slot_a
-                           bcs  l_8    ; $C8CF  A was $02 or above?
-l_7:                       lda  sid2_v1_voice_record_slot_a    ; $C8D1
+                           bcs  l_10    ; $C8CF  A was $02 or above?
+l_9:                       lda  sid2_v1_voice_record_slot_a    ; $C8D1
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $CD1D
 ;   ASL can flip to: NOP
 ;   ASL <-> NOP: SID#2 analogue of $10D4 — filter cutoff output scaling. $CD1D stores $EA (NOP) or $0A (ASL).
-l_8:                       asl  a    ; $C8D4
+l_10:                      asl  a    ; $C8D4
                            sta  save_encoder_jp_chain_walker.SID2_FC_HI    ; $C8D5
                            lda  #$FF    ; $C8D8  ; ← sid2_v1_voice_record_slot_b
-                           bpl  l_13    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
+                           bpl  l_15    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
                            and  #$0F    ; $C8DC
                            sta  sid2_v1_voice_record_slot_b    ; $C8DE
                            sta  sid2_v1_sc1_step_counter    ; $C8E1
@@ -16826,24 +16849,24 @@ l_8:                       asl  a    ; $C8D4
                            sta  sid2_v0_sc2_step_counter    ; $C8E7
                            ldy  #$FF    ; $C8EA  ; ← sid2_frame_state_slot
                            ldx  arranger_v3_sid2,y    ; $C8EC
-                           bpl  l_12    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
+                           bpl  l_14    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
                            lda  arranger_v5_sid2,y    ; $C8F1
-                           beq  l_10    ; $C8F4  arranger_v5_sid2,Y was zero?
+                           beq  l_12    ; $C8F4  arranger_v5_sid2,Y was zero?
                            cpy  sid2_player_init_stride    ; $C8F6
-                           beq  l_9    ; $C8F9  $FF was sid2_player_init_stride?
+                           beq  l_11    ; $C8F9  $FF was sid2_player_init_stride?
                            sty  sid2_player_init_stride    ; $C8FB
                            sta  sid2_player_init_stride_counter    ; $C8FE
-                           jmp  l_10    ; $C901
-l_9:                       dec  sid2_player_init_stride_counter    ; $C904
-                           bne  l_10    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
+                           jmp  l_12    ; $C901
+l_11:                      dec  sid2_player_init_stride_counter    ; $C904
+                           bne  l_12    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
                            lda  #$00    ; $C909
                            sta  sid2_player_init_stride    ; $C90B
                            iny    ; $C90E
-                           jmp  l_11    ; $C90F
-l_10:                      lda  arranger_v4_sid2,y    ; $C912
+                           jmp  l_13    ; $C90F
+l_12:                      lda  arranger_v4_sid2,y    ; $C912
                            tay    ; $C915
-l_11:                      ldx  arranger_v3_sid2,y    ; $C916
-l_12:                      lda  pat_base_lo,x    ; $C919
+l_13:                      ldx  arranger_v3_sid2,y    ; $C916
+l_14:                      lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_c986    ; $C91C
                            lda  pat_base_hi,x    ; $C91F
                            sta  sid2_filter_slot_c987    ; $C922
@@ -16859,9 +16882,9 @@ l_12:                      lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_ca97    ; $C940
                            iny    ; $C943
                            sty  sid2_frame_state_slot    ; $C944
-l_13:                      ldx  #$00    ; $C947
+l_15:                      ldx  #$00    ; $C947
                            ldy  #$FF    ; $C949  ; ← sid2_v1_sc1_step_counter
-                           bmi  l_14    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
+                           bmi  l_16    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
                            dec  sid2_v1_sc1_step_counter    ; $C94D
 ;   step-idiom: source = sid2_v1_sc1_step_counter  (= $C94A)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $C94D
@@ -16884,39 +16907,39 @@ l_13:                      ldx  #$00    ; $C947
                            asl  a    ; $C978
                            sta  sid2_voice_record_v2 + $123    ; $C979
                            jmp  sid2_v0_row_read_ldy_smc.l_1    ; $C97C
-l_14:                      ldy  #$01    ; $C97F
+l_16:                      ldy  #$01    ; $C97F
                            lda  #$FF    ; $C981  ; ← (SMC operand at $C982, no name)
-                           bpl  l_15    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
+                           bpl  l_17    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C985
                            sta  sid2_cascade_step_counter    ; $C988
                            stx  sid2_filter_slot_cae0    ; $C98B
-l_15:                      iny    ; $C98E
+l_17:                      iny    ; $C98E
                            lda  #$FF    ; $C98F  ; ← (SMC operand at $C990, no name)
-                           bpl  l_16    ; $C991  sid2_register_write_body_$16E had bit 7 clear?
+                           bpl  l_18    ; $C991  sid2_register_write_body_$16E had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C993
                            sta  sid2_v2_sc2_counter    ; $C996
                            stx  sid2_cascade_inner_gate_counter    ; $C999
-l_16:                      iny    ; $C99C
+l_18:                      iny    ; $C99C
                            lda  #$FF    ; $C99D  ; ← (SMC operand at $C99E, no name)
-                           bpl  l_17    ; $C99F  sid2_register_write_body_$17C had bit 7 clear?
+                           bpl  l_19    ; $C99F  sid2_register_write_body_$17C had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C9A1
                            sta  sid2_v2_sc2_step_counter    ; $C9A4
                            sta  sid2_cascade_inner_counter    ; $C9A7
                            stx  sid2_voice_record_v0    ; $C9AA
                            stx  sid2_v0_voice_record_slot_a    ; $C9AD
                            stx  sid2_v0_voice_record_slot_c    ; $C9B0
-l_17:                      iny    ; $C9B3
+l_19:                      iny    ; $C9B3
                            ldx  #$FF    ; $C9B4  ; ← (SMC operand at $C9B5, no name)
-                           bpl  l_18    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
+                           bpl  l_20    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $C9B8
                            bmi  sid2_v0_row_read_ldy_smc.l_1    ; $C9BB  sid2_register_write_body_$193 had bit 7 set?
-l_18:                      tya    ; $C9BD
+l_20:                      tya    ; $C9BD
                            clc    ; $C9BE
                            adc  sid2_filter_slot_c986    ; $C9BF
                            sta  sid2_filter_slot_c986    ; $C9C2
-                           bcc  l_19    ; $C9C5  sid2_filter_slot_c986 no carry
+                           bcc  l_21    ; $C9C5  sid2_filter_slot_c986 no carry
                            inc  sid2_filter_slot_c987    ; $C9C7
-l_19:                      lda  #$0F    ; $C9CA
+l_21:                      lda  #$0F    ; $C9CA
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -16924,7 +16947,7 @@ l_19:                      lda  #$0F    ; $C9CA
 ; ──────────────────────────────────────────────────────────────────────
 ; Undocumented opcode $8F (abs): SID#2 mirror of the voice-0 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
 ;
-;   code edges:          fall-through from $C9CA sid2_register_write_body_19 (2 bytes earlier)
+;   code edges:          fall-through from $C9CA sid2_register_write_body_21 (2 bytes earlier)
 ;
 ;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
 sid2_v0_row_read_ldy_smc .block
@@ -17270,9 +17293,6 @@ l_6:                       ldx  #$62    ; $CC05
 ;
 ;   callers:             sid2_pitch_oscillator_wrap_tail JMP (the SID#2 cascade re-dispatch loop tail).
 ;
-;   code edges:          fall-through from $CC05 sid2_voice_fanout_next_gate_6 (2 bytes earlier)
-;   apparent (from data): $CCE8 in sid2_pitch_oscillator_wrap_tail
-;
 ;   Per-voice dispatch on slide mode (sid2_subframe_forced_variant,X = SID#2 mirror of slide_mode_v0,X):
 ;     - == 0     → sid2_pitch_oscillator_post_tail (no-slide).
 ;     - $01..$7F → sid2_pitch_oscillator_post_tail (portamento).
@@ -17376,23 +17396,46 @@ l_2:                       clc    ; $CC69
 sid2_cascade_step_dispatcher .block
                            ldy  sid2_v0_voice_record_slot_b,x    ; $CC95
                            beq  sid2_cascade_dispatch_wrap_guard    ; $CC98  sid2_v0_voice_record_slot_b,X was zero?
-                           bpl  l_2    ; $CC9A  sid2_v0_voice_record_slot_b,X had bit 7 clear?
+                           bpl  sid2_pitch_pw_clamp_commit.l_3    ; $CC9A  sid2_v0_voice_record_slot_b,X had bit 7 clear?
                            tya    ; $CC9C
-        .byte $2B, $7F, $7D, $23, $C8, $9D, $23, $C8, $90, $3C, $BD, $25, $C8, $C9, $0F, $F0    ; $CC9D
-        .byte $06, $FE, $25, $C8, $4C, $E3, $CC, $A9, $F8, $9D, $23, $C8, $98, $49, $80, $9D    ; $CCAD
-        .byte $1E, $C8, $4C, $E3, $CC    ; $CCBD
-l_1:                       lda  #$01    ; $CCC2
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CC9D  sid2_pitch_pw_clamp_commit
+; ──────────────────────────────────────────────────────────────────────
+; SID#2 PS-sweep clamp + commit (37 bytes, sid2_pitch_pw_clamp_commit).
+;
+;   code edges:          fall-through from $CC9C in sid2_cascade_step_dispatcher (1 bytes earlier)
+;
+;   Body reads sid2_register_write_body,X (SID#2 PS slot), ANDs with #$7F, indexes sid2_cascade_inner_gate, writes back to sid2_register_write_body,X (SID#2 PW lo slot), and applies a sid2_voice_record_v2 overflow check. The PS-sweep counterpart of SID#1's clamp logic at the same offsets in the ps_sweep_entry-ps_sweep_tail band.
+sid2_pitch_pw_clamp_commit .block
+                           .byte $2B, $7F    ; $CC9D  ; anc #$7F (undocumented opcode $2B)
+                           adc  sid2_v0_step_accumulator,x    ; $CC9F
+                           sta  sid2_v0_step_accumulator,x    ; $CCA2
+                           bcc  sid2_cascade_dispatch_wrap_guard    ; $CCA5
+                           lda  sid2_v0_voice_record_pw_slot,x    ; $CCA7
+                           cmp  #$0F    ; $CCAA
+                           beq  l_1    ; $CCAC  sid2_v0_voice_record_pw_slot,X was $0F?
+                           inc  sid2_v0_voice_record_pw_slot,x    ; $CCAE
+                           jmp  sid2_cascade_dispatch_wrap_guard    ; $CCB1
+l_1:                       lda  #$F8    ; $CCB4
+                           sta  sid2_v0_step_accumulator,x    ; $CCB6
+                           tya    ; $CCB9
+                           eor  #$80    ; $CCBA
+                           sta  sid2_v0_voice_record_slot_b,x    ; $CCBC
+                           jmp  sid2_cascade_dispatch_wrap_guard    ; $CCBF
+l_2:                       lda  #$01    ; $CCC2
                            sta  sid2_v0_step_accumulator,x    ; $CCC4
                            tya    ; $CCC7
                            eor  #$80    ; $CCC8
                            sta  sid2_v0_voice_record_slot_b,x    ; $CCCA
                            jmp  sid2_cascade_dispatch_wrap_guard    ; $CCCD
-l_2:                       lda  sid2_v0_step_accumulator,x    ; $CCD0
+l_3:                       lda  sid2_v0_step_accumulator,x    ; $CCD0
                            sbc  sid2_v0_voice_record_slot_b,x    ; $CCD3
                            sta  sid2_v0_step_accumulator,x    ; $CCD6
                            bcs  sid2_cascade_dispatch_wrap_guard    ; $CCD9  sid2_v0_voice_record_slot_b no borrow
                            lda  sid2_v0_voice_record_pw_slot,x    ; $CCDB
-                           beq  l_1    ; $CCDE  sid2_v0_voice_record_pw_slot,X was zero?
+                           beq  l_2    ; $CCDE  sid2_v0_voice_record_pw_slot,X was zero?
                            dec  sid2_v0_voice_record_pw_slot,x    ; $CCE0
 .bend
 
@@ -17401,12 +17444,27 @@ l_2:                       lda  sid2_v0_step_accumulator,x    ; $CCD0
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 cascade re-dispatch wrap guard.
 ;
-;   callers:             3 code sites: $CC98, $CCCD, $CCD9
+;   callers:             6 code sites: $CC98, $CCA5, $CCB1, $CCBF, $CCCD, $CCD9
 ;
 ;   A←X / SBX #$31 (illegal opcode — X := (A & X) - $31 = X - $31, flags from result) / →sid2_pitch_oscillator_wrap_tail when negative (X was < $31 → return, end of cascade chain) / jump sid2_pitch_oscillator (X >= $31 → continue cascade with X reduced by $31). The $31 = 49 = #SID#2 cascade row-table size. Reached by 3 jump callers from the sid2_cascade_step_dispatcher dispatch arms (sid2_pitch_pw_clamp_commit) after they update per-voice cascade state slots. SBX is an undocumented 6502 opcode (CB imm). After TXA the accumulator equals X, so (A & X) = X, and SBX effectively does X := X - $31 + flag-set. Used here as a 'reduce X by $31 with underflow branch' primitive.
 sid2_cascade_dispatch_wrap_guard .block
                            txa    ; $CCE3
-        .byte $CB, $31, $30, $03, $4C, $07, $CC, $60, $00, $00    ; $CCE4
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CCE4  sid2_pitch_oscillator_wrap_tail
+; ──────────────────────────────────────────────────────────────────────
+; SID#2 pitch oscillator wrap tail (10 bytes, sid2_pitch_oscillator_wrap_tail).
+;
+;   code edges:          fall-through from $CCE3 sid2_cascade_dispatch_wrap_guard (1 bytes earlier)
+;
+;   Reads the SID#2 stride/wrap state, branches back to sid2_pitch_oscillator if more voices to process. Companion to sid2_pitch_oscillator's body.
+sid2_pitch_oscillator_wrap_tail .block
+                           axs  #$31    ; $CCE4
+                           bmi  l_1    ; $CCE6
+                           jmp  sid2_pitch_oscillator    ; $CCE8
+l_1:                       rts    ; $CCEB
+        .byte $00, $00    ; $CCEC
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -17442,7 +17500,7 @@ l_1:                       cmp  VIC_RASTER    ; $CCF2
 l_2:                       lda  #$02    ; $CD16
                            sta  sid2_v1_voice_record_slot_a    ; $CD18
                            lda  #$EA    ; $CD1B
-l_3:                       sta  sid2_register_write_body.l_8    ; $CD1D
+l_3:                       sta  sid2_register_write_body.l_10    ; $CD1D
                            plp    ; $CD20
                            rts    ; $CD21
 .bend
@@ -17483,7 +17541,7 @@ l_1:                       sta  sid2_base_default,y    ; $CD29
                            jsr  sid2_player_init_body    ; $CD44
 ;     X←$62 / A←$00 / loop: write sid2_v0_cascade_step_bytes,X / write sid2_v2_cascade_slot_triple,X (clear SID#2 cascade step-counter + row-idx tables). decrement X / →loop when positive.
                            ldx  #$62    ; $CD47
-                           lda  #$00    ; $CD49
+l_2:                       lda  #$00    ; $CD49
                            sta  sid2_cascade_step_counter,x    ; $CD4B
                            sta  sid2_v2_sc2_counter,x    ; $CD4E
                            sta  sid2_v0_sid_patch_b,x    ; $CD51
@@ -17496,7 +17554,22 @@ l_1:                       sta  sid2_base_default,y    ; $CD29
                            lda  #$FF    ; $CD66
                            sta  sid2_filter_slot_cae0,x    ; $CD68
                            sta  sid2_cascade_inner_gate_counter,x    ; $CD6B
-        .byte $CB, $31, $10, $D7, $A9, $80, $8D, $D9, $C8, $60    ; $CD6E
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CD6E  sid2_player_init_tail
+; ──────────────────────────────────────────────────────────────────────
+; SID#2 player_init tail (10 bytes, sid2_player_init_tail) — reads the SID#2 stride byte and writes $80 to sid2_voice_record_v2 (SID#2 silence flag).
+;
+;   code edges:          fall-through from $CD6B in sid2_main_tick_2 (3 bytes earlier)
+;
+;   Companion to sid2_player_init_body.
+sid2_player_init_tail .block
+                           axs  #$31    ; $CD6E
+                           bpl  sid2_main_tick.l_2    ; $CD70
+                           lda  #$80    ; $CD72
+                           sta  sid2_v1_voice_record_slot_b    ; $CD74
+                           rts    ; $CD77
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -17559,7 +17632,7 @@ l_7:                       lda  zp_scratch_96    ; $CDC9
                            sta  sid2_v0_step_accumulator,x    ; $CDD7
 l_8:                       iny    ; $CDDA
                            lda  (zp_sidtab_row_lo),y    ; $CDDB
-                           beq  sid2_sidtab_row_apply_ctrl_write.l_1    ; $CDDD  (zp_sidtab_row_lo),Y was zero?
+                           beq  sid2_sidtab_ctrl_accumulator.l_4    ; $CDDD  (zp_sidtab_row_lo),Y was zero?
                            asl  a    ; $CDDF
                            sta  zp_scratch_96    ; $CDE0
                            bcc  l_9    ; $CDE2  (zp_sidtab_row_lo),Y shifted-out bit was 0?
@@ -17567,7 +17640,7 @@ l_8:                       iny    ; $CDDA
                            lda  (zp_sidtab_row_lo),y    ; $CDE5
                            sta  sid2_v0_voice_record_slot_b,x    ; $CDE7
 l_9:                       lda  zp_scratch_96    ; $CDEA
-                           beq  sid2_sidtab_row_apply_ctrl_write.l_1    ; $CDEC  zp_scratch_96 was zero?
+                           beq  sid2_sidtab_ctrl_accumulator.l_4    ; $CDEC  zp_scratch_96 was zero?
                            and  #$80    ; $CDEE
                            beq  sid2_sidtab_ctrl_accumulator    ; $CDF0  (zp_scratch_96 & $80) was zero?
                            iny    ; $CDF2
@@ -17596,15 +17669,80 @@ l_11:                      lda  sid2_silence_latch_acc    ; $CE09
 ;   Confluence point for SID#2's CTRL row-apply: three mutation modes (replace, AND-with-mask, OR-with-mask) all converge on the STA sid2_silence_latch_acc here. The two non-fall-through arms (single-source replace, AND-mask) jump in from sid2_sidtab_row_apply; the OR-mask fall-through arrives directly. sid2_silence_latch_acc is the single-byte CTRL combiner slot mirroring the equivalent area in SID#1's sidtab_row_apply body.
 sid2_sidtab_row_apply_ctrl_write .block
                            sta  sid2_silence_latch_acc    ; $CE13
-        .byte $A7, $96, $F0, $43, $29, $40, $F0, $06, $C8, $B1, $FB, $8D, $AF, $C8, $8A, $29    ; $CE16
-        .byte $20, $F0, $06, $C8, $B1, $FB, $8D, $CA, $C8, $8A, $29, $10, $F0, $29, $C8, $B3    ; $CE26
-        .byte $FB, $C8, $B1, $FB, $30, $0F, $8E, $B6, $C8, $8D, $BE, $C8, $A9, $00, $8D, $B9    ; $CE36
-        .byte $C8, $8D, $C0, $C8, $60, $0A, $30, $10, $8E, $B9, $C8, $4A, $8D, $C0, $C8, $A9    ; $CE46
-        .byte $69, $8D, $B8, $C8, $8D, $BF, $C8    ; $CE56
-l_1:                       rts    ; $CE5D
-        .byte $8E, $B9, $C8, $4B, $7F, $8D, $C0, $C8, $A9, $E9, $8D, $B8, $C8, $8D, $BF, $C8    ; $CE5E
-        .byte $60, $00, $40, $00, $1F, $00, $1F, $00, $00, $0F, $00, $5F, $00, $5F, $FF, $00    ; $CE6E
-        .byte $71, $00, $00    ; $CE7E
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CE16  sid2_sidtab_ctrl_accumulator
+; ──────────────────────────────────────────────────────────────────────
+; SID#2 sidtab_row_apply CTRL accumulator (71 bytes, sid2_sidtab_ctrl_accumulator).
+;
+;   callers:             1 code sites: $CDF0
+;
+;   Y←$96 / beq +43 / A&=$40 / beq +6 / increment Y / read ($FB),Y / write sid2_voice_record_v2 / A←X / and … — CTRL-accumulator merge logic feeding the sid2_sidtab_row_apply_ctrl_write write sid2_silence_latch_acc write. Mirror of SID#1's sidtab_row_apply cascade CTRL handling.
+sid2_sidtab_ctrl_accumulator .block
+                           lax  zp_scratch_96    ; $CE16
+                           beq  l_4    ; $CE18
+                           and  #$40    ; $CE1A
+                           beq  l_1    ; $CE1C  (zp_scratch_96 & $40) was zero?
+                           iny    ; $CE1E
+                           lda  (zp_sidtab_row_lo),y    ; $CE1F
+                           sta  sid2_voice_record_v2 + $34    ; $CE21
+l_1:                       txa    ; $CE24
+                           and  #$20    ; $CE25
+                           beq  l_2    ; $CE27  (zp_scratch_96 & $20) was zero?
+                           iny    ; $CE29
+                           lda  (zp_sidtab_row_lo),y    ; $CE2A
+                           sta  sid2_cascade_pre_counter    ; $CE2C
+l_2:                       txa    ; $CE2F
+                           and  #$10    ; $CE30
+                           beq  l_4    ; $CE32  (zp_scratch_96 & $10) was zero?
+                           iny    ; $CE34
+                           lax  (zp_sidtab_row_lo),y    ; $CE35
+                           iny    ; $CE37
+                           lda  (zp_sidtab_row_lo),y    ; $CE38
+                           bmi  l_3    ; $CE3A  (zp_sidtab_row_lo),Y had bit 7 set?
+                           stx  sid2_frame_state_c8b6    ; $CE3C
+                           sta  sid2_frame_state_c8be    ; $CE3F
+                           lda  #$00    ; $CE42
+                           sta  sid2_voice_record_v2 + $3E    ; $CE44
+                           sta  sid2_voice_record_v2 + $45    ; $CE47
+                           rts    ; $CE4A
+l_3:                       asl  a    ; $CE4B
+                           bmi  sid2_self_modifier_setup    ; $CE4C  (zp_sidtab_row_lo),Y had bit 7 set?
+                           stx  sid2_voice_record_v2 + $3E    ; $CE4E
+                           lsr  a    ; $CE51
+                           sta  sid2_voice_record_v2 + $45    ; $CE52
+                           lda  #$69    ; $CE55
+                           sta  sid2_register_write_body.l_6    ; $CE57
+                           sta  sid2_register_write_body.l_7    ; $CE5A
+l_4:                       rts    ; $CE5D
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CE5E  sid2_self_modifier_setup
+; ──────────────────────────────────────────────────────────────────────
+; Self-modifier-setup.
+;
+;   callers:             1 code sites: $CE4C
+;
+;   Sequence:
+;     - X→sid2_voice_record_v2.
+;     - .byte $4B $7F (= ALR #$7F, undocumented AND-then-LSR-A on the 6510).
+;     - write sid2_voice_record_v2.
+;     - A←$E9 / write sid2_voice_record_v2 / write sid2_voice_record_v2.
+;     - return.
+;
+;   Patches 4 sites in the sid2_voice_record_v2 region (inside secondary_disk_mode_handler) with X and #$E9. Reached from sid2_sidtab_ctrl_accumulator (bmi). Body ends at sid2_self_modifier_setup; sid2_self_modifier_padding..save_prep_arranger_scan beyond is mixed break/data padding. sid2_voice_record_v2 sits inside the secondary_disk_mode_handler band — this routine seeds it with caller-X + a stride constant.
+sid2_self_modifier_setup .block
+                           stx  sid2_voice_record_v2 + $3E    ; $CE5E
+                           alr  #$7F    ; $CE61
+                           sta  sid2_voice_record_v2 + $45    ; $CE63
+                           lda  #$E9    ; $CE66
+                           sta  sid2_register_write_body.l_6    ; $CE68
+                           sta  sid2_register_write_body.l_7    ; $CE6B
+                           rts    ; $CE6E
+        .byte $00, $40, $00, $1F, $00, $1F, $00, $00, $0F, $00, $5F, $00, $5F, $FF, $00, $71    ; $CE6F
+        .byte $00, $00    ; $CE7F
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -19310,8 +19448,8 @@ seqLIST_status_painter .block
 l_1:                       lda  seqlist_scroll    ; $E013
                            sta  seqlist_paint_loop_end    ; $E016
                            lda  #$16    ; $E019
-                           sta  seqLIST_paint_loop_tail + $97    ; $E01B
-                           ldx  seqlist_paint_loop_end    ; $E01E
+                           sta  seqlist_helper_pad    ; $E01B
+l_2:                       ldx  seqlist_paint_loop_end    ; $E01E
                            lda  hex_digit_hi_lut,x    ; $E021
                            ldy  #$00    ; $E024
                            sta  (zp_ptr1_lo),y    ; $E026
@@ -19320,24 +19458,150 @@ l_1:                       lda  seqlist_scroll    ; $E013
                            sta  (zp_ptr1_lo),y    ; $E02C
                            ldy  seqlist_paint_loop_end    ; $E02E
                            lda  sid_chip_view    ; $E031
-                           bne  seqLIST_hex_byte_paint + $39    ; $E034  sid_chip_view was not SID_VIEW_1?
-        .byte $BF, $00, $1B, $A0, $02, $BD, $00, $7C, $91, $02, $C8, $BD, $00, $7B, $91, $02    ; $E036
-        .byte $AC, $3D, $E1, $BF, $00, $1C, $A0, $04, $BD, $00, $7C, $91, $02, $C8, $BD, $00    ; $E046
-        .byte $7B, $91, $02, $AC, $3D, $E1, $BF, $00, $1D, $A0, $06, $BD, $00, $7C, $91, $02    ; $E056
-        .byte $C8, $BD, $00, $7B, $91, $02, $4C, $A5, $E0, $BF, $00, $6E, $A0, $02, $BD, $00    ; $E066
-        .byte $7C, $91, $02, $C8, $BD, $00, $7B, $91, $02, $AC, $3D, $E1, $BF, $00, $6F, $A0    ; $E076
-        .byte $04, $BD, $00, $7C, $91, $02, $C8, $BD, $00, $7B, $91, $02, $AC, $3D, $E1, $BF    ; $E086
-        .byte $00, $70, $A0, $06, $BD, $00, $7C, $91, $02, $C8, $BD, $00, $7B, $91, $02, $EE    ; $E096
-        .byte $3D, $E1, $A5, $02, $18, $69, $28, $85, $02, $90, $02, $E6, $03, $CE, $3C, $E1    ; $E0A6
-        .byte $F0, $03, $4C, $1E, $E0, $AD, $F7, $0A, $F0, $32, $AD, $89, $72, $18, $69, $15    ; $E0B6
-        .byte $CD, $70, $71, $90, $27, $AC, $89, $72, $CC, $70, $71, $F0, $02, $B0, $1D, $AD    ; $E0C6
-        .byte $70, $71, $38, $ED, $89, $72, $18, $69, $02, $A8, $20, $DE, $0C, $A0, $20, $B1    ; $E0D6
-        .byte $02, $09, $80, $91, $02, $C8, $B1, $02, $09, $80, $91, $02, $20, $61, $B2, $38    ; $E0E6
-        .byte $ED, $89, $72, $90, $18, $C9, $16, $B0, $14, $18, $69, $02, $A8, $20, $DE, $0C    ; $E0F6
-        .byte $A0, $22, $B1, $02, $09, $80, $91, $02, $C8, $C0, $28, $D0, $F5, $AD, $67, $71    ; $E106
-        .byte $C9, $02, $D0, $1E, $AD, $6A, $71, $29, $0C, $F0, $17, $AD, $87, $72, $18, $69    ; $E116
-        .byte $02, $A8, $20, $DE, $0C, $AD, $86, $72, $18, $69, $22, $A8, $B1, $02, $49, $80    ; $E126
-        .byte $91, $02, $20, $F4, $A9, $60, $FF, $FF    ; $E136
+                           bne  seqLIST_hex_byte_paint.l_1    ; $E034  sid_chip_view was not SID_VIEW_1?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E036  seqLIST_hex_byte_paint
+; ──────────────────────────────────────────────────────────────────────
+; seqLIST hex-byte screen paint.
+;
+;   code edges:          fall-through from $E034 in seqLIST_status_painter_2 (2 bytes earlier)
+;
+;   Per-voice arranger byte X → 2 screen-code bytes at ($02),Y: read A=X=arranger_v0_sid1,X / arranger_v1_sid1,X / arranger_v2_sid1,X (reads arranger entry for V0/V1/V2 via undocumented $BF opcode LAX abs,Y); read hex_digit_hi_lut,X (hi-nibble screen code) / write ($02),Y; increment Y; read hex_digit_lo_lut,X (lo-nibble screen code) / write ($02),Y. Three voice arms (seqLIST_hex_byte_paint) write at Y=2/4/6 — 3 columns of 2 hex digits each = the V0/V1/V2 pattern numbers in the seqLIST row. Reads from arrangers arranger_v0_sid1/arranger_v1_sid1/arranger_v2_sid1 (SID#1 view).
+seqLIST_hex_byte_paint .block
+                           lax  arranger_v0_sid1,y    ; $E036
+                           ldy  #$02    ; $E039
+                           lda  hex_digit_hi_lut,x    ; $E03B
+                           sta  (zp_ptr1_lo),y    ; $E03E
+                           iny    ; $E040
+                           lda  hex_digit_lo_lut,x    ; $E041
+                           sta  (zp_ptr1_lo),y    ; $E044
+                           ldy  seqlist_paint_loop_end    ; $E046
+                           lax  arranger_v1_sid1,y    ; $E049
+                           ldy  #$04    ; $E04C
+                           lda  hex_digit_hi_lut,x    ; $E04E
+                           sta  (zp_ptr1_lo),y    ; $E051
+                           iny    ; $E053
+                           lda  hex_digit_lo_lut,x    ; $E054
+                           sta  (zp_ptr1_lo),y    ; $E057
+                           ldy  seqlist_paint_loop_end    ; $E059
+                           lax  arranger_v2_sid1,y    ; $E05C
+                           ldy  #$06    ; $E05F
+                           lda  hex_digit_hi_lut,x    ; $E061
+                           sta  (zp_ptr1_lo),y    ; $E064
+                           iny    ; $E066
+                           lda  hex_digit_lo_lut,x    ; $E067
+                           sta  (zp_ptr1_lo),y    ; $E06A
+                           jmp  seqLIST_paint_loop_tail    ; $E06C
+l_1:                       lax  arranger_v3_sid2,y    ; $E06F
+                           ldy  #$02    ; $E072
+                           lda  hex_digit_hi_lut,x    ; $E074
+                           sta  (zp_ptr1_lo),y    ; $E077
+                           iny    ; $E079
+                           lda  hex_digit_lo_lut,x    ; $E07A
+                           sta  (zp_ptr1_lo),y    ; $E07D
+                           ldy  seqlist_paint_loop_end    ; $E07F
+                           lax  arranger_v4_sid2,y    ; $E082
+                           ldy  #$04    ; $E085
+                           lda  hex_digit_hi_lut,x    ; $E087
+                           sta  (zp_ptr1_lo),y    ; $E08A
+                           iny    ; $E08C
+                           lda  hex_digit_lo_lut,x    ; $E08D
+                           sta  (zp_ptr1_lo),y    ; $E090
+                           ldy  seqlist_paint_loop_end    ; $E092
+                           lax  arranger_v5_sid2,y    ; $E095
+                           ldy  #$06    ; $E098
+                           lda  hex_digit_hi_lut,x    ; $E09A
+                           sta  (zp_ptr1_lo),y    ; $E09D
+                           iny    ; $E09F
+                           lda  hex_digit_lo_lut,x    ; $E0A0
+                           sta  (zp_ptr1_lo),y    ; $E0A3
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E0A5  seqLIST_paint_loop_tail
+; ──────────────────────────────────────────────────────────────────────
+; Loop tail for seqLIST_hex_byte_paint.
+;
+;   callers:             seqLIST_hex_byte_paint (JMP seqLIST_paint_loop_tail), seqLIST_hex_byte_paint+ fallthrough
+;
+;   increment seqlist_paint_loop_end (counter) / advance ($02) pointer by $28 (40-byte row stride) / decrement seqLIST_paint_loop_tail / beq → screen-paint exit branch involving ui_mode_mirror vs seqlist_scroll (visible row vs cursor row, ORs $80 markers via screen_row_addr_resolver); else jump seqLIST_status_painter.
+seqLIST_paint_loop_tail .block
+                           inc  seqlist_paint_loop_end    ; $E0A5
+                           lda  zp_ptr1_lo    ; $E0A8
+                           clc    ; $E0AA
+                           adc  #$28    ; $E0AB
+                           sta  zp_ptr1_lo    ; $E0AD
+                           bcc  l_1    ; $E0AF  (zp_ptr1_lo + $28) shifted-out bit was 0?
+                           inc  zp_ptr1_hi    ; $E0B1
+l_1:                       dec  seqlist_helper_pad    ; $E0B3
+                           beq  l_2    ; $E0B6  (seqlist_helper_pad − 1) was zero?
+                           jmp  seqLIST_status_painter.l_2    ; $E0B8
+l_2:                       lda  playback_state    ; $E0BB
+                           beq  l_4    ; $E0BE  playback_state was PLAYBACK_OFF?
+                           lda  seqlist_scroll    ; $E0C0
+                           clc    ; $E0C3
+                           adc  #$15    ; $E0C4
+                           cmp  ui_mode_mirror    ; $E0C6
+                           bcc  l_4    ; $E0C9  A was below ui_mode_mirror?
+                           ldy  seqlist_scroll    ; $E0CB
+                           cpy  ui_mode_mirror    ; $E0CE
+                           beq  l_3    ; $E0D1  seqlist_scroll was ui_mode_mirror?
+                           bcs  l_4    ; $E0D3  seqlist_scroll was ui_mode_mirror or above?
+l_3:                       lda  ui_mode_mirror    ; $E0D5
+                           sec    ; $E0D8
+                           sbc  seqlist_scroll    ; $E0D9
+                           clc    ; $E0DC
+                           adc  #$02    ; $E0DD
+                           tay    ; $E0DF
+                           jsr  screen_row_addr_resolver    ; $E0E0
+                           ldy  #$20    ; $E0E3
+                           lda  (zp_ptr1_lo),y    ; $E0E5
+                           ora  #$80    ; $E0E7
+                           sta  (zp_ptr1_lo),y    ; $E0E9
+                           iny    ; $E0EB
+                           lda  (zp_ptr1_lo),y    ; $E0EC
+                           ora  #$80    ; $E0EE
+                           sta  (zp_ptr1_lo),y    ; $E0F0
+l_4:                       jsr  seqED_step_cursor_increment    ; $E0F2
+                           sec    ; $E0F5
+                           sbc  seqlist_scroll    ; $E0F6
+                           bcc  l_6    ; $E0F9  seqlist_scroll borrow
+                           cmp  #$16    ; $E0FB
+                           bcs  l_6    ; $E0FD  A was $16 or above?
+                           clc    ; $E0FF
+                           adc  #$02    ; $E100
+                           tay    ; $E102
+                           jsr  screen_row_addr_resolver    ; $E103
+                           ldy  #$22    ; $E106
+l_5:                       lda  (zp_ptr1_lo),y    ; $E108
+                           ora  #$80    ; $E10A
+                           sta  (zp_ptr1_lo),y    ; $E10C
+                           iny    ; $E10E
+                           cpy  #$28    ; $E10F
+                           bne  l_5    ; $E111  ($22 + 1) was not $28?
+l_6:                       lda  ui_mode    ; $E113
+                           cmp  #UI_MODE_SEQLIST    ; $E116
+                           bne  l_7    ; $E118  ui_mode was not UI_MODE_SEQLIST?
+                           lda  cursor_redraw_flag    ; $E11A
+                           and  #$0C    ; $E11D
+                           beq  l_7    ; $E11F  (cursor_redraw_flag & $0C) was zero?
+                           lda  seqed_col_cursor    ; $E121
+                           clc    ; $E124
+                           adc  #$02    ; $E125
+                           tay    ; $E127
+                           jsr  screen_row_addr_resolver    ; $E128
+                           lda  seqlist_col_cursor    ; $E12B
+                           clc    ; $E12E
+                           adc  #$22    ; $E12F
+                           tay    ; $E131
+                           lda  (zp_ptr1_lo),y    ; $E132
+                           eor  #$80    ; $E134
+                           sta  (zp_ptr1_lo),y    ; $E136
+l_7:                       jsr  vic_sprite_init_internal.l_91    ; $E138
+                           rts    ; $E13B
+        .byte $FF, $FF    ; $E13C
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────

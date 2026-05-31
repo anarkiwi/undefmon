@@ -3977,6 +3977,14 @@ role     = "SID#2 pitch-oscillator post-integration tail — mirror of pitch_osc
 notes    = "clear-carry / Y←sid2_v2_cascade_slot_triple,X (SID#2 current-note mirror of current_note_v0,X) / read sid2_voice_record,X / A+=note_pitch_lut_lo,Y (note→pitch LUT lo — shared with SID#1) → sid2_register_write_body,X (SID#2 voice freq lo) / read note_pitch_lut_hi,Y (note→pitch LUT hi — shared) → sid2_register_write_body,X. Reached from sid2_pitch_oscillator jump inside sid2_pitch_oscillator. Not a separate function — see sid2_pitch_oscillator."
 evidence = "tools/re/xref.py --target 0xCC3A → 1 caller."
 
+[region."$CCEC"]
+name = "sid2_pitch_sweep_pad"
+role = "Two $00 padding bytes after the SID#2 pitch-sweep helper's rts, before sid2_player_init_body."
+
+[region."$E13C"]
+name = "seqlist_helper_pad"
+role = "Padding byte(s) after the preceding helper's rts, before seqLIST_helper."
+
 [region."$CCEE"]
 name     = "sid2_player_init_body"
 role     = "SID#2 player_init body inside sid2_main_tick."
@@ -5451,26 +5459,26 @@ notes = "Mirror of v0_sc2_cascade_slot_triple / v1_sc2_cascade_slot_triple."
 
 [region."$149D"]
 name  = "ps_sweep_anc_imm_smc"
-role  = "Self-mod operand pair ($2B $7F), 2 bytes — the immediate operand of `ANC #$7F` at ps_sweep_add_path_smc (the and-then-clear-carry illegal opcode used by the PS sweep ADD path)."
-notes = "Followed by ps_sweep_anc_imm_smc continuing the same instruction stream."
+role  = "Undocumented opcode $2B (immediate): masks A with #$7F and copies bit 7 into carry, in the PS-sweep add path; rendered as .byte because 64tass emits the $0B encoding for that mnemonic."
+notes = "Continues the ps_sweep_add_path_smc instruction stream; the $2B byte is one of two ANC encodings (the other is $0B)."
 
 [region."$14E4"]
 name  = "pitch_oscillator_loop_tail_smc"
-role  = "Self-mod operand pair ($CB $31), 2 bytes — the indexed-load address slot read by the pitch_oscillator_loop_tail at the tail of pitch_slide_oscillator."
-notes = "The X-loop walks voices by A-=$31 stride, so pitch_oscillator_loop_tail_smc hold the LUT base after the stride-back."
+role  = "Undocumented opcode $CB (immediate): X is set to (A & X) minus #$31, at the tail of pitch_slide_oscillator."
+notes = "Subtracts the $31 per-voice record stride as the loop walks voices."
 
 [region."$156E"]
 name  = "pitch_oscillator_anc_smc_mirror"
-role  = "Self-mod operand pair ($CB $31), 2 bytes — mirror of pitch_oscillator_loop_tail_smc but in a parallel branch inside the pitch oscillator."
-notes = "Same stride-back semantics."
+role  = "Undocumented opcode $CB (immediate): X is set to (A & X) minus #$31, a parallel-branch mirror of pitch_oscillator_loop_tail_smc."
+notes = "Same $31 stride-subtract semantics."
 
 [region."$174E"]
 name = "pitch_lut_tail_smc"
-role = "Self-mod operand pair ($A7 $96), 2 bytes — operand of an indexed lda in the late pitch-LUT tail."
+role = "Undocumented opcode $A7 (zp): loads A and X together from a zero-page slot, in the late pitch-LUT tail."
 
 [region."$1799"]
 name = "player_irq_tail_anc_smc"
-role = "Self-mod operand pair ($4B $7F), 2 bytes — operand of an ANC-like immediate-mode instruction in the player-IRQ tail before the player_irq_band_nop_padding no-op padding."
+role = "Undocumented opcode $4B (immediate): masks A with #$7F then shifts it right one bit, in the player-IRQ tail before player_irq_band_nop_padding."
 
 [region."$17A7"]
 name  = "player_irq_band_nop_padding"

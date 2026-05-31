@@ -203,14 +203,18 @@ reproducing the build.)
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
 
-5. **100 of ~11,520 code-starts are statically unreachable** (`make
-   unreachable-triage`). This was 3,234 until the `OPS` table learned
-   the LAX-abs / SAX-abs undocumented opcodes defMON uses: those were
-   rendering as `.byte`, fragmenting the callgraph's fall-through graph
-   so large stretches of genuine code (the unrolled `paint_page` paint
-   routine, the row-timer SAX stores) looked disconnected. The
-   remaining 100 are the `smc_io_band` RAM-under-I/O encoder (reached
-   via SMC / banking) plus a handful of `isolated` starts.
+5. **46 of ~11,710 code-starts are statically unreachable** (`make
+   unreachable-triage`), and **all 46 are `smc_io_band`** — the
+   RAM-under-I/O encoder/decoder reached only via SMC dispatch / I/O
+   banking, the legitimate floor for a static walk. This was 3,234
+   until the `OPS` table learned the undocumented opcodes defMON uses
+   (LAX/SAX in every mode, plus the combine-ops ANC/ALR/ARR/AXS):
+   those rendered as `.byte`, fragmenting the callgraph's fall-through
+   so genuine code (the unrolled `paint_page` routine, the row-timer
+   stores, the pitch-slide math) looked disconnected. The two
+   duplicate-encoding bytes (`$2B` ANC, `$EB` SBC) that 64tass can't
+   reproduce from a mnemonic are classified as instructions but
+   rendered as `.byte` with the decoded op in the comment.
 
 6. **SMC catalogue is curated** (dispatch + opcode + branch). 11
    genuine `smc_opcode` flips and the 9 `smc_branch` gate sites at
