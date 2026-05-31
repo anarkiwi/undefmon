@@ -3196,7 +3196,9 @@ player_play_body .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5A6
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-0's SID writes. $C5A6 writes `jmp $1053` here (jump to the V1 write band) when V0's wave is off. Restored to STX when the voice plays again.
+;   When patched, jumps to:
+;     $1053  v1_sid_write_band             [skip V0 SID writes]
+;   STX -> JMP: when voice 0's wave is off, the SID-write band entry is overwritten with a jump that skips V0's SID writes; restored to STX when the voice plays again.
 l_1:                       stx  SID_V1_PW_LO    ; $1026
                            sta  save_encoder_byte_counter_acc.SID_V1_PW_HI    ; $1029
                            ldx  #$00    ; $102C  ; ← slide_acc_commit_lo
@@ -3228,7 +3230,9 @@ v1_sid_write_band .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5C8
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-1's SID writes. $C5C8 writes `jmp $1084` here (jump to the V2 write band) when V1's wave is off.
+;   When patched, jumps to:
+;     $1084  v2_sid_write_band             [skip V1 SID writes]
+;   STX -> JMP: skips voice 1's SID writes when V1's wave is off.
 l_1:                       stx  save_encoder_byte_counter_acc.SID_V2_PW_LO    ; $1057
                            sta  SID_V2_PW_HI    ; $105A
                            ldx  #$00    ; $105D
@@ -3260,7 +3264,9 @@ v2_sid_write_band .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C5EA
 ;   STX can flip to: JMP
-;   STX -> JMP: skip voice-2's SID writes. $C5EA writes `jmp $10A9` here (jump to the SID#1 globals tail) when V2's wave is off.
+;   When patched, jumps to:
+;     $10A9  sid1_globals_tail             [skip V2 SID writes]
+;   STX -> JMP: skips voice 2's SID writes when V2's wave is off.
 l_1:                       stx  save_encoder_byte_counter_acc.SID_V3_PW_LO    ; $1088
                            sta  SID_V3_PW_HI    ; $108B
                            ldx  #$00    ; $108E
@@ -16651,7 +16657,9 @@ sid2_register_write_body .block
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C53D
 ;   STX can flip to: JMP
-;   STX -> JMP: SID#2 analogue of $1026 — skip SID#2 voice-0's writes. $C53D writes `jmp $C853` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C853  sid2_v1_sid_write_band        [skip SID#2 V0 writes]
+;   STX -> JMP: SID#2 analogue of the V0 voice-skip — skips SID#2 voice 0's writes when its wave is off.
 l_1:                       stx  save_encoder_jp_chain_walker.SID2_V1_PW_LO    ; $C826
                            sta  SID2_V1_PW_HI    ; $C829
                            ldx  #$00    ; $C82C  ; ← sid2_v0_voice_record_slide_lo
@@ -16672,7 +16680,9 @@ l_2:                       ldx  #$00    ; $C853
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C55F
 ;   STX can flip to: JMP
-;   STX -> JMP: skip SID#2 voice-1's writes. $C55F writes `jmp $C884` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C884  sid2_v2_sid_write_band        [skip SID#2 V1 writes]
+;   STX -> JMP: skips SID#2 voice 1's writes when its wave is off.
 l_3:                       stx  SID2_V2_PW_LO    ; $C857
                            sta  SID2_V2_PW_HI    ; $C85A
                            ldx  #$00    ; $C85D
@@ -16693,7 +16703,9 @@ l_4:                       ldx  #$00    ; $C884
 ; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
 ;   Patched at: $C581
 ;   STX can flip to: JMP
-;   STX -> JMP: skip SID#2 voice-2's writes. $C581 writes `jmp $C8A9` here when the voice's wave is off.
+;   When patched, jumps to:
+;     $C8A9  sid2_globals_tail             [skip SID#2 V2 writes]
+;   STX -> JMP: skips SID#2 voice 2's writes when its wave is off.
 l_5:                       stx  SID2_V3_PW_LO    ; $C888
                            sta  SID2_V3_PW_HI    ; $C88B
                            ldx  #$00    ; $C88E
