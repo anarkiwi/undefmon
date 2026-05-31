@@ -4471,6 +4471,12 @@
       "is_primary": true
     },
     {
+      "addr": "$0889",
+      "name": "post_load_startup",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$08AA",
       "name": "LAB_08aa",
       "source": "DEFAULT",
@@ -8260,6 +8266,12 @@
       "addr": "$7723",
       "name": "LAB_7722+1",
       "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$7735",
+      "name": "save_failure_panic_loop",
+      "source": "USER_DEFINED",
       "is_primary": true
     },
     {
@@ -19429,6 +19441,12 @@
       "is_primary": true
     },
     {
+      "addr": "$D772",
+      "name": "configurable_emitter_post_write_hook_writeonly",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$D77D",
       "name": "FUN_d77d",
       "source": "DEFAULT",
@@ -21135,6 +21153,132 @@
     {
       "addr": "$E356",
       "name": "LAB_e356",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E357",
+      "name": "seqLIST_writer_super_arg_dispatch",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E35F",
+      "name": "LAB_e35f",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E36D",
+      "name": "LAB_e36d",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E37F",
+      "name": "LAB_e37f",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E382",
+      "name": "LAB_e382",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E393",
+      "name": "LAB_e393",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E397",
+      "name": "LAB_e397",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3A9",
+      "name": "LAB_e3a9",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3AC",
+      "name": "LAB_e3ac",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3AD",
+      "name": "LAB_e3ac+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3B7",
+      "name": "LAB_e3b7",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3C4",
+      "name": "LAB_e3c4",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3C8",
+      "name": "LAB_e3c8",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3DA",
+      "name": "LAB_e3da",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3DD",
+      "name": "LAB_e3dd",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3EA",
+      "name": "LAB_e3ea",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E3EE",
+      "name": "LAB_e3ee",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E403",
+      "name": "LAB_e403",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E409",
+      "name": "LAB_e409",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E411",
+      "name": "LAB_e411",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E41A",
+      "name": "LAB_e41a",
       "source": "DEFAULT",
       "is_primary": true
     },
