@@ -238,6 +238,7 @@ _X_NEUTRAL = frozenset(
         "ANC",
         "ALR",
         "ARR",  # write A only — neutral for X
+        "PLA",  # pulls into A only — neutral for X
         "CMP",
         "CPX",
         "CPY",
@@ -314,6 +315,7 @@ _Y_NEUTRAL = frozenset(
         "ROL",
         "ROR",
         "LAX",  # writes A+X, reads Y — neutral for Y
+        "PLA",  # pulls into A only — neutral for Y
         "JMP",
         "BEQ",
         "BNE",
@@ -537,6 +539,7 @@ def _resolve_lhs(
     mem: bytes,
     instr_at: dict[int, tuple[str, str, int]],
     graph,
+    depth: int = 0,
 ) -> dict:
     """Find what fed ``reg`` at ``setter_pc``.
 
@@ -665,10 +668,13 @@ def _resolve_lhs(
             # An ALU op computed `cur` in-function from a value we can't
             # name. The register itself is still the honest lhs: the
             # branch condition surfaces the comparison (e.g. `A < #imm?`)
-            # even though the operand isn't a variable. Other writers
-            # (PLA from stack, etc.) stay unknown.
+            # even though the operand isn't a variable.
             if mnem in ("ADC", "SBC", "ORA", "EOR", "AND", "ANC", "ALR", "ARR", "AXS"):
                 return {"kind": "computed_reg", "reg": cur, "via": mnem}
+            # PLA pulled `cur` (=A) off the stack — trace it to the
+            # matching PHA's pushed value via stack-depth balancing.
+            if mnem == "PLA" and cur == "A":
+                return _resolve_pla_source(pc, mem, instr_at, graph, depth + 1)
             return {"kind": "unknown", "reason": f"clobber_{mnem.lower()}"}
 
         if _is_neutral(mnem, mode, cur):
@@ -712,6 +718,94 @@ def _resolve_lhs(
     transforms = {s[-1] for s in sources}
     transform_out = next(iter(transforms)) if len(transforms) == 1 else None
     return _format_resolved(next(iter(sources)), transform_out)
+
+
+_MAX_PLA_DEPTH = 4
+
+
+def _resolve_pla_source(
+    pla_pc: int,
+    mem: bytes,
+    instr_at: dict[int, tuple[str, str, int]],
+    graph,
+    depth: int = 0,
+) -> dict:
+    """Resolve the value a ``PLA`` pulls by matching it to the ``PHA``
+    that pushed it. Walks back over CFG edges tracking ``pending`` — the
+    number of pulls still needing a matching push (a PLA/PLP seen going
+    back adds one, a PHA/PHP removes one). When a PHA balances the stack
+    (``pending`` hits 0) it pushed our value, so resolve A's source there.
+
+    Conservative: a balancing PHP means the pull took a status byte (not a
+    register) — unknown; TSX/TXS move the stack pointer directly —
+    unknown; walking off the function front before balancing means the
+    value came from the caller's stack — unknown. JSR/RTS are stack-
+    neutral within a function (the callee balances its own frame). If
+    multiple paths resolve to different sources, the result is unknown."""
+    if depth > _MAX_PLA_DEPTH:
+        return {"kind": "unknown", "reason": "pla_depth"}
+    preds = _preds_of(pla_pc, graph, instr_at)
+    if not preds:
+        return {"kind": "unknown", "reason": "pla_from_caller"}
+    visited: set[tuple[int, int]] = set()
+    frontier: list[tuple[int, int]] = [(p, 1) for p in preds]
+    results: list[dict] = []
+    steps = 0
+    while frontier:
+        if steps >= _MAX_WALK_STEPS:
+            return {"kind": "unknown", "reason": "pla_walk_limit"}
+        steps += 1
+        pc, pending = frontier.pop()
+        if (pc, pending) in visited:
+            continue
+        visited.add((pc, pending))
+        info = instr_at.get(pc)
+        if info is None:
+            return {"kind": "unknown", "reason": "pla_non_code"}
+        mnem = info[0]
+        if mnem in ("PLA", "PLP"):
+            pending += 1
+        elif mnem == "PHA":
+            pending -= 1
+            if pending == 0:
+                results.append(_resolve_lhs(pc, "A", mem, instr_at, graph, depth + 1))
+                continue
+        elif mnem == "PHP":
+            pending -= 1
+            if pending == 0:
+                return {"kind": "unknown", "reason": "pla_pulls_status"}
+        elif mnem in ("TXS", "TSX"):
+            return {"kind": "unknown", "reason": "pla_sp_moved"}
+        nxt = _preds_of(pc, graph, instr_at)
+        if not nxt:
+            return {"kind": "unknown", "reason": "pla_from_caller"}
+        for p in nxt:
+            frontier.append((p, pending))
+    if not results:
+        return {"kind": "unknown", "reason": "pla_no_push"}
+    keys = {_source_key_of_lhs(r) for r in results}
+    if len(keys) > 1:
+        return {"kind": "unknown", "reason": "pla_ambiguous"}
+    return results[0]
+
+
+def _source_key_of_lhs(lhs: dict) -> tuple:
+    """Identity key for an already-formatted lhs dict, to test whether
+    two PLA-source resolutions agree."""
+    k = lhs.get("kind")
+    if k == "var":
+        return ("var", lhs.get("var_addr"), lhs.get("index"))
+    if k == "imm":
+        return ("imm", lhs.get("value"))
+    if k == "var_indirect":
+        return ("var_indirect", lhs.get("ptr_addr"), lhs.get("index"))
+    if k == "computed_reg":
+        return ("computed_reg", lhs.get("reg"), lhs.get("via"))
+    if k == "from_caller":
+        return ("from_caller", lhs.get("reg"))
+    if k == "jsr_return":
+        return ("jsr_return", lhs.get("target"), lhs.get("reg"))
+    return ("unknown", lhs.get("reason"))
 
 
 def _source_key(src: tuple) -> tuple:
@@ -924,6 +1018,26 @@ def collect_facts(
                 "containing_block": _block_of(pc, sorted_pcs, name_by_pc),
             }
             stats["computed_reg"] += 1
+            continue
+
+        # PLA as the direct setter: the branch tests the byte pulled off
+        # the stack (vs zero / bit 7). Trace it to its matching PHA.
+        if s_mnem == "PLA":
+            lhs = _resolve_pla_source(setter_pc, mem, instr_at, graph)
+            rhs = {"kind": "zero"}
+            if lhs["kind"] in ("var", "imm", "var_indirect"):
+                stats["operand_based"] += 1
+            else:
+                stats["unknown"] += 1
+            facts[f"${pc:04X}"] = {
+                "branch": mnem,
+                "taken_target": f"${taken:04X}" if taken is not None else None,
+                "fall_through": f"${fall_through:04X}",
+                "flag_setter": flag_setter_rec,
+                "lhs": lhs,
+                "rhs": rhs,
+                "containing_block": _block_of(pc, sorted_pcs, name_by_pc),
+            }
             continue
 
         reg_info = _reg_for_setter(s_mnem, s_mode)

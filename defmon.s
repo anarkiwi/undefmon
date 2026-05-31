@@ -2807,7 +2807,7 @@ paint_ui_selection_cell .block
                            cmp  #UI_MODE_SEQLIST    ; $0E15
                            beq  paint_selection_glyph_write.l_1    ; $0E17  ui_mode was UI_MODE_SEQLIST?
                            pla    ; $0E19
-                           beq  l_1    ; $0E1A
+                           beq  l_1    ; $0E1A  A was zero?
                            lda  #$A0    ; $0E1C
                            jmp  paint_selection_glyph_write    ; $0E1E
 l_1:                       lda  #$D1    ; $0E21
@@ -2825,7 +2825,7 @@ paint_selection_glyph_write .block
                            sta  SCREEN_RAM_SIDTAB_GLYPH,y    ; $0E23
                            rts    ; $0E26
 l_1:                       pla    ; $0E27
-                           beq  l_2    ; $0E28
+                           beq  l_2    ; $0E28  A was zero?
                            lda  #$02    ; $0E2A
 l_2:                       sta  COLOR_RAM,x    ; $0E2C
                            sta  COLOR_RAM + $01,x    ; $0E2F
@@ -7360,8 +7360,8 @@ l_4:                       cpy  #KEY_F7    ; $81F7
                            lda  ui_mode_range_bound    ; $8208
                            cmp  #UI_MODE_SEQED    ; $820B
                            pla    ; $820D
-                           cmp  #$00    ; $820E
-                           bne  l_5    ; $8210
+                           cmp  #PLAYBACK_OFF    ; $820E
+                           bne  l_5    ; $8210  playback_state was not PLAYBACK_OFF?
                            lda  editor_state_716f    ; $8212
                            sta  current_arranger_row    ; $8215
                            inc  current_arranger_row    ; $8218
@@ -13728,22 +13728,22 @@ seqED_voice_selector_check .block
                            bne  l_4    ; $B288  sid_chip_view was not SID_VIEW_1?
                            pla    ; $B28A
                            cmp  #$09    ; $B28B
-                           bcs  l_1    ; $B28D
+                           bcs  l_1    ; $B28D  voice_selector was $09 or above?
                            lda  arranger_v0_sid1,x    ; $B28F
                            jmp  l_3    ; $B292
 l_1:                       cmp  #$12    ; $B295
-                           bcs  l_2    ; $B297
+                           bcs  l_2    ; $B297  voice_selector was $12 or above?
                            lda  arranger_v1_sid1,x    ; $B299
                            jmp  l_3    ; $B29C
 l_2:                       lda  arranger_v2_sid1,x    ; $B29F
 l_3:                       rts    ; $B2A2
 l_4:                       pla    ; $B2A3
                            cmp  #$09    ; $B2A4
-                           bcs  l_5    ; $B2A6
+                           bcs  l_5    ; $B2A6  voice_selector was $09 or above?
                            lda  arranger_v3_sid2,x    ; $B2A8
                            jmp  l_3    ; $B2AB
 l_5:                       cmp  #$12    ; $B2AE
-                           bcs  l_6    ; $B2B0
+                           bcs  l_6    ; $B2B0  voice_selector was $12 or above?
                            lda  arranger_v4_sid2,x    ; $B2B2
                            jmp  l_3    ; $B2B5
 l_6:                       lda  arranger_v5_sid2,x    ; $B2B8
@@ -19017,7 +19017,7 @@ load_decoder_patbody_4:    and  #$70    ; $D32C
                            jmp  load_decoder_patbody_2    ; $D35A
 load_decoder_patbody_5:    inx    ; $D35D
                            cpx  save_chain_counter    ; $D35E
-                           bne  load_decoder_patbody_1    ; $D361
+                           bne  load_decoder_patbody_1    ; $D361  ($00 + 1) was not save_chain_counter?
                            rts    ; $D363
         .byte $00    ; $D364
 load_decoder_patbody_6:    ldx  pat_base_lo    ; $D365
@@ -19166,7 +19166,7 @@ load_decoder_patbody_24:   lda  SCREEN_RAM + $F1,x    ; $D48D
                            sta  KERNAL_KEYBUF_SCRATCH,x    ; $D490
                            inx    ; $D493
                            cpx  song_end_pointer_pre    ; $D494
-                           bne  load_decoder_patbody_21    ; $D497
+                           bne  load_decoder_patbody_21    ; $D497  sidtab_row_decoder->X was not song_end_pointer_pre?
                            ldx  #$00    ; $D499
 load_decoder_patbody_25:   lda  pat_base_lo,x    ; $D49B
                            sta  zp_decoder_dest_lo    ; $D49E
@@ -19427,9 +19427,9 @@ l_7:                       bcs  l_8    ; $D659
 l_8:                       ldy  #$00    ; $D669
                            pla    ; $D66B
                            cpx  #$01    ; $D66C
-                           beq  l_11    ; $D66E
+                           beq  l_11    ; $D66E  A was $01?
                            cpx  #$02    ; $D670
-                           beq  l_10    ; $D672
+                           beq  l_10    ; $D672  A was $02?
                            jsr  decoder_emit_byte_inc    ; $D674
                            cmp  #$FF    ; $D677
                            bne  l_9    ; $D679  decoder_emit_byte_inc->A was not $FF?
@@ -19708,7 +19708,7 @@ decoder_emit_byte_dec_body .block
 l_1:                       pla    ; $D742
                            dex    ; $D743
                            cpx  #$FF    ; $D744
-                           bne  decoder_emit_byte_dec    ; $D746
+                           bne  decoder_emit_byte_dec    ; $D746  decoder_src_decr->X was not $FF?
                            jmp  decoder_block_helper.l_1    ; $D748
 l_2:                       rts    ; $D74B
 .bend
@@ -20401,7 +20401,7 @@ l_17:                      lda  super_arg_count    ; $E2D9
 l_18:                      lda  arranger_v5_sid2,y    ; $E2EE
                            sta  sidtab_data + 290*SidtabRow_size + $03,y    ; $E2F1
 l_19:                      cpy  #$FF    ; $E2F4  ; ← (SMC operand at $E2F5, no name)
-                           beq  l_20    ; $E2F6
+                           beq  l_20    ; $E2F6  ($FF − 1) was $FF?
                            jmp  l_3    ; $E2F8
 l_20:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E2FB
                            dex    ; $E2FE

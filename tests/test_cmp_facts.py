@@ -3,7 +3,46 @@
 import types
 import unittest
 
-from tools.re.cmp_facts import _lhs_from_operand_setter, _resolve_lhs
+from tools.re.cmp_facts import (
+    _lhs_from_operand_setter,
+    _resolve_lhs,
+    _resolve_pla_source,
+)
+
+
+class TestResolvePlaSource(unittest.TestCase):
+    def test_pla_matched_to_pha_resolves_to_pushed_var(self):
+        """`LDA $1234; PHA; NOP; PLA` — the PLA matches the PHA across the
+        intervening NOP and resolves to the variable pushed ($1234)."""
+        mem = bytearray(0x10000)
+        mem[0x1000:0x1003] = bytes([0xAD, 0x34, 0x12])
+        mem[0x1003] = 0x48
+        mem[0x1004] = 0xEA
+        mem[0x1005] = 0x68
+        instr_at = {
+            0x1000: ("LDA", "abs", 3),
+            0x1003: ("PHA", "imp", 1),
+            0x1004: ("NOP", "imp", 1),
+            0x1005: ("PLA", "imp", 1),
+        }
+        graph = types.SimpleNamespace(
+            fall_through_in={0x1003: 0x1000, 0x1004: 0x1003, 0x1005: 0x1004},
+            code_in={},
+        )
+        lhs = _resolve_pla_source(0x1005, mem, instr_at, graph)
+        self.assertEqual(lhs["kind"], "var")
+        self.assertEqual(lhs["var_addr"], 0x1234)
+
+    def test_unbalanced_pla_pulls_caller_value(self):
+        """A PLA with no matching PHA in the function (the push came from
+        the caller) is unknown, not a phantom source."""
+        mem = bytearray(0x10000)
+        mem[0x1000] = 0x68
+        mem[0x1001] = 0xEA
+        instr_at = {0x0FFF: ("NOP", "imp", 1), 0x1000: ("PLA", "imp", 1)}
+        graph = types.SimpleNamespace(fall_through_in={0x1000: 0x0FFF}, code_in={})
+        lhs = _resolve_pla_source(0x1000, mem, instr_at, graph)
+        self.assertEqual(lhs["kind"], "unknown")
 
 
 class TestResolveLhsJsrReturn(unittest.TestCase):
