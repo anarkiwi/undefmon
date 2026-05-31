@@ -18,7 +18,9 @@ jobs:
       - name: Install Kick Assembler (for round-trip)
         run: |
           mkdir -p "$HOME/kickass"
-          curl -fsSL http://theweb.dk/KickAssembler/KickAssembler.zip \
+          # theweb.dk 415s the default curl User-Agent, so pose as a browser.
+          curl -fsSL -A "Mozilla/5.0" \
+            http://theweb.dk/KickAssembler/KickAssembler.zip \
             -o /tmp/kickass.zip
           unzip -q /tmp/kickass.zip -d "$HOME/kickass"
           jar="$(find "$HOME/kickass" -name KickAss.jar | head -1)"
