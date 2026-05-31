@@ -13011,6 +13011,9 @@ l_7:                       rts    ; $AB8E
 ; seqED handler (mode ui_mode=UI_MODE_SEQED).
 ;
 ;   callers:             1 code sites: $094A
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Same shape as sidTAB: X←kbd_modifiers / Y←kbd_decoded_key / call seqED_dispatch dispatch / return.
 seqED_handler .block
@@ -13028,6 +13031,7 @@ seqED_handler .block
 ;
 ;   callers:             seqED_handler
 ;   inputs:              X = kbd_modifiers, Y = kbd_decoded_key
+;   registers clobbered: A, X, Y
 ;
 ;   compare X=$00 (no modifier) / bne → seqED_clear_arm ctrl/cbm/shift dispatch; else cascade through bare-key arms (CRSR keys, note-keys, SPACE clear-advance, INSTDEL clear, etc.).
 seqED_dispatch .block
@@ -13069,6 +13073,10 @@ l_5:                       cpy  #KEY_CRSRLR    ; $AEAF
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED note-key arm.
 ;
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          fall-through from $AEB1 in seqED_CRSRUD_bare_arm_5 (2 bytes earlier)
 ;
 ;   Looks up the keycap pitch in key_pitch_lut (note keys carry the raw pitch; non-note keys are tagged with bit 7 set and exit immediately). For note keys: adds the current octave offset, dispatches to writer_note via field_writer_dispatcher (X/Y = lo/hi of writer_note), then jumps into seqED_auto_advance to roll the cursor.
@@ -13089,6 +13097,10 @@ l_1:                       cpy  #$20    ; $AEC6
 ; $AECA  seqED_clear_advance_arm
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED clear-and-advance arm (SPACE, $20).
+;
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $AEC8 in seqED_note_arm_1 (2 bytes earlier)
 ;
@@ -13243,6 +13255,8 @@ l_13:                      cpx  #$10    ; $AFBC
 ; seqED bare-CRSR arm.
 ;
 ;   callers:             1 code sites: $AFBE
+;   inputs:              Y
+;   registers clobbered: A, X, Y
 ;
 ;   CRSRUD ($6F) → jump seqED_cursor_step_up_bare step cursor; else falls through to the digit-keys check via seqED_cursor_wrap.
 seqED_cursor_step .block
@@ -13346,6 +13360,9 @@ l_12:                      jmp  seqED_auto_advance_bare_return    ; $B06B
 ; seqED CTRL-prefix arm.
 ;
 ;   callers:             1 code sites: $AFC0
+;   inputs:              X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   compare X=$04 (CTRL only) / →seq when zeroED_super_set; else jump seqED_cbm_shift_arm.
 seqED_ctrl_prefix .block
@@ -13451,6 +13468,9 @@ l_11:                      jmp  seqED_auto_advance_bare_return    ; $B131
 ; seqED CBM+SHIFT arm.
 ;
 ;   callers:             1 code sites: $B072
+;   inputs:              A, X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   compare X=$30 (CBM+SHIFT bitmask) / →seq when nonzeroED_ctrl_cbm. Inner: CRSRUD → call super_arg_extract + jump seqED_auto_advance_octave; INSTDEL → writer (X=$B8,Y=$B4).
 seqED_cbm_shift_arm .block
@@ -13491,6 +13511,8 @@ l_5:                       jmp  seqED_auto_advance_bare_return    ; $B174
 ; seqED CTRL+CBM arm.
 ;
 ;   callers:             1 code sites: $B136
+;   inputs:              A, X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   compare X=$24 / bne +pass; else if Y ∈ [$01..$06]: A←Y, A+=$09 to map keycode to nibble, fall into seqED_speed_arm with prepared A.
 seqED_ctrl_cbm .block
@@ -13511,6 +13533,9 @@ seqED_ctrl_cbm .block
 ; seqED speed-write arm.
 ;
 ;   callers:             1 code sites: $B19C
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Calls field_writer_dispatcher with (X=$FF, Y=$B3) → writer_speed; jump seqED_auto_advance auto-advance.
 seqED_speed_arm .block
@@ -13593,6 +13618,8 @@ seqED_auto_advance_bare_return .block
 ;
 ;   callers:             6 JMP sites: seqED_note_arm (note arm tail), seqED_clear_advance_arm (SPACE clear-and-advance), seqED_sidcall_arm (sidCALL arm), seqED_cursor_wrap (CRSRUD bare-arm), seqED_cbm_shift_arm (CBM+SHIFT writer arm), seqED_speed_arm (CTRL+CBM writer arm). Also reached via JMP seqED_auto_advance_bare_return from seqED_clear_arm/seqED_sidcall_arm/seqED_cursor_wrap/seqED_super_set (where seqED_auto_advance_bare_return is a 3-byte LDA #$XX preamble that sets A before falling into seqED_auto_advance).
 ;   inputs:              writer_loop_count (repeat count), writer_loop_stride (stride), page_offset/step_cursor (cursor state).
+;   outputs:             Y
+;   registers clobbered: A, X, Y
 ;
 ;   Patches the auto-advance loop body's JSR operand to point at note_arm_auto_writer, then enters auto_advance_loop_body. The loop body fires the writer up to writer_loop_count times using writer_loop_stride as the count slot, then paints. Drives the post-write step-cursor advance for every seqED arm that emits a value. seqED_auto_advance_octave is the variant that targets post_write_paint_tail (the CBM+SHIFT 'octave shift' walk).
 seqED_auto_advance .block
@@ -13607,6 +13634,8 @@ seqED_auto_advance .block
 ; $B21A  seqED_auto_advance_via_b2c3
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED auto-advance variant — writer = seqED_cursor_step_up_bare (CRSRUD bare-arm pre-load).
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Patches the auto-advance writer call to seqED_cursor_step_up_bare (seqED_cursor_step_up_bare). Same shape as seqED_auto_advance (note_arm_auto_writer writer) and seqED_auto_advance_octave (post_write_paint_tail writer); reached via indirect call through the field_writer_dispatcher field-writer dispatcher.
 seqED_auto_advance_via_b2c3 .block
@@ -13628,6 +13657,8 @@ l_1:                       lda  #$6B    ; $B227
 ; seqED octave-shift auto-advance variant (writer = `post_write_paint_tail` instead of note_arm_auto_writer).
 ;
 ;   callers:             seqED_cbm_shift_arm JMP.
+;   outputs:             Y
+;   registers clobbered: A, X, Y
 ;
 ;   Self-mods auto_advance_writer_smc_lo := #$80 / auto_advance_writer_smc_hi := #$B3; jump auto_advance_loop_body. Shares the rest of the auto-advance loop body with seqED_auto_advance. Reached from seqED_cbm_shift_arm jmp — the CBM+SHIFT 'shift all notes by octave' arm inside seqED_cbm_shift_arm. post_write_paint_tail (the variant writer) applies a per-step octave shift to the note byte rather than writing a new note value.
 seqED_auto_advance_octave .block
@@ -13661,12 +13692,19 @@ auto_advance_loop_body .block
 l_1:                       lda  writer_loop_count    ; $B249
                            sta  auto_advance_repeat    ; $B24C
                            beq  l_3    ; $B24F  writer_loop_count was zero?
-; ──── SMC-patched JSR (targets uncatalogued) ────
+; ──── SMC-patched JSR (4 catalogued targets) ────
 ;   Patched at: $B20F, $B214, $B21C, $B221, $B229, $B22E, $B236, $B23B
-;   Auto-advance dispatch — 4 (lo, hi) pairs at $B20F/$B214, $B21C/$B221,
-;   $B229/$B22E, $B236/$B23B select among 4 per-mode auto-advance
-;   handlers. Targets read from a 4-entry LUT indexed by the current
-;   ui_mode slot.
+;   Auto-advance dispatch — one of four entry arms ($B20D, $B21A, $B227,
+;   $B234) loads an immediate (lo, hi) and stores it into this JSR's
+;   operand at $B252/$B253 before falling through to the shared tail at
+;   $B241. The four targets are therefore statically fixed (the
+;   immediates), not runtime data: the step_cursor up/down and inc/dec
+;   handlers below.
+;   Targets:
+;     $B2C3  seqED_cursor_step_up_bare         [step_cursor up ($B21A arm)]
+;     $B2BC  seqED_cursor_step_down_bare       [step_cursor down ($B20D arm)]
+;     $B36B  step_cursor_inc_wrap              [step_cursor +1 mod $20 ($B227 arm)]
+;     $B380  step_cursor_dec_wrap              [step_cursor -1 ($B234 arm)]
 l_2:                       jsr  VEC_IRQ_HI    ; $B251
                            dec  auto_advance_repeat    ; $B254
                            bne  l_2    ; $B257  (auto_advance_repeat − 1) was non-zero?
