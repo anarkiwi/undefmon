@@ -4,10 +4,63 @@ import types
 import unittest
 
 from tools.re.cmp_facts import (
+    _find_flag_setter,
     _lhs_from_operand_setter,
     _resolve_lhs,
     _resolve_pla_source,
 )
+from tools.re.emit_defmon_source import render_condition_from_fact
+
+
+class TestFindFlagSetter(unittest.TestCase):
+    def test_skips_op_that_does_not_touch_the_hunted_flag(self):
+        """Hunting carry for a BCC, an intervening LDA (which leaves C
+        untouched) is transparent, so the walk reaches the CMP."""
+        instr_at = {
+            0x1000: ("CMP", "imm", 2),
+            0x1002: ("LDA", "imm", 2),
+            0x1004: ("BCC", "rel", 2),
+        }
+        graph = types.SimpleNamespace(fall_through_in={0x1004: 0x1002, 0x1002: 0x1000})
+        self.assertEqual(_find_flag_setter(0x1004, "BCC", graph, instr_at), 0x1000)
+
+    def test_jsr_is_the_setter_when_nothing_after_touches_the_flag(self):
+        """A JSR right before the branch is returned as the setter — the
+        tested flag is the one the callee left on return."""
+        instr_at = {0x1000: ("JSR", "abs", 3), 0x1003: ("BCC", "rel", 2)}
+        graph = types.SimpleNamespace(fall_through_in={0x1003: 0x1000})
+        self.assertEqual(_find_flag_setter(0x1003, "BCC", graph, instr_at), 0x1000)
+
+    def test_control_flow_barrier_stops_the_walk(self):
+        """An RTS between the branch and any setter is a barrier — None."""
+        instr_at = {0x1000: ("RTS", "imp", 1), 0x1001: ("BCC", "rel", 2)}
+        graph = types.SimpleNamespace(fall_through_in={0x1001: 0x1000})
+        self.assertIsNone(_find_flag_setter(0x1001, "BCC", graph, instr_at))
+
+
+class TestJsrFlagRendering(unittest.TestCase):
+    def test_jsr_flag_renders_callee_return_convention(self):
+        """A jsr_flag lhs renders the callee's flag-return wording."""
+        fact = {
+            "branch": "BCS",
+            "lhs": {"kind": "jsr_flag", "target": "$E000", "flag": "C"},
+            "rhs": None,
+            "flag_setter": {},
+        }
+        self.assertEqual(
+            render_condition_from_fact(fact, {0xE000: "kernal_load"}),
+            "kernal_load returned carry set?",
+        )
+
+    def test_jsr_flag_to_unnamed_callee_is_dropped(self):
+        """No label for the callee -> bare hex -> no comment."""
+        fact = {
+            "branch": "BNE",
+            "lhs": {"kind": "jsr_flag", "target": "$ABCD", "flag": "Z"},
+            "rhs": None,
+            "flag_setter": {},
+        }
+        self.assertIsNone(render_condition_from_fact(fact, {}))
 
 
 class TestResolvePlaSource(unittest.TestCase):

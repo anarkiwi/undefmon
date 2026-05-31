@@ -102,6 +102,20 @@ _BIT_PREDICATE = {
     "BVC": "{expr} had bit 6 clear?",
 }
 
+# Branch right after a JSR: the flag tested is the one the callee left on
+# return (nothing between the call and the branch touched it). Reads as the
+# subroutine's flag-return convention (carry = ok/error, zero = found, etc.).
+_JSR_FLAG_PREDICATE = {
+    "BCS": "{fn} returned carry set?",
+    "BCC": "{fn} returned carry clear?",
+    "BEQ": "{fn} returned zero?",
+    "BNE": "{fn} returned non-zero?",
+    "BMI": "{fn} result had bit 7 set?",
+    "BPL": "{fn} result had bit 7 clear?",
+    "BVS": "{fn} returned overflow set?",
+    "BVC": "{fn} returned overflow clear?",
+}
+
 _SETTER_INFIX = {"AND": "&", "ORA": "|", "EOR": "^", "ADC": "+", "SBC": "−"}
 
 _TRANSFORM_WRAPPERS = {
@@ -547,6 +561,18 @@ def render_condition_from_fact(
 
     if lhs.get("kind") in ("unknown", "multi_source", None):
         return None
+
+    # Flag left by a called subroutine: render the callee's flag-return
+    # convention. Drop when the callee has no label (bare-hex name).
+    if lhs.get("kind") == "jsr_flag":
+        addr = _parse_hex_addr(lhs.get("target", ""))
+        if addr is None:
+            return None
+        fn = _name_for_address(addr, labels, block_pcs_sorted, block_name_by_pc)
+        if fn.startswith("$"):
+            return None
+        tmpl = _JSR_FLAG_PREDICATE.get(branch)
+        return tmpl.format(fn=fn) if tmpl else None
 
     # SMC-immediate pivot: when lhs reduces to a literal constant
     # (e.g. `lda #$00`), the test is not really against the constant

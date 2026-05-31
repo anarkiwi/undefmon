@@ -4574,7 +4574,7 @@ sidtab_row_apply .block
                            iny    ; $16BD
                            lda  (zp_sidtab_row_lo),y    ; $16BE
                            sta  v0_sid_patch_c,x    ; $16C0
-l_1:                       bcc  l_2    ; $16C3
+l_1:                       bcc  l_2    ; $16C3  (zp_sidtab_row_lo),Y shifted-out bit was 0?
                            iny    ; $16C5
                            lda  (zp_sidtab_row_lo),y    ; $16C6
                            sta  v0_sid_patch_d,x    ; $16C8
@@ -5666,11 +5666,11 @@ dir_read_open .block
                            ldy  #$74    ; $74BC
                            jsr  KERNAL_SETNAM    ; $74BE
                            jsr  KERNAL_OPEN    ; $74C1
-                           bcc  l_1    ; $74C4
+                           bcc  l_1    ; $74C4  KERNAL_OPEN returned carry clear?
                            jmp  dir_read_close_tail    ; $74C6
 l_1:                       ldx  #$01    ; $74C9
                            jsr  KERNAL_CHKIN    ; $74CB
-                           bcc  l_2    ; $74CE
+                           bcc  l_2    ; $74CE  KERNAL_CHKIN returned carry clear?
                            jmp  dir_read_close_tail    ; $74D0
 l_2:                       jsr  KERNAL_CHRIN    ; $74D3
                            jsr  KERNAL_CHRIN    ; $74D6
@@ -5719,7 +5719,7 @@ l_1:                       jsr  KERNAL_CHRIN    ; $74EC
                            jsr  dir_paint_glyph    ; $74F9
                            jsr  KERNAL_CHRIN    ; $74FC
                            jsr  KERNAL_READST    ; $74FF
-                           bne  dir_read_close_tail    ; $7502
+                           bne  dir_read_close_tail    ; $7502  KERNAL_READST returned non-zero?
 l_2:                       jsr  KERNAL_CHRIN    ; $7504
                            tax    ; $7507
                            beq  dir_entry_inner_loop    ; $7508  KERNAL_CHRIN->A was zero?
@@ -6155,7 +6155,7 @@ l_5:                       jmp  disk_menu_input_wait    ; $76B3
 disk_menu_exit_arm .block
                            rts    ; $76B6
 l_1:                       jsr  save_prg_loadaddr_msb.l_1    ; $76B7
-                           bcc  l_2    ; $76BA
+                           bcc  l_2    ; $76BA  save_prg_loadaddr_msb_1 returned carry clear?
                            jmp  disk_menu_input_wait    ; $76BC
 l_2:                       lda  save_name_buf_marker    ; $76BF
                            cmp  #$2E    ; $76C2
@@ -6181,7 +6181,7 @@ l_2:                       lda  save_name_buf_marker    ; $76BF
 ;    JMP post_load_init_decoder -- post-load decoder of the saved RLE-packed body into the live pitch_lut_band_alt_base..super_cmd_staged RAM block (not just state-reset)
 disk_menu_return_handler .block
                            jsr  tune_load_entry    ; $76C9
-                           bcs  load_failure_panic_loop    ; $76CC
+                           bcs  load_failure_panic_loop    ; $76CC  tune_load_entry returned carry set?
                            jsr  disk_status_read    ; $76CE
                            ldx  #$B2    ; $76D1
                            ldy  #$CE    ; $76D3
@@ -6217,7 +6217,7 @@ disk_menu_save_arm .block
                            ldy  #$10    ; $76E4
                            ldx  #$01    ; $76E6
                            jsr  filename_prompt_paint    ; $76E8
-                           bcc  l_1    ; $76EB
+                           bcc  l_1    ; $76EB  filename_prompt_paint returned carry clear?
                            jmp  disk_menu_input_loop    ; $76ED
 l_1:                       lda  #$00    ; $76F0
                            sta  save_overwrite_state_byte    ; $76F2
@@ -6236,7 +6236,7 @@ l_1:                       lda  #$00    ; $76F0
 ;   Reached from disk_menu_shift_dispatch's SHIFT+'S' arm. Sub-routines that write the file body under the current filename (without re-prompting). Body extends past save_overwrite_tail.
 save_overwrite_tail .block
                            jsr  save_prg_loadaddr_msb.l_1    ; $76FC
-                           bcc  l_1    ; $76FF
+                           bcc  l_1    ; $76FF  save_prg_loadaddr_msb_1 returned carry clear?
                            jmp  disk_menu_input_wait    ; $7701
 l_1:                       lda  #$01    ; $7704
                            sta  save_overwrite_state_byte    ; $7706
@@ -6355,7 +6355,7 @@ l_7:                       cmp  #KEY_R    ; $781B
 l_8:                       ldy  #$10    ; $7822
                            ldx  #$00    ; $7824
                            jsr  filename_prompt_paint    ; $7826
-                           bcc  l_9    ; $7829
+                           bcc  l_9    ; $7829  filename_prompt_paint returned carry clear?
                            jmp  disk_menu_input_loop    ; $782B
 l_9:                       lda  save_name_buf_len    ; $782E
                            bne  l_10    ; $7831  save_name_buf_len was non-zero?
@@ -6625,7 +6625,7 @@ l_1:                       ldy  save_name_input_state    ; $79A4
 ;   code edges:          fall-through from $79B0 in kernal_load_wrapper_1 (2 bytes earlier)
 kernal_load_call_site .block
                            jsr  KERNAL_LOAD    ; $79B2
-                           bcs  l_1    ; $79B5
+                           bcs  l_1    ; $79B5  KERNAL_LOAD returned carry set?
                            clc    ; $79B7
                            rts    ; $79B8
 l_1:                       inc  VIC_SP2_X.VIC_BG0    ; $79B9
@@ -6658,7 +6658,7 @@ l_5:                       ldy  #$00    ; $79E7
                            ldy  save_name_buf_byte3    ; $79F9
                            lda  #$FD    ; $79FC
                            jsr  KERNAL_SAVE    ; $79FE
-                           bcs  l_6    ; $7A01
+                           bcs  l_6    ; $7A01  KERNAL_SAVE returned carry set?
                            rts    ; $7A03
 l_6:                       inc  VIC_BORDER    ; $7A04
                            jmp  l_6    ; $7A07
@@ -7073,7 +7073,7 @@ disk_status_read .block
 l_1:                       ldy  #$0F    ; $8091
                            jsr  KERNAL_SETLFS    ; $8093
                            jsr  KERNAL_OPEN    ; $8096
-                           bcs  border_flash_panic    ; $8099
+                           bcs  border_flash_panic    ; $8099  KERNAL_OPEN returned carry set?
                            ldx  #$0F    ; $809B
                            jsr  KERNAL_CHKIN    ; $809D
                            ldy  #$00    ; $80A0
@@ -7089,7 +7089,7 @@ l_1:                       ldy  #$0F    ; $8091
 ;   Reached only by jump disk_status_inner_trampoline (next iter). Not a separate function — see disk_status_read.
 disk_status_inner_top .block
                            jsr  KERNAL_READST    ; $80A2
-                           bne  disk_status_cleanup_tail    ; $80A5
+                           bne  disk_status_cleanup_tail    ; $80A5  KERNAL_READST returned non-zero?
                            jsr  KERNAL_CHRIN    ; $80A7
                            jsr  KERNAL_CHROUT    ; $80AA
 .bend
@@ -7601,7 +7601,7 @@ ctrl_only_modifier_arm:    cpx  #KBD_MOD_CTRL    ; $82D0
                            bne  l_1    ; $82E1  encoder_state_flag was non-zero?
                            jmp  statusline_print_bare_return    ; $82E3
 l_1:                       jsr  iec_tx_byte    ; $82E6
-                           bcc  l_2    ; $82E9
+                           bcc  l_2    ; $82E9  iec_tx_byte returned carry clear?
                            jmp  statusline_print_bare_return    ; $82EB
 l_2:                       jmp  global_pre_dispatch_barekey_cascade    ; $82EE
 l_3:                       cpy  #KEY_F3    ; $82F1
@@ -7611,7 +7611,7 @@ l_3:                       cpy  #KEY_F3    ; $82F1
                            lda  encoder_state_flag    ; $82FB
                            beq  global_pre_dispatch_barekey_trampoline.l_1    ; $82FE  encoder_state_flag was zero?
                            jsr  iec_tx_byte    ; $8300
-                           bcs  global_pre_dispatch_barekey_trampoline.l_1    ; $8303
+                           bcs  global_pre_dispatch_barekey_trampoline.l_1    ; $8303  iec_tx_byte returned carry set?
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -8062,7 +8062,7 @@ super_cmd_write_iter .block
                            cpy  #UI_MODE_SEQED    ; $84D3
                            bne  l_1    ; $84D5  ui_mode was not UI_MODE_SEQED?
                            jsr  seqED_voice_selector_check    ; $84D7
-                           bmi  super_cmd_writer_bare_return    ; $84DA
+                           bmi  super_cmd_writer_bare_return    ; $84DA  seqED_voice_selector_check result had bit 7 set?
                            sta  super_cmd_status_mirror    ; $84DC
 l_1:                       jsr  super_cmd_resolve_target    ; $84DF
 .bend
@@ -8615,7 +8615,7 @@ super_cmd_dispatch_bare_return .block
 ;     - call super_flag_or / return.
 super_cmd_s_lo_nibble .block
                            jsr  hex_digit_validate    ; $86BE
-                           bcc  super_cmd_terminate    ; $86C1
+                           bcc  super_cmd_terminate    ; $86C1  hex_digit_validate returned carry clear?
                            sta  super_arg_slot_swr_hi    ; $86C3
                            tax    ; $86C6
                            lda  #$13    ; $86C7
@@ -8648,7 +8648,7 @@ super_cmd_s_lo_nibble .block
 ;   Mirror of super_cmd_wr_hi_nibble but uses super_arg_slot_swr_hi slot exclusively.
 super_cmd_s_hi_nibble .block
                            jsr  hex_digit_validate    ; $86DB
-                           bcc  super_cmd_terminate    ; $86DE
+                           bcc  super_cmd_terminate    ; $86DE  hex_digit_validate returned carry clear?
                            ldx  #$04    ; $86E0
 l_1:                       asl  super_arg_slot_swr_hi    ; $86E2
                            dex    ; $86E5
@@ -8695,7 +8695,7 @@ super_cmd_terminate .block
 ;     - call super_flag_or / return.
 super_cmd_w_lo_nibble .block
                            jsr  hex_digit_validate    ; $86FB
-                           bcc  super_cmd_terminate    ; $86FE
+                           bcc  super_cmd_terminate    ; $86FE  hex_digit_validate returned carry clear?
                            sta  super_arg_slot_w    ; $8700
                            tax    ; $8703
                            lda  #$17    ; $8704
@@ -8727,7 +8727,7 @@ super_cmd_w_lo_nibble .block
 ;   Dispatched via super_cmd_dispatch jump from super_cmd_dispatch cascade.
 super_cmd_r_lo_nibble .block
                            jsr  hex_digit_validate    ; $8717
-                           bcc  super_cmd_terminate    ; $871A
+                           bcc  super_cmd_terminate    ; $871A  hex_digit_validate returned carry clear?
                            sta  super_arg_slot_r    ; $871C
                            tax    ; $871F
                            lda  #$12    ; $8720
@@ -8760,7 +8760,7 @@ super_cmd_r_lo_nibble .block
 ;   Implements the second digit of W's or R's 2-digit hex pair.
 super_cmd_wr_hi_nibble .block
                            jsr  hex_digit_validate    ; $8734
-                           bcc  super_cmd_terminate    ; $8737
+                           bcc  super_cmd_terminate    ; $8737  hex_digit_validate returned carry clear?
                            ldx  #$04    ; $8739
 l_1:                       asl  super_arg_slot_r    ; $873B
                            dex    ; $873E
@@ -8791,7 +8791,7 @@ l_1:                       asl  super_arg_slot_r    ; $873B
 ;     - call super_flag_or / return.
 super_cmd_q_lo_nibble .block
                            jsr  hex_digit_validate    ; $8751
-                           bcc  super_cmd_terminate    ; $8754
+                           bcc  super_cmd_terminate    ; $8754  hex_digit_validate returned carry clear?
                            sta  super_arg_slot_q    ; $8756
                            tax    ; $8759
                            lda  #$11    ; $875A
@@ -8822,7 +8822,7 @@ super_cmd_q_lo_nibble .block
 ;     - jump super_cmd_terminate (terminate).
 super_cmd_q_hi_nibble .block
                            jsr  hex_digit_validate    ; $876E
-                           bcc  super_cmd_terminate    ; $8771
+                           bcc  super_cmd_terminate    ; $8771  hex_digit_validate returned carry clear?
                            ldx  #$04    ; $8773
 l_1:                       asl  super_arg_slot_q    ; $8775
                            dex    ; $8778
@@ -13557,7 +13557,7 @@ l_8:                       cpx  #$14    ; $B1DB
                            cpy  #$6F    ; $B1DF
                            bne  l_10    ; $B1E1  Y was not $6F?
                            jsr  seqED_step_cursor_increment    ; $B1E3
-                           beq  l_9    ; $B1E6
+                           beq  l_9    ; $B1E6  seqED_step_cursor_increment returned zero?
                            dec  page_pair_counter    ; $B1E8
                            jmp  post_write_paint_tail    ; $B1EB
 l_9:                       lda  #$FF    ; $B1EE
@@ -15275,7 +15275,7 @@ l_1:                       ldx  #$5F    ; $BCC7
                            ldy  #$C1    ; $BCC9
                            jsr  field_writer_dispatcher    ; $BCCB
                            jsr  sidTAB_shifted_helper    ; $BCCE
-                           bmi  l_2    ; $BCD1
+                           bmi  l_2    ; $BCD1  sidTAB_shifted_helper result had bit 7 set?
                            jmp  chipview_step_right    ; $BCD3
 l_2:                       jsr  chipview_step_left    ; $BCD6
                            jmp  chipview_step_down    ; $BCD9
@@ -15786,7 +15786,7 @@ l_10:                      lda  dl_per_step_counters,y    ; $BEA2
                            iny    ; $BEB4
                            lda  (zp_ptr1_lo),y    ; $BEB5
                            sta  sidTAB_staging_buffer_ext + $01    ; $BEB7
-l_11:                      bcc  l_12    ; $BEBA
+l_11:                      bcc  l_12    ; $BEBA  (zp_ptr1_lo),Y shifted-out bit was 0?
                            iny    ; $BEBC
                            lda  (zp_ptr1_lo),y    ; $BEBD
                            sta  sidTAB_staging_buffer_ext + $02    ; $BEBF
@@ -15875,7 +15875,7 @@ l_26:                      ldy  #$00    ; $BF61
                            iny    ; $BF6D
                            lda  sidTAB_staging_buffer_ext + $01    ; $BF6E
                            sta  (zp_ptr1_lo),y    ; $BF71
-l_27:                      bcc  l_28    ; $BF73
+l_27:                      bcc  l_28    ; $BF73  (sidtab_staging_field1 << 1) shifted-out bit was 0?
                            iny    ; $BF75
                            lda  sidTAB_staging_buffer_ext + $02    ; $BF76
                            sta  (zp_ptr1_lo),y    ; $BF79
@@ -16253,7 +16253,7 @@ writer_sidtab_toggle .block
                            jsr  pitch_lut_generator_inner_loop.l_9    ; $C149
                            ldy  #$01    ; $C14C
                            jsr  sid2_v3_sidtab_row_apply    ; $C14E
-                           bcs  l_1    ; $C151
+                           bcs  l_1    ; $C151  sid2_v3_sidtab_row_apply returned carry set?
                            lda  sidTAB_staging,y    ; $C153
                            eor  #$80    ; $C156
                            sta  sidTAB_staging,y    ; $C158
@@ -16275,7 +16275,7 @@ writer_sidtab_digit .block
                            jsr  pitch_lut_generator_inner_loop.l_9    ; $C162
                            jsr  sidTAB_shifted_helper.l_1    ; $C165
                            jsr  sid2_v3_sidtab_row_apply    ; $C168
-                           bcs  l_3    ; $C16B
+                           bcs  l_3    ; $C16B  sid2_v3_sidtab_row_apply returned carry set?
                            lda  sidtab_cell_descriptor_lut,x    ; $C16D
                            bpl  l_1    ; $C170  sidtab_cell_descriptor_lut,X had bit 7 clear?
                            lda  sidTAB_staging,y    ; $C172
@@ -16311,7 +16311,7 @@ writer_sidtab_clear_advance .block
                            jsr  pitch_lut_generator_inner_loop.l_9    ; $C19C
                            jsr  sidTAB_shifted_helper.l_1    ; $C19F
                            jsr  sid2_v4_sidtab_row_apply    ; $C1A2
-                           bcs  l_1    ; $C1A5
+                           bcs  l_1    ; $C1A5  sid2_v4_sidtab_row_apply returned carry set?
                            jsr  pitch_lut_generator_inner_loop.l_23    ; $C1A7
 l_1:                       rts    ; $C1AA
 .bend
@@ -16333,7 +16333,7 @@ writer_sidtab_inc .block
                            cmp  #$01    ; $C1B7
                            bne  l_1    ; $C1B9  writer_loop_count was not $01?
                            jsr  sid2_v3_sidtab_row_apply    ; $C1BB
-                           bcs  l_2    ; $C1BE
+                           bcs  l_2    ; $C1BE  sid2_v3_sidtab_row_apply returned carry set?
 l_1:                       lda  sidTAB_staging,y    ; $C1C0
                            clc    ; $C1C3
                            adc  super_arg    ; $C1C4
@@ -16359,7 +16359,7 @@ writer_sidtab_dec .block
                            cmp  #$01    ; $C1DA
                            bne  l_1    ; $C1DC  writer_loop_count was not $01?
                            jsr  sid2_v3_sidtab_row_apply    ; $C1DE
-                           bcs  l_2    ; $C1E1
+                           bcs  l_2    ; $C1E1  sid2_v3_sidtab_row_apply returned carry set?
 l_1:                       lda  sidTAB_staging,y    ; $C1E3
                            sec    ; $C1E6
                            sbc  super_arg    ; $C1E7
@@ -18015,7 +18015,7 @@ sid2_sidtab_row_apply .block
                            iny    ; $CD85
                            lda  (zp_sidtab_row_lo),y    ; $CD86
                            sta  sid2_v0_sid_patch_c,x    ; $CD88
-l_1:                       bcc  l_2    ; $CD8B
+l_1:                       bcc  l_2    ; $CD8B  (zp_sidtab_row_lo),Y shifted-out bit was 0?
                            iny    ; $CD8D
                            lda  (zp_sidtab_row_lo),y    ; $CD8E
                            sta  sid2_v0_sid_patch_d,x    ; $CD90
@@ -18998,7 +18998,7 @@ load_decoder_patbody_4:    and  #$70    ; $D32C
                            sec    ; $D338
                            sbc  #$04    ; $D339
                            tay    ; $D33B
-                           bcc  load_decoder_patbody_5    ; $D33C
+                           bcc  load_decoder_patbody_5    ; $D33C  (A − $04) shifted-out bit was 0?
                            lda  (zp_decoder_dest_lo),y    ; $D33E
                            and  #$0F    ; $D340
                            clc    ; $D342
@@ -19415,7 +19415,7 @@ l_6:                       lda  #$FF    ; $D64A  ; ← decoder_save_state_d64b
                            sta  decoder_pointer_init + $53    ; $D651
                            beq  l_7    ; $D654  (A ^ $FF) was zero?
                            dec  decoder_pointer_init + $53    ; $D656
-l_7:                       bcs  l_8    ; $D659
+l_7:                       bcs  l_8    ; $D659  zp_ptr1_lo no borrow
                            lda  #$FF    ; $D65B  ; ← decoder_save_state_d65c
                            sbc  zp_ptr1_hi    ; $D65D
                            bcs  l_8    ; $D65F  zp_ptr1_hi no borrow
