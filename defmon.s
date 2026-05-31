@@ -2149,11 +2149,19 @@ jsr_with_ram_helper .block
                            pha    ; $0BAD
                            lda  #$30    ; $0BAE
                            sta  CPU_PORT    ; $0BB0
-; ──── SMC-patched JSR (targets uncatalogued) ────
+; ──── SMC-patched JSR (4 catalogued targets) ────
 ;   Patched at: $0BA4, $0BA7
-;   Trampoline — caller supplies target address in (X = low byte, Y =
-;   high byte). Used by the kbd-modifier dispatch chain at $0B9A-$0BB2 to
-;   call into per-modifier handlers without a switch.
+;   Banking trampoline (jsr_with_ram_helper) — the caller supplies the
+;   target in (X = low byte, Y = high byte), which the helper stores into
+;   this JSR operand before banking RAM in over the I/O area and calling.
+;   All 5 call sites are in the disk load/save path and pass an immediate
+;   target, so the dispatch set is statically complete: the four
+;   RAM-under-I/O routines below.
+;   Targets:
+;     $CEB2  decoder_load_setup                [load ($76D5, $7731)]
+;     $CE81  save_prep_orchestrator            [save ($771F)]
+;     $D02C  save_encode_orchestrator          [save ($783A)]
+;     $D92A  ram_screen_repaint                [post-load screen ($7856)]
                            jsr  kbd_page_band_end    ; $0BB2
                            pla    ; $0BB5
                            sta  CPU_PORT    ; $0BB6
