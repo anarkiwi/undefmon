@@ -1002,6 +1002,8 @@ SEED_LANDMARKS = {
     # Statically unreachable (entered via the post-NMI branch fan-out),
     # so seed it explicitly to decode as code instead of a .byte run.
     0x0AD9: "nmi_sid2_silence_count",
+    0x0AED: "nmi_irq_entry",
+    0x0B8B: "raster_irq_entry",
     # $D780 auto-advance dispatch targets (reached only via the
     # self_modifying_byte_emitter JMP at $D780; no I/O aliasing).
     0xD784: "configurable_emitter_advance_hook",

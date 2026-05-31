@@ -481,14 +481,6 @@ editor_frame_jmp_padding = $0917
 boot_init_nop_padding    = $09F8
 pre_quiesce_sprite_data  = $0A0A
 ;   notes: The $AA/$55 byte runs are a sprite bitmap staged during boot before the VIC/CIA quiesce; trailing zero bytes pad the 63-byte sprite block.
-nmi_irq_entry            = $0AED
-;   notes:
-;     The NMI then either
-;     falls into the player body or short-circuits to RTI, with no
-;     conditional branch beyond the BEQ at nmi_irq_entry.
-;
-;     The IRQ source is a raster IRQ via CIA-1 Timer-A at ~42 Hz
-;     (23546 cycles), not a true NMI from the restore-key.
 playback_state           = $0AF7
 PLAYBACK_OFF             = $00
 PLAYBACK_ON              = $01
@@ -498,16 +490,6 @@ PLAYBACK_ON              = $01
 ;   notes: Since the same byte serves both as the immediate-mode operand and as the read-back state, simply writing here is what stops or starts the player IRQ body.
 nmi_playback_gate_smc    = $0AFB
 sid2_stereo_sync_byte    = $0B18
-nmi_subframe_call_site   = $0B33
-;   notes: Reached from nmi_irq_entry jmp.
-;   code edges:          none
-;   apparent (from data): $0B2B in sid2_stereo_sync_byte, $0B68 in nmi_post_player_tail
-nmi_post_player_tail     = $0B50
-;   notes: Reached from nmi_irq_entry jump and nmi_subframe_call_site beq.
-;   code edges:          none
-;   apparent (from data): $0B14 in nmi_playback_gate_smc, $0B1E in sid2_stereo_sync_byte, $0B4C in nmi_subframe_call_site
-boot_init_band_end       = $0BA3
-;   notes: Boundary marker.
 stale_trampoline_c04     = $0C04
 ;   code edges:          none
 ;   apparent (from data): $835C in super_cmd_arg_prompt_template
@@ -1245,10 +1227,6 @@ seqED_disk_key_lut       = $C6E3
 ;   notes: Span seqED_disk_key_lut-secondary_disk_data_end = 285 B. Probably the secondary-disk-mode key→handler lookup.
 secondary_disk_data_end  = $C7FF
 ;   notes: Data table, not code. Read by the ui_mode=UI_MODE_DISK (CTRL+/) handler that toggles the secondary disk mode reachable only from sidTAB.
-sid2_subframe_forced_variant = $C806
-;   notes: Lets the IRQ run the SID#2 update even when the user is currently viewing SID#1. Invoked from nmi_irq_entry as the optional SID#2 sub-frame path.
-;   code edges:          none
-;   apparent (from data): $0B11 in nmi_playback_gate_smc
 sid2_v0_voice_record_slot_a = $C81A
 sid2_v0_voice_record_slot_c = $C81B
 sid2_v0_voice_record_slot_b = $C81E
@@ -2073,8 +2051,7 @@ raster_irq_trigger_setter .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Start of the secondary boot-init helper band (boot_init_band-boot_init_band_end, ~200 bytes).
 ;
-;   code edges:          none
-;   apparent (from data): $0AF8 in playback_state, $0B88 in nmi_post_player_tail
+;   callers:             2 code sites: $0AF8, $0B88 nmi_post_player_tail_3
 ;
 ;   Fired once at boot from the chain rooted at post_load_init_decoder / the main `jump post_load_init_decoder` after LOAD (disk_menu_return_handler chain). Mostly screen-init, IRQ vector install, ZP setup.
 nmi_sid2_silence_count .block
@@ -2100,23 +2077,167 @@ nmi_sid2_silence_branch .block
 ;   code edges:          fall-through from $0ADD nmi_sid2_silence_branch (3 bytes earlier)
 nmi_sid2_silence_cont .block
                            jsr  sid2_chipview_voice_mute_apply    ; $0AE0
-l_1:                       lda  #$00    ; $0AE3
-                           ldx  #$00    ; $0AE5
-                           ldy  #$00    ; $0AE7
+l_1:                       lda  #$00    ; $0AE3  ; ← (SMC operand at $0AE4, no name)
+                           ldx  #$00    ; $0AE5  ; ← (SMC operand at $0AE6, no name)
+                           ldy  #$00    ; $0AE7  ; ← (SMC operand at $0AE8, no name)
                            bit  CIA2_ICR    ; $0AE9
                            rti    ; $0AEC
-        .byte $8D, $E4, $0A, $8E, $E6, $0A, $8C, $E8, $0A, $A9, $00, $F0, $DF, $A9, $02, $8D    ; $0AED
-        .byte $20, $D0, $AD, $72, $71, $F0, $13, $20, $06, $10, $AD, $5D, $71, $F0, $08, $A9    ; $0AFD
-        .byte $0B, $8D, $20, $D0, $20, $06, $C8, $4C, $50, $0B, $A9, $00, $10, $09, $EE, $18    ; $0B0D
-        .byte $0B, $4C, $50, $0B, $CE, $18, $0B, $A9, $00, $F0, $06, $CE, $25, $0B, $4C, $33    ; $0B1D
-        .byte $0B, $A9, $0C, $8D, $01, $DD, $20, $03, $10, $AD, $5D, $71, $F0, $09, $AD, $0D    ; $0B2D
-        .byte $0B, $8D, $20, $D0, $20, $03, $C8, $A9, $04, $8D, $01, $DD, $AD, $18, $0B, $F0    ; $0B3D
-        .byte $02, $10, $D1, $AD, $6B, $71, $8D, $20, $D0, $AD, $72, $71, $18, $69, $01, $CD    ; $0B4D
-        .byte $5C, $71, $D0, $02, $A9, $00, $8D, $72, $71, $AD, $EB, $10, $C9, $FF, $F0, $0E    ; $0B5D
-        .byte $AE, $4A, $11, $10, $09, $8D, $6A, $0B, $20, $4E, $7F, $EE, $FC, $08, $AD, $6E    ; $0B6D
-        .byte $71, $F0, $08, $AD, $4A, $11, $D0, $03, $EE, $F5, $08, $4C, $D9, $0A, $8D, $9B    ; $0B7D
-        .byte $0B, $8E, $9D, $0B, $8C, $9F, $0B, $EE, $AB, $08, $20, $08, $80, $A9, $00, $A2    ; $0B8D
-        .byte $00, $A0, $00, $0E, $19, $D0, $40    ; $0B9D
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0AED  nmi_irq_entry
+; ──────────────────────────────────────────────────────────────────────
+; NMI/raster-IRQ entry — gated player-tick driver.
+;
+;   inputs:              playback_state (immediate at LDA #$XX) — non-zero = play tick enabled, zero = no-op exit
+;   outputs:             When playing: SID#1/SID#2 registers written via player_play/player_sound_update/sid2_subframe_entry/sid2_subframe_forced_variant; sub_frame_phase/sub_frame_count ratcheted; editor_row_delta / editor_col_delta arranger-row counters INCed.
+;   registers clobbered: A, X, Y
+;
+;   Saves A/X/Y to self-modify storage (nmi_sid2_silence_cont); read playback_state (immediate-operand load — playback_state IS the playback state flag); beq → exit tail at boot_init_band if playback off; else fall through to the player body at nmi_irq_entry which calls player_sound_update (sub-frame SID update), conditionally sid2_subframe_forced_variant (SID#2 sub-frame), the nmi_subframe_call_site site for call player_play (player_play full tick), conditional sid2_subframe_entry (SID#2 player_play), then to the nmi_post_player_tail post-player tail (border restore + arranger ratchet at sub_frame_phase/sub_frame_count + optional IEC encode at iec_clk_pulse + jump boot_init_band exit).
+;
+;   Self-modifying-gate trick: playback_state is *both* the player-state flag AND
+;   the immediate operand of the LDA at nmi_irq_entry. `stop_playback` (stop_playback)
+;   writes $00 there; `play_from_*` writes non-zero. The NMI then either
+;   falls into the player body or short-circuits to RTI, with no
+;   conditional branch beyond the BEQ at nmi_irq_entry.
+;
+;   Internal labels (sub-labels of nmi_irq_entry):
+;    boot_init_band exit tail: BIT CIA2_ICR (clear CIA2 IRQ flag), restore regs,
+;    RTI via nmi_sid2_silence_cont (the $40 byte that ends the exit fragment).
+;    nmi_irq_entry playing branch: red border (VIC_BORDER=$02), then JSR player_sound_update,
+;    optional sid2_subframe_forced_variant, JMP nmi_post_player_tail.
+;    nmi_irq_entry alt path (when playback_state self-modify counter hits a phase) —
+;    decides whether this NMI handles a sub-frame or a full
+;    tick based on nmi_irq_entry (also a self-modify counter byte).
+;    nmi_subframe_call_site call site: JSR player_play (player_play full per-frame tick).
+;    nmi_post_player_tail post-player tail: restore border from ui_mode_range_bound; advance
+;    sub_frame_phase ratchet (wraps at sub_frame_count → 0); shared-arranger / IEC
+;    / counter bookkeeping; JMP boot_init_band.
+;
+;   The IRQ source is a raster IRQ via CIA-1 Timer-A at ~42 Hz
+;   (23546 cycles), not a true NMI from the restore-key.
+nmi_irq_entry .block
+                           sta  nmi_sid2_silence_cont + $04    ; $0AED
+                           stx  nmi_sid2_silence_cont + $06    ; $0AF0
+                           sty  nmi_sid2_silence_cont + $08    ; $0AF3
+                           lda  #$00    ; $0AF6  ; ← playback_state
+                           beq  nmi_sid2_silence_count    ; $0AF8  playback_state was PLAYBACK_OFF?
+                           lda  #$02    ; $0AFA  ; ← nmi_playback_gate_smc
+                           sta  VIC_BORDER    ; $0AFC
+                           lda  sub_frame_phase    ; $0AFF
+                           beq  l_2    ; $0B02  sub_frame_phase was zero?
+                           jsr  player_sound_update    ; $0B04
+                           lda  stereo_enable    ; $0B07
+                           beq  l_1    ; $0B0A  stereo_enable was STEREO_OFF?
+                           lda  #$0B    ; $0B0C
+                           sta  VIC_BORDER    ; $0B0E
+                           jsr  sid2_subframe_forced_variant    ; $0B11
+l_1:                       jmp  nmi_post_player_tail    ; $0B14
+l_2:                       lda  #$00    ; $0B17  ; ← sid2_stereo_sync_byte
+                           bpl  l_4    ; $0B19  sid2_stereo_sync_byte had bit 7 clear?
+                           inc  sid2_stereo_sync_byte    ; $0B1B
+                           jmp  nmi_post_player_tail    ; $0B1E
+l_3:                       dec  sid2_stereo_sync_byte    ; $0B21
+l_4:                       lda  #$00    ; $0B24  ; ← (SMC operand at $0B25, no name)
+                           beq  l_5    ; $0B26  nmi_irq_entry_$38 was zero?
+                           dec  playback_state + $2E    ; $0B28
+                           jmp  nmi_subframe_call_site    ; $0B2B
+l_5:                       lda  #$0C    ; $0B2E
+                           sta  CIA2_PRB    ; $0B30
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0B33  nmi_subframe_call_site
+; ──────────────────────────────────────────────────────────────────────
+; Sub-frame player-tick call site inside nmi_irq_entry.
+;
+;   callers:             1 code sites: $0B2B
+;
+;   call player_play (full per-frame player_play) → conditional call sid2_subframe_entry (SID#2 player_play when stereo_enable stereo flag set). Reached from nmi_irq_entry jmp.
+nmi_subframe_call_site .block
+                           jsr  player_play    ; $0B33
+                           lda  stereo_enable    ; $0B36
+                           beq  l_1    ; $0B39  stereo_enable was STEREO_OFF?
+                           lda  playback_state + $16    ; $0B3B
+                           sta  VIC_BORDER    ; $0B3E
+                           jsr  sid2_subframe_entry    ; $0B41
+l_1:                       lda  #$04    ; $0B44
+                           sta  CIA2_PRB    ; $0B46
+                           lda  sid2_stereo_sync_byte    ; $0B49
+                           beq  nmi_post_player_tail    ; $0B4C  sid2_stereo_sync_byte was zero?
+                           bpl  nmi_irq_entry.l_3    ; $0B4E  sid2_stereo_sync_byte had bit 7 clear?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0B50  nmi_post_player_tail
+; ──────────────────────────────────────────────────────────────────────
+; Post-player tail inside nmi_irq_entry.
+;
+;   callers:             3 code sites: $0B14 nmi_irq_entry_1, $0B1E, $0B4C
+;
+;   Reached from nmi_irq_entry jump and nmi_subframe_call_site beq.
+nmi_post_player_tail .block
+;     read ui_mode_range_bound → write VIC_BORDER (restore border).
+                           lda  border_color_state_a    ; $0B50
+                           sta  VIC_BORDER    ; $0B53
+;     read sub_frame_phase / A+=SUB_FRAME_1X (advance arranger ratchet) / compare sub_frame_count → write sub_frame_phase (wrap to 0 at target).
+                           lda  sub_frame_phase    ; $0B56
+                           clc    ; $0B59
+                           adc  #$01    ; $0B5A
+                           cmp  sub_frame_count    ; $0B5C
+                           bne  l_1    ; $0B5F  A was not sub_frame_count?
+;     read current_arranger_row / compare =$FF → →nmi_post_player_tail when zero.
+                           lda  #$00    ; $0B61
+l_1:                       sta  sub_frame_phase    ; $0B63
+                           lda  current_arranger_row    ; $0B66
+                           cmp  #$FF    ; $0B69  ; ← (SMC operand at $0B6A, no name)
+                           beq  l_2    ; $0B6B  current_arranger_row was $FF?
+;     X←v0_row_timer / →skip when positive.
+                           ldx  v0_row_timer    ; $0B6D
+                           bpl  l_2    ; $0B70  v0_row_timer had bit 7 clear?
+;     write nmi_post_player_tail / call iec_clk_pulse (IEC encode emit).
+                           sta  nmi_post_player_tail + $1A    ; $0B72
+                           jsr  iec_clk_pulse    ; $0B75
+                           inc  editor_col_delta    ; $0B78
+l_2:                       lda  ui_state_716e    ; $0B7B
+                           beq  l_3    ; $0B7E  ui_state_716e was zero?
+                           lda  v0_row_timer    ; $0B80
+                           bne  l_3    ; $0B83  v0_row_timer was non-zero?
+                           inc  editor_row_delta    ; $0B85
+l_3:                       jmp  nmi_sid2_silence_count    ; $0B88
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0B8B  raster_irq_entry
+; ──────────────────────────────────────────────────────────────────────
+; Raster-IRQ entry: services the VIC raster interrupt.
+;
+;   inputs:              A, X, Y
+;   registers clobbered: A, X, Y
+;
+;   Saves A/X/Y into self-mod restore slots, bumps a frame counter, calls iec_recv_primitive_a, restores A/X/Y, acknowledges the VIC raster-IRQ latch, and RTIs. Reached only via the IRQ vector, so seeded explicitly (see SEED_LANDMARKS) rather than statically.
+raster_irq_entry .block
+                           sta  raster_irq_entry + $10    ; $0B8B
+                           stx  raster_irq_entry + $12    ; $0B8E
+                           sty  raster_irq_entry + $14    ; $0B91
+                           inc  editor_busy_wait_counter    ; $0B94
+                           jsr  iec_recv_primitive_a    ; $0B97
+                           lda  #$00    ; $0B9A  ; ← (SMC operand at $0B9B, no name)
+                           ldx  #$00    ; $0B9C  ; ← (SMC operand at $0B9D, no name)
+                           ldy  #$00    ; $0B9E  ; ← (SMC operand at $0B9F, no name)
+                           asl  VIC_SP2_X.VIC_IRQ_STATUS    ; $0BA0
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $0BA3  boot_init_band_end
+; ──────────────────────────────────────────────────────────────────────
+; End of the secondary boot-init helper band (boot_init_band-boot_init_band_end).
+;
+;   code edges:          fall-through from $0BA0 in raster_irq_entry (3 bytes earlier)
+;
+;   Boundary marker.
+boot_init_band_end .block
+                           rti    ; $0BA3
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -3085,7 +3206,7 @@ player_init .block
 ; ──────────────────────────────────────────────────────────────────────
 ; player_play.
 ;
-;   callers:             1 code sites: $81CA
+;   callers:             2 code sites: $0B33 nmi_subframe_call_site, $81CA
 ;   outputs:             X, Y
 ;   registers clobbered: A, X, Y
 ;
@@ -3099,10 +3220,8 @@ player_play .block
 ; ──────────────────────────────────────────────────────────────────────
 ; player_sound_update.
 ;
+;   callers:             1 code sites: $0B04
 ;   registers clobbered: A, X, Y
-;
-;   code edges:          none
-;   apparent (from data): $0B04 in nmi_playback_gate_smc, $D915 in load_decoder_tail_jump
 ;
 ;   Sub-frame SID write update (per ScannerBoy / CIA2_PRB sync model).
 ;
@@ -6774,9 +6893,6 @@ l_3:                       lda  CIA1_PRB    ; $7F40
 ;   outputs:             CIA2 PA pulsed; no return value (always RTSes plain).
 ;   registers clobbered: A
 ;
-;   code edges:          none
-;   apparent (from data): $0B75 in nmi_post_player_tail
-;
 ;   When the DATA line is being asserted by the drive (MSB of CIA2_PRA clear), drives the CLK line high (bit 4) for ~12 NOPs (~12-24 cycles) and then idles the port back to $C7. Used by the player to keep the drive-side code synchronised when the editor is paused. Same encoder_state_flag gate as iec_tx_byte; symmetric with the cassette-toggle helpers border_flash_debug_a / border_flash_debug_b which mutate encoder_state_flag only on encoder error paths.
 iec_clk_pulse .block
                            lda  encoder_state_flag    ; $7F4E
@@ -6924,10 +7040,8 @@ player_helper_band .block
 ; ──────────────────────────────────────────────────────────────────────
 ; IEC receive primitive (4-byte input via CIA2_PRA reads).
 ;
+;   callers:             1 code sites: $0B97
 ;   registers clobbered: A, X, Y
-;
-;   code edges:          none
-;   apparent (from data): $0B97 in nmi_post_player_tail
 ;
 ;   Identified by CHECK_LOAD on CIA2_PRA firing 1620 times during disk-menu
 ;   directory read. Contains the LDA/LDX/LDY/BIT CIA2_PRA 4-byte-receive
@@ -17162,15 +17276,34 @@ sid2_main_tick_entry .block
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 subframe entry — jump sid2_register_write_body.
 ;
-;   callers:             1 code sites: $81D2
+;   callers:             2 code sites: $0B41, $81D2
 ;   outputs:             A, X, Y
 ;   registers clobbered: A, X, Y
 ;
 ;   Mirror of player_sound_update SID#1 subframe. Called per-NMI from nmi_irq_entry, conditional on SID#2 player_play state.
 sid2_subframe_entry .block
                            jmp  sid2_register_write_body    ; $C803
-        .byte $AD, $D8, $C8, $48, $A9, $60, $8D, $D8, $C8, $20, $22, $C8, $68, $8D, $D8, $C8    ; $C806
-        .byte $4C, $DF, $CA, $00, $00, $00, $00, $00, $00, $00, $01, $FE    ; $C816
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $C806  sid2_subframe_forced_variant
+; ──────────────────────────────────────────────────────────────────────
+; SID#2 subframe forced variant.
+;
+;   callers:             1 code sites: $0B11
+;   registers clobbered: A, X, Y
+;
+;   Saves sid2_voice_record_v2 (SID#2 chip-view analog) to stack, forces sid2_voice_record_v2 := $60, JSRs sid2_register_write_body (subframe body), restores sid2_voice_record_v2 from stack, JMPs sid2_cascade_post_tick_gate (post-tick tail). Lets the IRQ run the SID#2 update even when the user is currently viewing SID#1. Invoked from nmi_irq_entry as the optional SID#2 sub-frame path.
+sid2_subframe_forced_variant .block
+                           lda  sid2_register_write_body.l_11    ; $C806
+                           pha    ; $C809
+                           lda  #$60    ; $C80A
+                           sta  sid2_register_write_body.l_11    ; $C80C
+                           jsr  sid2_register_write_body    ; $C80F
+                           pla    ; $C812
+                           sta  sid2_register_write_body.l_11    ; $C813
+                           jmp  sid2_cascade_post_tick_gate    ; $C816
+        .byte $00, $00, $00, $00, $00, $00, $00, $01, $FE    ; $C819
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -17178,7 +17311,7 @@ sid2_subframe_entry .block
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 register-write body.
 ;
-;   callers:             1 code sites: $C803 sid2_subframe_entry
+;   callers:             2 code sites: $C803 sid2_subframe_entry, $C80F
 ;   outputs:             A, X, Y
 ;   registers clobbered: A, X, Y
 ;
@@ -17276,8 +17409,11 @@ l_9:                       lda  sid2_v1_voice_record_slot_a    ; $C8D1
 ;   ASL <-> NOP: SID#2 analogue of $10D4 — filter cutoff output scaling. $CD1D stores $EA (NOP) or $0A (ASL).
 l_10:                      asl  a    ; $C8D4
                            sta  save_encoder_jp_chain_walker.SID2_FC_HI    ; $C8D5
-                           lda  #$FF    ; $C8D8  ; ← sid2_v1_voice_record_slot_b
-                           bpl  l_15    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
+; ──── SMC-patched OPCODE — instruction TYPE changes at runtime ────
+;   Patched at: $C80C, $C813
+;   LDA can flip to: RTS
+l_11:                      lda  #$FF    ; $C8D8  ; ← sid2_v1_voice_record_slot_b
+                           bpl  l_16    ; $C8DA  sid2_v1_voice_record_slot_b had bit 7 clear?
                            and  #$0F    ; $C8DC
                            sta  sid2_v1_voice_record_slot_b    ; $C8DE
                            sta  sid2_v1_sc1_step_counter    ; $C8E1
@@ -17285,24 +17421,24 @@ l_10:                      asl  a    ; $C8D4
                            sta  sid2_v0_sc2_step_counter    ; $C8E7
                            ldy  #$FF    ; $C8EA  ; ← sid2_frame_state_slot
                            ldx  arranger_v3_sid2,y    ; $C8EC
-                           bpl  l_14    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
+                           bpl  l_15    ; $C8EF  arranger_v3_sid2,Y had bit 7 clear?
                            lda  arranger_v5_sid2,y    ; $C8F1
-                           beq  l_12    ; $C8F4  arranger_v5_sid2,Y was zero?
+                           beq  l_13    ; $C8F4  arranger_v5_sid2,Y was zero?
                            cpy  sid2_player_init_stride    ; $C8F6
-                           beq  l_11    ; $C8F9  $FF was sid2_player_init_stride?
+                           beq  l_12    ; $C8F9  $FF was sid2_player_init_stride?
                            sty  sid2_player_init_stride    ; $C8FB
                            sta  sid2_player_init_stride_counter    ; $C8FE
-                           jmp  l_12    ; $C901
-l_11:                      dec  sid2_player_init_stride_counter    ; $C904
-                           bne  l_12    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
+                           jmp  l_13    ; $C901
+l_12:                      dec  sid2_player_init_stride_counter    ; $C904
+                           bne  l_13    ; $C907  (sid2_player_init_stride_counter − 1) was non-zero?
                            lda  #$00    ; $C909
                            sta  sid2_player_init_stride    ; $C90B
                            iny    ; $C90E
-                           jmp  l_13    ; $C90F
-l_12:                      lda  arranger_v4_sid2,y    ; $C912
+                           jmp  l_14    ; $C90F
+l_13:                      lda  arranger_v4_sid2,y    ; $C912
                            tay    ; $C915
-l_13:                      ldx  arranger_v3_sid2,y    ; $C916
-l_14:                      lda  pat_base_lo,x    ; $C919
+l_14:                      ldx  arranger_v3_sid2,y    ; $C916
+l_15:                      lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_c986    ; $C91C
                            lda  pat_base_hi,x    ; $C91F
                            sta  sid2_filter_slot_c987    ; $C922
@@ -17318,9 +17454,9 @@ l_14:                      lda  pat_base_lo,x    ; $C919
                            sta  sid2_filter_slot_ca97    ; $C940
                            iny    ; $C943
                            sty  sid2_frame_state_slot    ; $C944
-l_15:                      ldx  #$00    ; $C947
+l_16:                      ldx  #$00    ; $C947
                            ldy  #$FF    ; $C949  ; ← sid2_v1_sc1_step_counter
-                           bmi  l_16    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
+                           bmi  l_17    ; $C94B  sid2_v1_sc1_step_counter had bit 7 set?
                            dec  sid2_v1_sc1_step_counter    ; $C94D
 ;   step-idiom: source = sid2_v1_sc1_step_counter  (= $C94A)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $C94D
@@ -17343,39 +17479,39 @@ l_15:                      ldx  #$00    ; $C947
                            asl  a    ; $C978
                            sta  sid2_voice_record_v2 + $123    ; $C979
                            jmp  sid2_v0_row_read_ldy_smc.l_1    ; $C97C
-l_16:                      ldy  #$01    ; $C97F
+l_17:                      ldy  #$01    ; $C97F
                            lda  #$FF    ; $C981  ; ← (SMC operand at $C982, no name)
-                           bpl  l_17    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
+                           bpl  l_18    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C985
                            sta  sid2_cascade_step_counter    ; $C988
                            stx  sid2_filter_slot_cae0    ; $C98B
-l_17:                      iny    ; $C98E
+l_18:                      iny    ; $C98E
                            lda  #$FF    ; $C98F  ; ← (SMC operand at $C990, no name)
-                           bpl  l_18    ; $C991  sid2_register_write_body_$16E had bit 7 clear?
+                           bpl  l_19    ; $C991  sid2_register_write_body_$16E had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C993
                            sta  sid2_v2_sc2_counter    ; $C996
                            stx  sid2_cascade_inner_gate_counter    ; $C999
-l_18:                      iny    ; $C99C
+l_19:                      iny    ; $C99C
                            lda  #$FF    ; $C99D  ; ← (SMC operand at $C99E, no name)
-                           bpl  l_19    ; $C99F  sid2_register_write_body_$17C had bit 7 clear?
+                           bpl  l_20    ; $C99F  sid2_register_write_body_$17C had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $C9A1
                            sta  sid2_v2_sc2_step_counter    ; $C9A4
                            sta  sid2_cascade_inner_counter    ; $C9A7
                            stx  sid2_voice_record_v0    ; $C9AA
                            stx  sid2_v0_voice_record_slot_a    ; $C9AD
                            stx  sid2_v0_voice_record_slot_c    ; $C9B0
-l_19:                      iny    ; $C9B3
+l_20:                      iny    ; $C9B3
                            ldx  #$FF    ; $C9B4  ; ← (SMC operand at $C9B5, no name)
-                           bpl  l_20    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
+                           bpl  l_21    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $C9B8
                            bmi  sid2_v0_row_read_ldy_smc.l_1    ; $C9BB  sid2_register_write_body_$193 had bit 7 set?
-l_20:                      tya    ; $C9BD
+l_21:                      tya    ; $C9BD
                            clc    ; $C9BE
                            adc  sid2_filter_slot_c986    ; $C9BF
                            sta  sid2_filter_slot_c986    ; $C9C2
-                           bcc  l_21    ; $C9C5  sid2_filter_slot_c986 no carry
+                           bcc  l_22    ; $C9C5  sid2_filter_slot_c986 no carry
                            inc  sid2_filter_slot_c987    ; $C9C7
-l_21:                      lda  #$0F    ; $C9CA
+l_22:                      lda  #$0F    ; $C9CA
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -17383,7 +17519,7 @@ l_21:                      lda  #$0F    ; $C9CA
 ; ──────────────────────────────────────────────────────────────────────
 ; Undocumented opcode $8F (abs): SID#2 mirror of the voice-0 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
 ;
-;   code edges:          fall-through from $C9CA sid2_register_write_body_21 (2 bytes earlier)
+;   code edges:          fall-through from $C9CA sid2_register_write_body_22 (2 bytes earlier)
 ;
 ;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
 sid2_v0_row_read_ldy_smc .block
@@ -17535,7 +17671,7 @@ sid2_row_advance_step_smc .block
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 cascade post-tick gate with self-modifying counter.
 ;
-;   callers:             3 code sites: $CA60, $CA8C, $CACB
+;   callers:             4 code sites: $C816, $CA60, $CA8C, $CACB
 ;   inputs:              X
 ;   outputs:             A, X, Y
 ;   registers clobbered: A, X, Y

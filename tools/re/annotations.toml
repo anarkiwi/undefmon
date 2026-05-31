@@ -6406,3 +6406,13 @@ patch_sources = ["$D1DB"]
 description = """GATE branch (voice 2, note / GATE_N). BPL offset set to \
 $13 once at load by $D1E0; v2 analogue of $119F."""
 patch_sources = ["$D1E0"]
+
+[region."$C819"]
+name = "sid2_forced_variant_data"
+role = "9-byte data table trailing sid2_subframe_forced_variant (zero-fill + $01/$FE marker), before sid2_register_write_body."
+notes = "Not code (decodes as 7 BRKs); a small parameter/marker table in the SID#2 sub-frame band."
+
+[function."$0B8B"]
+name = "raster_irq_entry"
+role = "Raster-IRQ entry: services the VIC raster interrupt."
+notes = "Saves A/X/Y into self-mod restore slots, bumps a frame counter, calls iec_recv_primitive_a, restores A/X/Y, acknowledges the VIC raster-IRQ latch, and RTIs. Reached only via the IRQ vector, so seeded explicitly (see SEED_LANDMARKS) rather than statically."

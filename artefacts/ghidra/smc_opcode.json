@@ -321,6 +321,24 @@
     "annotated": true,
     "discovered": true
   },
+  "$C8D8": {
+    "host_pc": 51416,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      51212,
+      51219
+    ],
+    "current_mnem": "LDA",
+    "candidate_opcodes_annotated": [],
+    "candidate_opcodes_discovered": [
+      "RTS"
+    ],
+    "targets": [],
+    "inconclusive": false,
+    "annotated": false,
+    "discovered": true
+  },
   "$D000": {
     "host_pc": 53248,
     "description": "",
@@ -446,13 +464,16 @@
     "patch_sources_annotated": [],
     "patch_sources_discovered": [
       2666,
-      2724
+      2724,
+      2976
     ],
     "current_mnem": "ADC",
     "candidate_opcodes_annotated": [],
-    "candidate_opcodes_discovered": [],
+    "candidate_opcodes_discovered": [
+      "BRK"
+    ],
     "targets": [],
-    "inconclusive": true,
+    "inconclusive": false,
     "annotated": false,
     "discovered": true
   },
