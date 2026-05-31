@@ -6436,3 +6436,102 @@ notes = "Stamps the source row into the pattern_bank_lookup_helper SMC operand (
 name = "seqlist_row_copy_loop"
 role = "Copies one 128-byte pattern row from an SMC-patched source into the destination row."
 notes = "Walks Y = $7F..0, reading the source via an LDA abs,Y whose operand is patched by the row-duplicate setups, and storing through zp_decoder_dst. The shared tail of seqlist_row_clone_setup / seqlist_row_insert_setup."
+
+[function."$BE1C"]
+name = "sidtab_field_at_cursor"
+role = "Returns in Y the sidTAB field byte under the chip-view cursor, bit 7 masked off."
+notes = "Indexes the sidTAB field row by chip_view_cursor_x. A read-only accessor used throughout the sidTAB editor (10 call sites)."
+
+[function."$BE26"]
+name = "sidtab_voice_mask_compute"
+role = "Recomputes the three sidTAB voice-mask bytes from the staging prefix."
+notes = "Derives the set / cleared / combined masks (ORA, EOR+AND against the prefix) used when applying a sidTAB edit across voices."
+
+[function."$BE62"]
+name = "sidtab_row_ptr_next"
+role = "Advances the sidTAB row pointer (zp_decoder_src) by one 15-byte row."
+
+[function."$BE6E"]
+name = "sidtab_row_ptr_prev"
+role = "Retreats the sidTAB row pointer (zp_decoder_src) by one 15-byte row."
+
+[function."$BE7A"]
+name = "sidtab_staging_clear"
+role = "Clears the 15-byte sidTAB staging buffer to zero."
+
+[function."$BE85"]
+name = "sidtab_staging_load"
+role = "Clears the sidTAB staging buffer, then loads the prefix-selected row into it."
+notes = "Calls sidtab_staging_clear, then loads the current row (selected by sidTAB_staging_prefix) via the song_position_arrays_hi / pitch_lut_band_alt_base tables. The sidTAB editor's row-load workhorse (18 call sites)."
+
+[function."$B36B"]
+name = "step_cursor_inc_wrap"
+role = "Advances step_cursor by one, wrapping at $20 and bumping page_pair_counter (sidTAB auto-advance, +1 variant)."
+
+[function."$A9F4"]
+name = "statusline_reverse_fill"
+role = "Fills the 14-cell status-line colour row with the current colour, reverse-video bit set."
+
+[function."$B63C"]
+name = "chip_view_cursor_home"
+role = "Resets the chip-view (sidTAB) cursor to column 6 / row 0 and re-reads the voice selector."
+
+[function."$BF3C"]
+name = "sidtab_staging_store"
+role = "Stores the sidTAB staging buffer back into the prefix-selected row tables (inverse of sidtab_staging_load)."
+notes = "Writes sidTAB_staging / its high byte into song_position_arrays_hi / pitch_lut_band_alt_base at sidTAB_staging_prefix. The sidTAB editor's row-commit workhorse (14 call sites)."
+
+[function."$BDFA"]
+name = "sidtab_row_decode_to_staging"
+role = "Decodes the current sidTAB row into the staging buffer via sidtab_row_decoder."
+
+[function."$C646"]
+name = "sid2_base_advance"
+role = "Advances the SID#2 base pointer (sid2_base_lo) by $20 and re-reads the secondary-disk data."
+
+[function."$D1B6"]
+name = "load_arm_voice_gates"
+role = "Arms the per-voice sidcall/note smc_branch gates by writing their branch offsets at load time."
+notes = "Sets the gate offsets at the per-voice smc_branch sites so the player skips or runs each voice's SID/note writes per the loaded tune."
+
+[function."$E15F"]
+name = "seqlist_cursor_step_wrap"
+role = "Steps the seqLIST cursor one row (down/wrap) via seqLIST_cursor_step_body."
+
+[function."$D0CC"]
+name = "save_encode_init"
+role = "Save/encode pipeline stage 1: clears the pattern-map page and seeds the arranger walk."
+
+[function."$D1E4"]
+name = "save_encode_copy_patterns"
+role = "Save/encode pipeline stage 2: copies the live pattern bodies (from pat_base) into the encode work area."
+
+[function."$D3DF"]
+name = "save_encode_clear_dedup"
+role = "Save/encode pipeline stage 3: clears the pattern-dedup table before the emit pass."
+
+[function."$D51E"]
+name = "save_encode_song_positions"
+role = "Save/encode pipeline stage 4: emits the per-voice song-position chains via the configurable emitter."
+
+[function."$D365"]
+name = "save_encode_pattern_stream"
+role = "Save/encode pipeline stage 5: emits the pattern bodies via the configurable emitter."
+
+
+[function."$AB56"]
+name = "chip_view_voice_cells_paint"
+role = "Repaints the three chip-view per-voice selection cells from the per-voice state bytes when SID#2 is in view."
+
+[function."$BB84"]
+name = "chip_view_voice_glyph"
+role = "Returns the glyph for a chip-view voice cell, choosing the muted glyph when SID#2 is active and the voice is off."
+
+[function."$CCEE"]
+name = "sid2_filter_raster_write"
+role = "Raster-synchronises, then writes the SID#2 filter registers."
+
+[function."$D562"]
+name = "save_encode_emit_flagged_row"
+role = "Emits a pattern-row entry via self_modifying_byte_emitter, appending the extra bytes selected by the row's continuation-flag bits."
+
