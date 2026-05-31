@@ -2847,6 +2847,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                 smc_opcode: dict[int, dict] | None = None,
                 switch_dispatchers: dict[int, dict] | None = None,
                 register_inputs: dict[int, dict[str, int]] | None = None,
+                reg_effects: dict[int, dict] | None = None,
                 ) -> tuple[int, int]:
     """Emit the .s body. Returns (instr_count, data_byte_count).
 
@@ -2876,6 +2877,7 @@ def emit_source(mem: bytes, base: int, end_excl: int,
     smc_opcode = smc_opcode or {}
     switch_dispatchers = switch_dispatchers or {}
     register_inputs = register_inputs or {}
+    reg_effects = reg_effects or {}
 
     # SMC-target audit: every address that's the operand of an
     # STA/STX/STY-abs anywhere in the disassembled image. The imm-mode
@@ -3208,6 +3210,26 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         if extra > 0:
             parts.append(f"+{extra} more")
         return f"{len(srcs)} code sites: " + ", ".join(parts)
+
+    def _derived_clobbers_line(addr: int, ann: dict | None) -> str:
+        """Graph-derived `registers clobbered:` rendering.
+
+        Returns "" when (a) there's no reg-effects data, (b) the
+        annotation has a hand-written `registers_clobbered` (hand wins),
+        or (c) the analysis was `uncertain` for this function — a
+        computed/self-modified/KERNAL call meant the result is only the
+        conservative A,X,Y, which is not worth rendering as if precise.
+        So only the soundly-analysed (certain) functions get a derived
+        line, where it genuinely informs (e.g. "A, X" = Y is preserved).
+        """
+        if ann and isinstance(ann.get("registers_clobbered"), str) \
+                and ann["registers_clobbered"]:
+            return ""
+        rec = reg_effects.get(addr)
+        if not rec or rec.get("uncertain"):
+            return ""
+        regs = rec.get("clobbers", "")
+        return ", ".join(regs) if regs else "none (preserves A/X/Y)"
 
     def _constraints_lines(ann: dict | None) -> list[str]:
         """Lines for the `constraints` block (do_not_reorder / load-
@@ -4180,7 +4202,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         # in derived form. This makes callers ubiquitous (every live
         # code-start gets one) without forcing 600+ hand entries.
         derived_callers = _derived_callers_line(addr, ann)
-        any_struct = any(v for _, v in structured) or bool(derived_callers)
+        derived_clobbers = _derived_clobbers_line(addr, ann)
+        any_struct = (any(v for _, v in structured)
+                      or bool(derived_callers) or bool(derived_clobbers))
         if any_struct:
             fh.write(";\n")
             for label, val in structured:
@@ -4188,6 +4212,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                     if label == "callers" and derived_callers:
                         pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                         fh.write(f";   {label}:{pad} {derived_callers}\n")
+                    elif label == "registers clobbered" and derived_clobbers:
+                        pad = " " * (_FIELD_LABEL_WIDTH - len(label))
+                        fh.write(f";   {label}:{pad} {derived_clobbers}\n")
                     continue
                 pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                 if label == "values" and isinstance(val, dict):
@@ -5322,6 +5349,28 @@ def load_refuted_addresses(annotations_path: Path) -> set[int]:
     return out
 
 
+def load_reg_effects(path: Path) -> dict[int, dict]:
+    """Load per-function register-clobber facts (from
+    `tools/re/reg_effects.py`) keyed by integer function address.
+
+    Each record carries the derived `clobbers` string and an `uncertain`
+    flag. The emitter renders a derived `registers clobbered:` line only
+    for certain functions without a hand annotation. Returns {} if the
+    file doesn't exist (optional — without it, no derived clobbers).
+    """
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text())
+    out: dict[int, dict] = {}
+    for k, v in data.items():
+        if isinstance(k, str) and k.startswith("$") and isinstance(v, dict):
+            try:
+                out[int(k.lstrip("$"), 16)] = v
+            except ValueError:
+                pass
+    return out
+
+
 def load_cmp_facts(facts_path: Path) -> dict[int, dict]:
     """Load comparison-site facts (from `tools/re/cmp_facts.py`) keyed
     by integer branch PC.
@@ -5620,6 +5669,12 @@ def main() -> None:
     cmp_facts_path = Path(__file__).resolve().parents[2] / "build" / "cmp_facts.json"
     cmp_facts = load_cmp_facts(cmp_facts_path)
 
+    # Per-function register-clobber facts (tools/re/reg_effects.py).
+    # Drives the derived `registers clobbered:` line for certain
+    # functions without a hand annotation. Optional.
+    reg_effects_path = Path(__file__).resolve().parents[2] / "build" / "reg_effects.json"
+    reg_effects = load_reg_effects(reg_effects_path)
+
     # Per-PC IMM operand overrides (manual `[imm."$XXXX"]` entries).
     # Loaded here so the resolver can be passed into emit_source.
     imm_overrides_map: dict[int, str] = {}
@@ -5687,7 +5742,8 @@ def main() -> None:
                              smc_branch=smc_branch_map,
                              smc_opcode=smc_opcode_map,
                              switch_dispatchers=switch_dispatchers,
-                             register_inputs=register_inputs_map)
+                             register_inputs=register_inputs_map,
+                             reg_effects=reg_effects)
 
     total = args.end - args.start
     print(f"wrote {out_path}  ({total} bytes  ${args.start:04X}-${args.end - 1:04X})")

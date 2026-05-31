@@ -2004,6 +2004,7 @@ vic_cia_quiesce_body .block
 ; IRQ/banking setup called by disk_menu_return_handler in the LOAD chain.
 ;
 ;   callers:             4 code sites: $7423 save_ui_entry, $7455, $76D8, $7880
+;   registers clobbered: A
 ;
 ;   IRQ-off; CIA timer setup; $01=#$35 banks KERNAL ROM OUT (exposes RAM-under-I/O at ram_under_io-ram_under_io_end for the decoder); NMI vector → nmi_irq_entry; return.
 ;
@@ -2378,6 +2379,7 @@ l_2:                       cmp  #$04    ; $0C6F
 ;
 ;   callers:             2 code sites: $0C71, $0C79
 ;   inputs:              (none — terminal loop)
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Reached only via ui_mode_to_slot_idx fall-through when ui_mode is not UI_MODE_SEQED / UI_MODE_SEQLIST / UI_MODE_SIDTAB — a should-never-happen panic. Three border-color INCs per iteration produce a fast colour-cycle on screen until reset. Only reference is the panic_color_loop JMP panic_color_loop self-jump — no external entry points. The cold-boot path always passes A=UI_MODE_SEQED through ui_mode_to_slot_idx's first arm, so this panic is unreachable from a clean boot.
 panic_color_loop .block
@@ -2453,6 +2455,7 @@ stop_playback .block
 ;
 ;   callers:             post_load_startup (cold-boot, A=$00 → black border); mode_transition_color_arm (mode-transition super-cmd recolour, A=$00 or $05); other UI handlers via mode_transition_wrapper tail.
 ;   inputs:              A = palette index ($00 = black, $05 = green, etc.)
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Stores A into ui_mode_range_bound (UI state byte for 'current border color') and VIC_BORDER (VIC border).
 ;
@@ -2470,6 +2473,7 @@ border_set_a .block
 ;
 ;   callers:             4 code sites: $B679, $C24E, $C256, $E48C
 ;   inputs:              A = palette index.
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Body: write ui_mode_range_bound / write VIC_BORDER / return. Both routines write the SAME border register (VIC_BORDER); they differ only in which state-mirror byte they update — border_set_a owns ui_mode_range_bound, border_set_b owns ui_mode_range_bound — letting callers track two parallel visual-feedback states (e.g. play indicator + super-cmd indicator) without trampling each other's saved value.
 border_set_b .block
@@ -2630,6 +2634,7 @@ speedadj_shift_right .block
 ;   callers:             4 sites in CTRL+R super-cmd speed-preset arms: shift_x_disk_menu_chord (X=$01 → preset 0, ~50 Hz PAL VBL), shift_x_disk_menu_chord (X=$02 → preset 1, ~100 Hz), shift_x_disk_menu_chord (X=$04 → preset 2, ~200 Hz), shift_x_disk_menu_chord (X=$08 → preset 3, ~400 Hz / 8-sub-frame). Plus 1 internal call from speedadj_preset_loader (post-adjust write-back chain).
 ;   inputs:              X = sub_frame_count (SUB_FRAME_1X/SUB_FRAME_2X/SUB_FRAME_4X/SUB_FRAME_8X = preset index 0/1/2/3).
 ;   outputs:             cia2_timer_lo/cia2_timer_hi = preset Timer-A reload; sub_frame_count = X; sub_frame_phase = $00.
+;   registers clobbered: A, X, Y
 ;
 ;   Caller passes X = sub_frame_count (SUB_FRAME_1X..SUB_FRAME_8X — number of NMIs per main tick). speedadj_preset_loader converts X to a 0-based preset index via A←X / lsr-loop (counts trailing zero bits), looks up Timer-A reload pair from speedadj_preset_timer_lo_lut (lo) / speedadj_preset_timer_hi_lut (hi), stores into cia2_timer_lo/cia2_timer_hi, raster-syncs on VIC_RASTER, sets X→sub_frame_count, clears sub_frame_phase (sub_frame phase counter), falls into speedadj_writeback_tail for the write-back.
 ;
@@ -2678,6 +2683,7 @@ l_3:                       cpy  VIC_RASTER    ; $0D94
 ;   callers:             7 internal sites in speedadj_block_header-speedadj_ldy_smc speed-adjust block: speedadj_bump_up (INC carry-clear from speedadj_bump_up), speedadj_bump_up (post-INC fall-through), speedadj_bump_down (DEC carry-set from speedadj_bump_down), speedadj_bump_down (post-DEC fall-through), speedadj_shift_left (post-ROL ×2), speedadj_shift_right (post-LSR /2 with clamp), speedadj_preset_loader (post-preset write from speedadj_preset_loader).
 ;   inputs:              cia2_timer_lo / cia2_timer_hi = new Timer-A reload.
 ;   outputs:             CIA2_TA_LO / CIA2_TA_HI = Timer-A registers; status line repainted.
+;   registers clobbered: A, X, Y
 ;
 ;   Installs the new Timer-A reload into the CIA registers, then repaints the status line with the current Timer-A value as hex digits.
 speedadj_writeback_tail .block
@@ -2708,6 +2714,7 @@ speedadj_writeback_tail .block
 ;
 ;   callers:             speedadj_cbm_f5_subframe_up (CBM+F5 arm in the CBM+F-key parser cascade).
 ;   outputs:             sub_frame_count = clamp(prev + 1, 1, 8); status line repainted via speedadj_status_repaint.
+;   registers clobbered: A, X, Y
 ;
 ;   Reads sub_frame_count; if it's already SUB_FRAME_8X, beq to speedadj_status_repaint (status repaint, no-op). Else increment sub_frame_count and fall through to speedadj_status_repaint. Pairs with speedadj_subframe_down (bump DOWN); both adjust the sub-frame divider within [1, 8]. Adjusting sub_frame_count alone (without changing cia2_timer_lo/cia2_timer_hi Timer-A reload) re-divides the per-tune main-tick rate. Use speedadj_preset_loader to load a full preset (Timer-A + sub_frame_count).
 speedadj_subframe_up .block
@@ -2725,6 +2732,7 @@ speedadj_subframe_up .block
 ;
 ;   callers:             speedadj_cbmshift_f5_subframe_dn (CBM+SHIFT+F5 arm in the CBM+F-key parser cascade).
 ;   outputs:             sub_frame_count = clamp(prev - 1, 1, 8); status line repainted via speedadj_status_repaint.
+;   registers clobbered: A, X, Y
 ;
 ;   Reads sub_frame_count; if it's already SUB_FRAME_1X, beq to speedadj_status_repaint (no-op). Else decrement sub_frame_count and fall through to speedadj_status_repaint. Companion to speedadj_subframe_up (bump UP).
 speedadj_subframe_down .block
@@ -2742,6 +2750,7 @@ speedadj_subframe_down .block
 ;   callers:             speedadj_subframe_up (post-clamp/INC), speedadj_subframe_down (post-clamp/DEC), speedadj_subframe_up (post-INC fall-through), speedadj_subframe_down (post-DEC fall-through). External: speedadj_subframe_up JMP.
 ;   inputs:              sub_frame_count = current sub_frame_count (1..8).
 ;   outputs:             status line shows 'SUB N' style indicator.
+;   registers clobbered: A, X, Y
 ;
 ;   Tail shared by speedadj_subframe_up / speedadj_subframe_down and their fall-throughs at speedadj_subframe_up / speedadj_subframe_down. Sequence:
 ;     - call statusline_clear (status-line clear).
@@ -2823,6 +2832,7 @@ l_2:                       sta  COLOR_RAM,x    ; $0E2C
 ;   callers:             9 sites: main_loop (editor main_loop input scan) + 8 disk-band loops (disk_menu_close_tail, dir_entry_inner_loop, disk_confirm_prompt_loop, disk_menu_kbd_scan, disk_menu_save_banner_dismiss, disk_menu_save_banner_dismiss, disk_menu_ui_band_end, filename_prompt_paint) — each disk-menu input-wait body calls kbd_scan to poll for the user's next key.
 ;   inputs:              CIA1_PRA/CIA1_PRB = CIA-1 keyboard matrix rows.
 ;   outputs:             kbd_matrix_mirror-kbd_matrix_mirror_end = matrix mirror (per-row bitmap); kbd_decoded_key = decoded key screen-code ($FF = no key); kbd_modifiers = modifier mask (via modifier_extract); kbd_voice_mute = voice-mute mask (via modifier_extract); kbd_debounce_counter = debounce countdown.
+;   registers clobbered: A, X, Y
 ;
 ;   Walks all 8 CIA-1 keyboard matrix rows, writes the 8-byte mirror to
 ;   kbd_matrix_mirror..kbd_matrix_mirror_end, decodes the first pressed key
@@ -2975,6 +2985,7 @@ l_2:                       ldy  #$0C    ; $0F18
 ; 3-instruction helper: Y←$02 / Y→kbd_debounce_counter / return.
 ;
 ;   callers:             kbd_scan_samemod_branch BEQ (only).
+;   registers clobbered: Y
 ;
 ;   Resets the keyboard-state retry counter at kbd_debounce_counter to 2. Reached by →retry_counter_reload when zero from kbd_scan_samemod_branch (the retry-budget-exhausted branch of kbd_dead_trampoline's dead path).
 retry_counter_reload .block
@@ -2997,6 +3008,7 @@ l_1:                       cmp  #KEY_CRSRLR    ; $0F24
 ;
 ;   callers:             2 code sites: $0EE2 kbd_scan_inner_continue_1, $0EFD
 ;   outputs:             kbd_modifiers = KBD_MOD_CTRL CTRL | KBD_MOD_SHIFT SHIFT | KBD_MOD_CBM CBM; kbd_voice_mute = voice-mute toggles
+;   registers clobbered: A
 ;
 ;   Builds kbd_modifiers (mod byte) and kbd_voice_mute (voice-mute) from matrix mirror at kbd_matrix_mirror..kbd_matrix_mirror_end.
 modifier_extract .block
@@ -3051,6 +3063,7 @@ l_4:                       rts    ; $0F8F
 ; player_init.
 ;
 ;   callers:             2 code sites: $7878, $8194
+;   registers clobbered: A, X, Y
 ;
 ;   A=tune index; call once after LOAD to bootstrap player state.
 player_init .block
@@ -3063,6 +3076,7 @@ player_init .block
 ; player_play.
 ;
 ;   callers:             1 code sites: $81CA
+;   registers clobbered: A, X, Y
 ;
 ;   Call every frame from IRQ to advance playback.
 player_play .block
@@ -3073,6 +3087,8 @@ player_play .block
 ; $1006  player_sound_update
 ; ──────────────────────────────────────────────────────────────────────
 ; player_sound_update.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          none
 ;   apparent (from data): $0B04 in nmi_playback_gate_smc, $D915 in load_decoder_tail_jump
@@ -3117,6 +3133,7 @@ player_sound_update_jmp_tail .block
 ; main per-frame player tick.
 ;
 ;   callers:             2 code sites: $1003 player_play, $100F
+;   registers clobbered: A, X, Y
 ;
 ;   Falls through V0/V1/V2 SID-write band (player_play_body-filter_resonance_routing), SID#1 globals + filter slide (filter_resonance_routing-filter_cutoff_block_end), then the sentinel bpl at row_advance_gate gates the pattern-row advance phase (skipped when called via player_sound_update sub-frame path). Tail JMPs through the 6-step sidTAB cascade (sidtab_cascade_entry-v2_sc2_cascade_slot_triple) and the per-voice pitch oscillator (pitch_slide_oscillator-groove_song_position).
 ;
@@ -3179,6 +3196,7 @@ l_1:                       stx  SID_V1_PW_LO    ; $1026
 ; V1 SID-write band — voice-1 analog of player_play_body.
 ;
 ;   callers:             1 code sites: $1047
+;   registers clobbered: A, X, Y
 ;
 ;   Falls through from pw_hi_patch_v0 jmp at end of V0 band. Same shape as V0: stx/write pulse-width into SID_V2_PW_LO/SID_V2_PW_HI (v1_sid_write_band), freq lo/hi into SID_V2_FREQ_LO/SID_V2_FREQ_HI (v1_sid_write_band), then S/R into SID_V2_SR (v1_sid_write_band), A/D into SID_V2_AD (v1_sid_write_band), ctrl_main eor ctrl_eor into SID_V2_CTRL (v1_sid_write_band). Per-voice working record at voice_record_v1 (offsets voice_record_v1..v1_voice_record_pad = slide accumulator lo/hi/mode; v1_sid_write_band = SID-write patch slots indexed by X=$31). Tail JMPs to v2_sid_write_band (V2 SID-write band). Pulse-width pair at v1_sid_write_band = V0's pw_lo_patch_v0/pw_hi_patch_v0 offset by $31. Freq pair at v1_sid_write_band = V0's pw_hi_patch_v0 + $31. Self-modifying — operand bytes serve as per-voice working registers and must not be reordered. The X=$31 base offset is hard-coded into the slide oscillator (pitch_slide_oscillator) and into sidtab_row_apply dispatch.
 v1_sid_write_band .block
@@ -3213,6 +3231,7 @@ l_1:                       stx  load_decoder_pat_base_walk.SID_V2_PW_LO    ; $10
 ; V2 SID-write band + SID#1 globals tail.
 ;
 ;   callers:             1 code sites: $1078
+;   registers clobbered: A, X, Y
 ;
 ;   V2 analog of v1_sid_write_band: writes SID_V3_FREQ_LO..SID_V3_SR (freq/PW/ctrl/ADSR) from V2's per-voice working record (voice_record_v2, X=$62), then falls through into the shared SID#1 globals tail (filter resonance/routing patched from filter_resonance_routing; volume + filter mode from filter_volume_or_mode; the filter-cutoff slide accumulator). The volume ORA $0F at filter_volume_or_mode forces volume to $0F (max) and ORs in the high-nibble filter-mode bits, so defMON tunes can't quiet the volume below max via this path — per-voice volume comes from envelope S/R only.
 v2_sid_write_band .block
@@ -3248,6 +3267,8 @@ l_1:                       stx  load_decoder_pat_base_walk.SID_V3_PW_LO    ; $10
 ; $10B5  filter_cutoff_slide_accumulator
 ; ──────────────────────────────────────────────────────────────────────
 ; 16-bit signed accumulator integrating cutoff_hi per frame.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $10B2 in filter_volume_or_mode (3 bytes earlier)
 ;
@@ -3432,6 +3453,7 @@ l_1:                       lda  pat_base_lo,x    ; $1119
 ; voice-0 timer + pattern row-read dispatch.
 ;
 ;   callers:             1 code sites: $10DA row_advance_gate
+;   registers clobbered: A, X, Y
 ;
 ;   Per-frame V0 pattern-row gate. The row timer at v0_row_timer counts
 ;   down each main-tick NMI; when it underflows ($FF) this band reads
@@ -3525,6 +3547,7 @@ v0_patch_to_v1_jmp .block
 ; runs when V0's row timer hits $FF.
 ;
 ;   callers:             1 code sites: $114B v0_row_advance_bmi
+;   registers clobbered: A, X, Y
 ;
 ;   Reads the 4-byte pattern row at (pat_base + Y*4) via three self-modifying lda-abs (row_read_body_v0/V0_gate_n_branch — each patched with pat_base from v0_freq_lookup_smc/v0_freq_lookup_smc_hi set by arranger_load_pat_bases). Y=$01 → step_byte_a → v0_sc1_row_idx (sidcall1 row index) + v0_sc1_counter (sidcall1 step counter = $00); Y=$02 → step_byte_b → v0_sc2_row_idx (sidcall2 row index) + v0_sc2_counter; Y=$03 → step_byte_n (NOTE) → v0_transpose_buffer (transpose buffer) + current_note_v0 (current_note) + zeros slide accumulator voice_record_v0/v0_slide_acc/slide_mode_v0. The →gate when positive at row_read_body_v0 skips the GATE_N branch when step_byte == $FF (no-op step).
 ;
@@ -3632,6 +3655,7 @@ SAX_v0_dur_nibble .block
 ; voice-1 analog of row_advance_band_v0.
 ;
 ;   callers:             3 code sites: $1150, $117C v0_patch_to_v1_jmp, $11BB
+;   registers clobbered: A, X, Y
 ;
 ;   X←$00 at entry, but row_read_body_v1's mirror-store at X→voice_record_v1/v1_voice_record_pad has shifted X to $31 by the time the band finishes (V1's slide accumulator sits at offset $31 from V0's voice_record_v0/v0_slide_acc/slide_mode_v0). Same shape as V0's row_advance_band_v0: →row_read_body_v1 when negative fires row read, decrement v1_row_timer + →row_advance_band_v2 when positive skips. Pattern row addresses come from row_read_body_v1 (set by arranger_load_pat_bases). On GATE_N fires, zeros voice_record_v1/v1_voice_record_pad. Per-NMI cadence + env-program emit timing: see row_advance_band_v0 notes. V1 mirrors V0's model — runs only on main-tick NMIs; does NOT emit V1 env-program bytes (SID_V2_CTRL/SID_V2_AD/SID_V2_SR), those flow through sidtab_row_apply → v1_sid_write_band operand slots → v1_sid_write_band V1 SID-write band. Cascade-fire NMI for V1 sc1 lives on the sidtab_cascade_v1_sc1 arm (V1 sc1 counter at v1_sc1_counter).
 row_advance_band_v1 .block
@@ -3668,6 +3692,7 @@ row_advance_band_v1 .block
 ; V1 analog of row_read_body_v0.
 ;
 ;   callers:             1 code sites: $11D3
+;   registers clobbered: A, X, Y
 ;
 ;   Reads 4-byte row at (pat_base_v1 + Y) via row_read_body_v1. Y=$01 → v1_sc1_row_idx (V1 sc1 row idx) + v1_sc1_counter (V1 sc1 counter); Y=$02 → v1_sc2_row_idx (V1 sc2 row idx) + v1_sc2_counter (V1 sc2 counter); Y=$03 → v1_cascade_slot_triple (V1 sc1 transpose mirror) + v1_sc2_cascade_slot_triple (V1 sc2 transpose mirror) + X→voice_record_v1/v1_voice_record_pad (V1 slide accumulator + mode reset). The mirror-store targets v1_cascade_slot_triple/v1_sc2_cascade_slot_triple are in the sidcall1/sidcall2 cascade rows rather than a per-voice 'transpose buffer' like V0's v0_transpose_buffer. V0_gate_n_branch/v0_gate_n_tail (V0 writes v0_transpose_buffer + current_note_v0) vs row_read_body_v1 (V1 writes v1_cascade_slot_triple + v1_sc2_cascade_slot_triple — both are sidcall row indexes, not the V1 current_note at v0_sc2_cascade_slot_triple). V1's current_note_v0-analog (current_note) lives at v0_sc2_cascade_slot_triple but isn't written from the row-read path; instead v1_sc1_row_idx = sidcall1 row index acts as the V1 'note' for the cascade dispatch.
 row_read_body_v1 .block
@@ -3733,6 +3758,7 @@ row_read_body_v2_ldy_smc .block
 ; voice-2 analog of row_advance_band_v0/row_advance_band_v1.
 ;
 ;   callers:             3 code sites: $11D8, $1204, $1243
+;   registers clobbered: A, X, Y
 ;
 ;   Same shape; pat_base from row_read_body_v2; row timer at v2_row_timer; GATE_N branch at row_read_body_v2 writes v2_cascade_slot_triple/v2_sc2_cascade_slot_triple (V2 sc1/sc2 row index mirrors) + zeros voice_record_v2 (V2 slide accumulator/mode at offset $62 from V0's voice_record_v0). Per-NMI cadence + env-program emit timing: see row_advance_band_v0 notes. V2 mirrors V0's model — runs only on main-tick NMIs; does NOT emit V2 env-program bytes (SID_V3_CTRL/SID_V3_AD/SID_V3_SR), those flow through sidtab_row_apply → v2_sid_write_band operand slots → v2_sid_write_band V2 SID-write band. Cascade-fire NMI for V2 sc1 lives on the sidtab_cascade_v2_sc1 arm (V2 sc1 counter at v2_sc1_counter).
 row_advance_band_v2 .block
@@ -3769,6 +3795,7 @@ row_advance_band_v2 .block
 ; V2 analog of row_read_body_v0/row_read_body_v1.
 ;
 ;   callers:             1 code sites: $125B
+;   registers clobbered: A, X, Y
 ;
 ;   Reads 4-byte row at (pat_base_v2 + Y) via row_read_body_v2. Y=$01 → v2_sc1_row_idx + v2_sc1_counter (V2 sc1); Y=$02 → v2_sc2_row_idx + v2_sc2_counter (V2 sc2); Y=$03 → v2_cascade_slot_triple + v2_sc2_cascade_slot_triple (sidcall row index mirrors) + X→voice_record_v2 (V2 slide accumulator + mode reset).
 row_read_body_v2 .block
@@ -3834,6 +3861,7 @@ row_advance_band_v2_ldy_smc .block
 ; start of the 6-step sidTAB cascade tail.
 ;
 ;   callers:             4 code sites: $1016 player_sound_update_jmp_tail, $1260, $128C, $12CB
+;   registers clobbered: A, X, Y
 ;
 ;   jmp'd into from both player_play_body's main-tick body and from player_sound_update's sub-frame body (after player_sound_update patches subframe_sentinel_opcode to $60 and JSRs player_play_body).
 ;
@@ -3876,6 +3904,7 @@ sidtab_cascade_entry .block
 ; V0 sidcall1 row-refetch path.
 ;
 ;   callers:             1 code sites: $12E1
+;   registers clobbered: A, X, Y
 ;
 ;   Entered when v0_sc1_counter underflows. Reads the current row's hi byte from sidtab_row_hi; if non-zero it's the row's runtime ptr-hi (post-LOAD: usually $5F). If zero, the row is a JP marker — the cascade reads the redirect target from sidtab_row_lo,Y, re-loads Y from it, and re-reads sidtab_row_hi at the redirected row for the actual ptr-hi (see JP_redirect_reread). The new row's DL byte goes into v0_sc1_counter, the row index advances, and sidtab_row_apply applies the row. The JP redirect (sidtab_row_hi[Y] == 0) is how tunes hold a voice on a single sustain cascade indefinitely — a self-loop pair keeps the voice alive for the lifetime of a note.
 sidtab_refetch_v0_sc1 .block
@@ -4067,6 +4096,7 @@ l_2:                       sta  zp_sidtab_row_hi    ; $13F1
 ; per-voice pitch slide + pulse-width modulation loop.
 ;
 ;   callers:             2 code sites: $13D8, $13DD
+;   registers clobbered: A, X, Y
 ;
 ;   Iterates X = $62, $31, $00 (V2, V1, V0). For each voice, dispatches on slide mode (slide_mode_v0,X):
 ;     - == 0     → simple note-pitch lookup (pitch_no_slide_path; freq = NOTE_PITCH[current_note_v0,X] + pitch_base_v0,X).
@@ -4358,6 +4388,7 @@ groove_song_position:      rts    ; $14EB
 ; push flags/IRQ-off, busy-wait for raster line VIC_RASTER=$FC, then read SID#1 voice-3 oscillator output SID_OSC3 for entropy.
 ;
 ;   callers:             1 code sites: $1544
+;   registers clobbered: A
 ;
 ;   Reads bit 0 of the V3 oscillator entropy byte and uses it to randomly bias the cutoff-slide path. Bit 0 clear → filter_cutoff_slide_threshold_reload = $02 + filter_slide_output_opcode = $EA (NOP, output passes through). Bit 0 set → filter_cutoff_slide_threshold_reload = $00 + filter_slide_output_opcode = $0A (ASL A, doubles the cutoff-slide output). Called once from player_init_body; the patched bytes stay for the lifetime of the loaded tune. This is how defMON gets tune-startup-randomized swing without rerolling per frame.
 raster_sync_random .block
@@ -4393,6 +4424,7 @@ l_3:                       sta  filter_slide_output_opcode    ; $151D
 ; A=tune index → current_arranger_row.
 ;
 ;   callers:             1 code sites: $1000 player_init
+;   registers clobbered: A, X, Y
 ;
 ;   Clears all 24 SID #1 regs (SID_V1_FREQ_LO-SID_FILTER_RES) via the dey loop at player_init_body; zeros filter/slide globals filter_cutoff_acc_lo/filter_cutoff_slide_acc_hi/filter_cutoff_slide_accumulator/filter_cutoff_slide_acc_hi/filter_cutoff_slide_saturation_step/filter_resonance_routing/filter_volume_or_mode; JSRs raster_sync_random for raster sync + RNG. Then for each voice (X = $62, $31, $00) zeros per-voice runtime state (v0_sc1_row_idx/v0_sc2_row_idx sidcall row indices; pw_hi_patch_v0 SID-write patch slots; slide_mode_v0/ps_depth_v0 mode flags; current_note_v0 current note) and sets sidcall step counters v0_sc1_counter,X / v0_sc2_counter,X = SILENCE_FLAG_EOS so the cascade re-fetches a row on the first tick. Sets silence_or_endsong_flag = SILENCE_FLAG_QUIET (silence) so playback stays muted until the next pattern row promotes the voice.
 player_init_body .block
@@ -4466,6 +4498,7 @@ pitch_oscillator_anc_smc_mirror .block
 ; apply one sidTAB row to voice X (X = $00 / $31 / $62).
 ;
 ;   callers:             6 code sites: $130D, $133E, $136F, $13A0, $13D1, $1402
+;   registers clobbered: A, X, Y
 ;
 ;   A = row low byte; sets ($FB) = full row pointer. Reads the row's first bitmap byte and dispatches per bit (MSB to LSB):
 ;     - bit 7 → pw_hi_patch_v0,X (ctrl eor mask, WGl column applied each frame).
@@ -5366,6 +5399,7 @@ player_irq_tail_anc_smc .block
 ; wait one full VBL frame.
 ;
 ;   callers:             irq_banking_setup (player NMI body — raster sync before paint), raster_wait BPL self-loop, global_pre_dispatch_statusline_epilogue (status-line paint epilogue inside global_pre_dispatch's global_pre_dispatch_statusline_epilogue region).
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   bit-test VIC_CR1 / →raster_wait when positive (busy-wait until raster is in the upper half) / bit-test VIC_CR1 / →raster_wait when negative (busy-wait until raster crosses into the lower half) / return. Guarantees the caller sees exactly one VIC_CR1 bit-7 transition per call (≈ half a PAL frame = ~8.3 ms).
 raster_wait .block
@@ -5382,6 +5416,7 @@ l_1:                       bit  VIC_CR1    ; $73F5
 ; Screen-clear with A=#$20.
 ;
 ;   callers:             disk_menu_drive_info_paint JSR (disk-menu open paint preamble inside save_ui_entry chain).
+;   registers clobbered: A, X
 ;
 ;   A←$20 / fall through to screen_fill_body. Fills the four screen-RAM pages screen_ram-SCREEN_RAM_END with the SPACE glyph (X = $00..$FF wraps via the →loop when nonzero at screen_ram_zero_fill). Used by the disk-menu open to blank the editor backdrop before the menu paint. Adjacent to screen_fill_body which is the same loop without the A preload — callers that want a non-space fill go through screen_fill_body directly.
 screen_clear_space .block
@@ -5394,6 +5429,7 @@ screen_clear_space .block
 ; Screen-fill body — write screen_ram,X / SCREEN_RAM_P2,X / SCREEN_RAM_P3,X / SCREEN_RAM_P4,X / decrement X / →stereo_state_band_end when nonzero / return.
 ;
 ;   callers:             disk_menu_screen_init JSR (disk-menu inner paint after directory fetch), filename_prompt_paint JSR (SAVE-completed status banner).
+;   registers clobbered: X
 ;
 ;   Caller-supplied A picks the fill glyph; uses X as 256-byte loop counter touching all 4 screen-RAM pages (1000 visible cells + 24 padding). Reached by fall-through from screen_clear_space (fill with SPACE) or directly when caller pre-loads A.
 screen_fill_body .block
@@ -5414,6 +5450,8 @@ stereo_state_band_end .block
 ; $7402  screen_ram_zero_fill
 ; ──────────────────────────────────────────────────────────────────────
 ; Screen-RAM zero-fill helper.
+;
+;   registers clobbered: X
 ;
 ;   code edges:          fall-through from $73FF stereo_state_band_end (3 bytes earlier)
 ;
@@ -5479,6 +5517,7 @@ save_ui_entry .block
 ; Disk-menu close tail.
 ;
 ;   callers:             save_ui_entry (fallthrough after JSR disk_menu_input_loop returns via disk_menu_exit_arm LEFTARROW arm)
+;   registers clobbered: A, X, Y
 ;
 ;   Spins polling the keyboard until all keys are released ($FF == no key), then quiesces the IEC bus, re-installs the defMON IRQ vectors, clears save_ui_saved_state, and returns to save_ui_entry's caller.
 disk_menu_close_tail .block
@@ -6072,6 +6111,7 @@ l_5:                       jmp  disk_menu_input_wait    ; $76B3
 ; Disk-menu arm: bare LEFTARROW ($1F) → return (exits the nested disk_menu_input_loop loop back through save_ui_entry to the main editor loop).
 ;
 ;   callers:             2 code sites: $764C, $7924
+;   registers clobbered: none (preserves A/X/Y)
 disk_menu_exit_arm .block
                            rts    ; $76B6
 l_1:                       jsr  save_prg_loadaddr_msb.l_1    ; $76B7
@@ -6117,6 +6157,7 @@ disk_menu_return_handler .block
 ;
 ;   callers:             disk_menu_return_handler (BCS load_failure_panic_loop = post-KERNAL-LOAD failure; the JSR tune_load_entry → kernal_load_call_site JSR KERNAL_LOAD returned with carry set), load_failure_panic_loop (JMP load_failure_panic_loop = post-OPEN failure in the secondary chain at disk_menu_save_arm).
 ;   inputs:              (none — terminal loop)
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   increment VIC_BORDER / jump load_failure_panic_loop — fast colour-cycle on screen until reset. Same shape as panic_color_loop, border_flash_panic, save_failure_panic_loop. Reached only on KERNAL LOAD/OPEN errors during tune load.
 load_failure_panic_loop .block
@@ -6420,6 +6461,7 @@ l_4:                       sec    ; $78CB
 ;
 ;   callers:             disk_menu_save_arm JSR (LOAD-rename UI), disk_menu_ui_band_end JSR (SAVE-name UI).
 ;   inputs:              X = entry column; Y = entry row.
+;   registers clobbered: A, X, Y
 ;
 ;   Sequence:
 ;     - Y → filename_prompt_row_smc (self-mod operand for the paint loop's Y position).
@@ -6630,6 +6672,7 @@ l_6:                       inc  VIC_BORDER    ; $7A04
 ;   callers:             supercmd_cbm_shift_fallthrough (CTRL+F1 / CTRL+F3 stop-playback super-cmd arms in the CBM+F-key parser).
 ;   inputs:              encoder_state_flag — must be non-zero (the BEQ at iec_tx_byte abandons the TX otherwise, jumping to the iec_tx_byte abort/cleanup tail with SEC).
 ;   outputs:             CIA2 PA (CIA2_PRA) driven through ATN+CLK toggles to clock one byte out to the drive. Border (VIC_BORDER) flashed CYAN ($03) during the TX as a visual debug indicator. Returns CLC on success, SEC on abort.
+;   registers clobbered: A
 ;
 ;   Sends one byte to the 1541 via the serial bus's ATN/CLK/DATA handshake
 ;   protocol. Asserts ATN (CIA2_PRA bit 5), flashes the border CYAN as a
@@ -6686,6 +6729,7 @@ l_3:                       lda  CIA1_PRB    ; $7F40
 ;   callers:             nmi_post_player_tail (player IRQ tail — called after each player_play main tick to maintain a heartbeat for any listening drive-side code).
 ;   inputs:              encoder_state_flag — must be non-zero (BEQ at iec_clk_pulse short-circuits to bare-RTS at iec_clk_pulse otherwise).
 ;   outputs:             CIA2 PA pulsed; no return value (always RTSes plain).
+;   registers clobbered: A
 ;
 ;   code edges:          none
 ;   apparent (from data): $0B75 in nmi_post_player_tail
@@ -6721,6 +6765,7 @@ l_1:                       rts    ; $7F6E
 ; VIC raster-IRQ-enable bit setter.
 ;
 ;   callers:             player_helper_band (post-iec_bus_quiesce quiesce tail, restores screen after a save session).
+;   registers clobbered: A
 ;
 ;   Sets bit 4 of VIC_CR1 (VIC control register 1), which on a real C64 enables the 24-row text display (not raster IRQ per se; the raster IRQ enable is on VIC_IRQ_MASK). Used as a 'show screen' helper after the IEC quiesce path blanks the display.
 vic_display_on .block
@@ -6736,6 +6781,7 @@ vic_display_on .block
 ; VIC display-blank helper.
 ;
 ;   callers:             iec_bus_quiesce (inside iec_bus_quiesce quiesce prologue).
+;   registers clobbered: A
 ;
 ;   Clears bit 4 of VIC_CR1, blanking the 24-row text display. Paired with vic_display_on (set). Used to blank the screen during the IEC bit-bang loop at iec_bus_quiesce so VIC bus contention doesn't disturb the timing-critical CIA2 PA toggles.
 vic_display_off .block
@@ -6752,6 +6798,7 @@ vic_display_off .block
 ;
 ;   callers:             save_ui_entry (inside save_ui_entry prologue), disk_menu_close_tail (inside disk_menu_close_tail save_ui_entry cleanup tail).
 ;   outputs:             CIA2_PRA = $C7 (IEC idle), VIC_CR1 bit 4 = 0 (display blanked), I-flag set (interrupts off — caller must CLI). 256 full toggle cycles burned to settle the bus.
+;   registers clobbered: A, X, Y
 ;
 ;   Called from save_ui_entry prologue and disk_menu_close_tail cleanup tail, also from supercmd_cbm_shift_fallthrough (CTRL+F-key stop-playback paths). Disables interrupts (IRQ-off), blanks the VIC display (call vic_display_off), then runs a 256-iteration loop (iec_bus_quiesce) of alternating sta/X→CIA2_PRA writes — bit-banging the IEC CLK+DATA lines into a known idle state via paired transitions. Finishes with the canonical idle byte (CIA2_PRA = $C7).
 ;
@@ -6834,6 +6881,8 @@ player_helper_band .block
 ; ──────────────────────────────────────────────────────────────────────
 ; IEC receive primitive (4-byte input via CIA2_PRA reads).
 ;
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          none
 ;   apparent (from data): $0B97 in nmi_post_player_tail
 ;
@@ -6870,6 +6919,7 @@ l_1:                       cpy  #$80    ; $802A
 ; Border-flash debug toggle helper #1 (cassette-area scratch).
 ;
 ;   callers:             iec_recv_primitive_a JMP (encoder error-path band).
+;   registers clobbered: A
 ;
 ;   Leaves a one-bit-toggle trace in cassette RAM (encoder_state_flag bit 0) after each encoder pass. Identical body shape to border_flash_debug_b. Cassette-area scratch (encoder_state_flag/data_band_no_op_tail) is used as 'unused RAM playground' since defMON disables KERNAL tape I/O.
 border_flash_debug_a .block
@@ -6887,6 +6937,7 @@ border_flash_debug_a .block
 ; Second IEC receive primitive (paired with iec_recv_primitive_a).
 ;
 ;   callers:             6 code sites: $801D, $8021, $8025, $802C, $8030, $8034
+;   registers clobbered: A, X, Y
 iec_recv_primitive_b .block
                            lda  CIA2_PRA    ; $8044
                            ldx  CIA2_PRA    ; $8047
@@ -6914,6 +6965,7 @@ l_1:                       cpy  #$80    ; $8061
 ; Border-flash debug toggle helper #2 — identical body shape to border_flash_debug_a (write data_band_no_op_tail := #$0A / eor-toggle encoder_state_flag bit 0 / return).
 ;
 ;   callers:             iec_recv_primitive_b JMP.
+;   registers clobbered: A
 ;
 ;   Called from iec_recv_primitive_b jump inside an adjacent encoder error-path band; the duplication is intentional (per-pass tracing slot in cassette RAM).
 border_flash_debug_b .block
@@ -7577,6 +7629,7 @@ l_9:                       cpy  #KEY_COMMA    ; $8361
 ;   callers:             global_pre_dispatch_barekey_trampoline (the ';' super-command entry: CMP #$2E / BNE / INC super_cmd_staged / JMP super_cmd_arg_prompt).
 ;   inputs:              super_cmd_staged = staged super-command opcode byte.
 ;   outputs:             Status line cleared and reprinted with the super-command prompt + opcode digits.
+;   registers clobbered: A, X, Y
 ;
 ;   The zstring template at super_cmd_arg_prompt_template is 18 screen-code bytes ('56789' / hex digits / '0123456') — visually a placeholder showing the user which keys to type next. Fall-through to super_cmd_arg_prompt handles per-opcode CMP cascades.
 super_cmd_arg_prompt .block
@@ -7617,6 +7670,7 @@ statusline_print_bare_return .block
 ; push A / A←X / push A, clear statusline_scratch (status-line col cursor) to 0, write space ($20) to statusline_buffer,X for X=0..13.
 ;
 ;   callers:             10 code sites: $0DB8, $0DED speedadj_status_repaint, $81A5, $8368 super_cmd_arg_prompt, $83AF statusline_tick_1, $8601, $8639 super_arg_buffer_init_1, $C607, +2 more
+;   registers clobbered: A, X
 ;
 ;   pop A/X←A/pop A/return. Initializes the status-line buffer with spaces before a new message is printed. 9 JSR callers — typically called before print_char_to_statusline sequences to start a fresh status message.
 statusline_clear .block
@@ -7642,6 +7696,7 @@ l_1:                       sta  statusline_buffer,x    ; $8398
 ; per-frame countdown decrement.
 ;
 ;   callers:             1 code sites: $08B4
+;   registers clobbered: A, X
 ;
 ;   Implements the status-line auto-clear timer. statusline_color_mirror == 0 → no countdown active, return. statusline_color_mirror == $FF → 'forever' sentinel, persist the message. Otherwise decrement; when the counter underflows to 0, statusline_clear wipes the buffer. Called from the main loop's pre-dispatch.
 statusline_tick .block
@@ -7664,6 +7719,7 @@ l_2:                       rts    ; $83B5
 ;   callers:             20 code sites: $0DBD, $0DC2, $0DC7, $0DF5, $0E01, $83D8, $83DE, $83F0, +12 more
 ;   inputs:              A = char to print (screen code). statusline_scratch = current cursor col in status line.
 ;   outputs:             statusline_buffer + statusline_scratch advanced.
+;   registers clobbered: A, X, Y
 ;
 ;   On entry: if statusline_color_mirror ≠ 0 (countdown active), bumps it via statusline_scroll_left; else clears statusline_print_char (no-decrement flag). Status line is the editor's bottom message strip. 18 JSR callers — the most-used print helper. Pairs with print_byte_as_hex (print byte as 2 hex digits) and statusline_clear (init buffer with spaces). Overflow handler at statusline_scroll_left scrolls the buffer one char left when col statusline_scratch fills.
 statusline_print_char .block
@@ -7690,6 +7746,7 @@ print_char_to_statusline_2: sty  statusline_print_state_83b7    ; $83D1
 ;
 ;   callers:             5 code sites: $0DCD, $0DD3, $8377, $C682, $C688
 ;   inputs:              X = byte value.
+;   registers clobbered: A, X, Y
 statusline_print_hex_byte .block
                            lda  hex_digit_hi_lut,x    ; $83D5
                            jsr  statusline_print_char    ; $83D8
@@ -7705,6 +7762,7 @@ statusline_print_hex_byte .block
 ;
 ;   callers:             7 code sites: $08A4, $81BF, $8371, $C615, $C63A, $C643, $C67C
 ;   inputs:              X = string addr lo, Y = string addr hi. A clobbered (saved at statusline_print_zstring).
+;   registers clobbered: A, X, Y
 ;
 ;   Self-modifies the LDA VEC_IRQ_HI,X operand bytes in place. 4 callers.
 statusline_print_zstring .block
@@ -7728,6 +7786,7 @@ print_zstring_1:           lda  VEC_IRQ_HI,x    ; $83ED
 ;   callers:             statusline_print_char (inside print_char_to_statusline) — called when statusline_color_mirror ≠ 0 and the buffer is full.
 ;   inputs:              statusline_buffer-statusline_buffer_end = 14-byte status-line buffer.
 ;   outputs:             statusline_buffer-sid_chip_view shifted left by 1; statusline_buffer_end := $20 (space, right-edge fill).
+;   registers clobbered: A, X
 ;
 ;   read sid_chip_view,X / write statusline_buffer,X / increment X / compare X = $0D / bne.
 ;     - A ← $20 / write statusline_buffer_end.
@@ -7763,6 +7822,7 @@ l_1:                       lda  sid_chip_view + $33,x    ; $83FE
 ; `read A=X=supercmd_flag_mask` (undoc, reads super flags into A+X); A&=$20 / →skip when zero; read super_arg_slot_r (super_arg_a) / write super_arg (super_arg = a).
 ;
 ;   callers:             3 code sites: $8455, $AF0E, $B13C
+;   registers clobbered: A, X
 ;
 ;   Then A←X / A&=$80 /... extracts the active super-command's arg value into super_arg for the writer to read. Called before writer-arm dispatch when a super command is staged. 3 callers.
 super_arg_extract .block
@@ -8190,6 +8250,7 @@ super_cmd_write_dispatch_bare_return .block
 ; clear supercmd_flag_mask super flags; call border_set_a; call super_enter_status; clear supercmd_flag_mask / writer_loop_count.
 ;
 ;   callers:             2 code sites: $082B, $8656
+;   registers clobbered: A, X
 ;
 ;   Full super-command state reset.
 super_init_full .block
@@ -8207,6 +8268,7 @@ super_init_full .block
 ;   callers:             mode_transition_wrapper_tail JMP (the mode-change wrapper inside mode_transition_wrapper — runs on every UI mode transition).
 ;   inputs:              (none — pure init)
 ;   outputs:             super_arg_count..writer_range_fill_mode initialised with sentinel defaults
+;   registers clobbered: A, X
 ;
 ;   call super_enter_status (clear super_arg_count/page_pair_counter) / X←$00 / X→supercmd_flag_mask / X←$01 / X→super_arg, writer_loop_count, writer_loop_stride / X←$0C / X→writer_range_fill_mode / return. Leaves slot tracking in a 'pending super-command, default count=1, default page=$0C' state.
 super_cmd_state_init .block
@@ -8228,6 +8290,7 @@ super_cmd_state_init .block
 ; A←SUPERCMD_S_DIG1 / write super_cmd_flags / return.
 ;
 ;   callers:             1 code sites: $85FE super_enter_status
+;   registers clobbered: A
 ;
 ;   Marks super-command mode active.
 super_set_active .block
@@ -8242,6 +8305,7 @@ super_set_active .block
 ; call super_set_active (set super_cmd_flags=SUPERCMD_S_DIG1 super-active flag) / jump statusline_clear (clear status line).
 ;
 ;   callers:             2 code sites: $85DF super_cmd_state_init, $8650
+;   registers clobbered: A, X
 ;
 ;   Combined 'enter super mode' init.
 super_enter_status .block
@@ -8257,6 +8321,7 @@ super_enter_status .block
 ;   callers:             7 code sites: $86BE super_cmd_s_lo_nibble, $86DB super_cmd_s_hi_nibble, $86FB super_cmd_w_lo_nibble, $8717 super_cmd_r_lo_nibble, $8734 super_cmd_wr_hi_nibble, $8751 super_cmd_q_lo_nibble, $876E super_cmd_q_hi_nibble
 ;   inputs:              A = screen code.
 ;   outputs:             A = nibble 0-15 if valid; C=1 valid / C=0 invalid.
+;   registers clobbered: A
 ;
 ;   compare =$3A / →error when carry; compare =$30 / bcs = '0'-'9'; compare =$00 / →error when zero; compare =$07 / →error when carry; else 'A'-'F' (screen codes $01-$06). Returns C=1 valid, C=0 invalid. The valid 'A'-'F' branch ADCs the screen code to convert to nibble value.
 hex_digit_validate .block
@@ -8284,6 +8349,7 @@ l_2:                       clc    ; $861B
 ;
 ;   callers:             5 code sites: $86D7, $8711, $8730, $876A, $87AB
 ;   inputs:              A = bit mask to OR into supercmd_flag_mask.
+;   registers clobbered: A
 ;
 ;   Sets bits in the super-command flags register at supercmd_flag_mask.
 super_flag_or .block
@@ -8298,6 +8364,7 @@ super_flag_or .block
 ; start of super-command argument typing.
 ;
 ;   callers:             5 code sites: $86C9, $8706, $8722, $875C, $8794
+;   registers clobbered: A, X, Y
 ;
 ;   Sets up the status line to echo the user's typed super-command arg digits. Patches print_ff_helper's dispatch address with A (so the next $FF print routes to the caller's wanted target), sets statusline_color_mirror = $FF (the 'persistent' sentinel so statusline_tick doesn't auto-clear), and prints a leading space if the cursor isn't already at column 0. Called by super-command entry chords.
 super_arg_buffer_init .block
@@ -8318,6 +8385,7 @@ l_1:                       jsr  statusline_clear    ; $8639
 ; Print-$FF helper: A←$FF / jump print_char_to_statusline (status-line print one screen-code).
 ;
 ;   callers:             super_arg_buffer_init JMP (1 site inside super_arg_buffer_init body).
+;   registers clobbered: A, X, Y
 ;
 ;   Used as a tail jump from super_arg_buffer_init inside super_arg_buffer_init to emit the $FF sentinel that marks 'super-arg typing in progress' on the status line.
 print_ff_helper .block
@@ -8333,6 +8401,7 @@ print_ff_helper .block
 ;   callers:             main_loop_postscan JSR (inside main_loop, after global_pre_dispatch).
 ;   inputs:              kbd_modifiers (must be $04 = CTRL only — non-CTRL paths JMP super_cmd_dispatch_bare_return bare-RTS); kbd_decoded_key decoded key; super_cmd_flags (current parser state).
 ;   outputs:             super_cmd_flags advanced through prefix → lo-nibble → hi-nibble states; super_arg_slot_r-super_arg_slot_w typed-arg slots; status line repainted via print_char_to_statusline / print_zstring / super_arg_buffer_init.
+;   registers clobbered: A, X, Y
 ;
 ;   Read every main-loop iteration (main_loop_postscan call super_cmd_dispatch before mode_dispatch). Two-phase: PREFIX (set super_cmd_flags from CTRL+letter) → DIGIT (consume typed hex digit, dispatch to per-prefix lo/hi-nibble arm based on super_cmd_flags).
 ;
@@ -8468,6 +8537,7 @@ super_cmd_dispatch_bare_return .block
 ; Super-cmd 'S' (step-jump) typed-digit LO-NIBBLE arm.
 ;
 ;   callers:             super_cmd_dispatch BEQ (from super_cmd_dispatch cascade; CPX #$01 BEQ at super_cmd_dispatch).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_S_DIG1 (set by CTRL+S prefix at super_cmd_dispatch). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry.
@@ -8497,6 +8567,7 @@ super_cmd_s_lo_nibble .block
 ; Super-cmd 'S' typed-digit HI-NIBBLE accumulator.
 ;
 ;   callers:             super_cmd_dispatch BEQ (from super_cmd_dispatch cascade; CPX #$02 BEQ at super_cmd_dispatch).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_S_DIG2 (set by super_cmd_s_lo_nibble S lo-nibble). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry.
@@ -8529,6 +8600,7 @@ l_1:                       asl  super_arg_slot_swr_hi    ; $86E2
 ;   callers:             12 sites in super-cmd typed-digit handlers: super_cmd_s_lo_nibble (W/R sub-arg invalid), super_cmd_s_hi_nibble (W lo-nibble fall-through), super_cmd_w_lo_nibble (Z/G sub-arg invalid), super_cmd_w_lo_nibble (G lo-nibble), super_cmd_r_lo_nibble/super_cmd_wr_hi_nibble/super_cmd_q_lo_nibble/super_cmd_q_hi_nibble (more sub-arg invalid), super_cmd_wr_hi_nibble (S lo-nibble), plus 2 jmp_abs paths.
 ;   inputs:              (none — pure flag write).
 ;   outputs:             super_cmd_flags := SUPERCMD_S_DIG1.
+;   registers clobbered: A
 ;
 ;   A←SUPERCMD_S_DIG1 / write super_cmd_flags (super_cmd_flags = lo-nibble committed / terminate) / return. Shared between the hi-nibble arms' invalid-digit →branches when no-carry and the lo-nibble arms' commit fall-through. Flag value super_cmd_flags == SUPERCMD_S_DIG1 means 'super-command parse complete (terminate)' — both for valid lo-nibble commit AND for invalid-digit abort. The actual command execution checks super_arg_slot_swr_hi/super_arg_slot_w (typed hex args) against expected sentinel values, not the flag itself. super_cmd_flags == SUPERCMD_S_DIG2 = hi-nibble committed (waiting for second digit).
 super_cmd_terminate .block
@@ -8543,6 +8615,7 @@ super_cmd_terminate .block
 ; Super-cmd 'W' (width-set) typed-digit LO-NIBBLE arm.
 ;
 ;   callers:             super_cmd_dispatch BEQ (from super_cmd_dispatch cascade; CPX #$04 BEQ at super_cmd_dispatch).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_W_DIG1 (set by CTRL+W prefix at super_cmd_dispatch). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry.
@@ -8571,6 +8644,7 @@ super_cmd_w_lo_nibble .block
 ; Super-cmd 'R' (timer/rate-set) typed-digit LO-NIBBLE arm.
 ;
 ;   callers:             super_cmd_dispatch JMP (1 site in super_cmd_dispatch cascade).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_R_DIG1 (set by CTRL+R prefix at super_cmd_dispatch). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry (invalid → terminate).
@@ -8602,6 +8676,7 @@ super_cmd_r_lo_nibble .block
 ; Super-cmd shared W+R typed-digit HI-NIBBLE accumulator.
 ;
 ;   callers:             super_cmd_dispatch JMP (from super_cmd_dispatch cascade; CPX #$20 BEQ).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_WR_DIG2 (set by either super_cmd_w_lo_nibble W lo-nibble OR super_cmd_r_lo_nibble R lo-nibble; both transition to this state). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry.
@@ -8633,6 +8708,7 @@ l_1:                       asl  super_arg_slot_r    ; $873B
 ; Super-cmd typed-digit LO-NIBBLE arm reached when super_cmd_flags == SUPERCMD_Q_DIG1 (set by the super_cmd_dispatch prefix arm on compare =$11 — which fires for the Q key, NOT Z).
 ;
 ;   callers:             super_cmd_dispatch JMP (from super_cmd_dispatch cascade; CPX #$40 BEQ).
+;   registers clobbered: A, X, Y
 ;
 ;   Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry (invalid).
@@ -8662,6 +8738,7 @@ super_cmd_q_lo_nibble .block
 ; Super-cmd typed-digit HI-NIBBLE accumulator paired with super_cmd_q_lo_nibble.
 ;
 ;   callers:             super_cmd_dispatch JMP (from super_cmd_dispatch cascade; CPX #$80 BEQ).
+;   registers clobbered: A, X, Y
 ;
 ;   Fires when super_cmd_flags == SUPERCMD_Q_DIG2 (set by super_cmd_q_lo_nibble's lo-nibble commit). Sequence:
 ;     - call hex_digit_validate / →super_cmd_terminate when no-carry.
@@ -8691,6 +8768,7 @@ l_1:                       asl  super_arg_slot_q    ; $8775
 ; Super-cmd typed-digit arm reached when super_cmd_flags == SUPERCMD_Z (set by the super_cmd_dispatch prefix arm on compare =$1A, which is the Z key per kbd_scancode_lut).
 ;
 ;   callers:             super_cmd_dispatch JMP (from super_cmd_dispatch cascade; CPX #$08 BEQ at super_cmd_dispatch).
+;   registers clobbered: A, X, Y
 super_cmd_z_arm .block
 ;     compare = $01 / →next-arm when nonzero (super_cmd_z_arm).
                            cmp  #KEY_A    ; $878B
@@ -8732,6 +8810,7 @@ l_1:                       jmp  super_cmd_terminate    ; $87B6
 ;   callers:             1 code sites: $08F8
 ;   inputs:              sid_chip_view, filter_cutoff_acc_lo/filter_cutoff_slide_acc_hi/filter_cutoff_slide_saturation_step or sid2_voice_record_v2 (filter-cutoff accumulator triple per chip)
 ;   outputs:             screen RAM at SCREEN_RAM_ROW0_COL38/SCREEN_RAM_ROW0_COL39 = cutoff display glyphs from hex_digit_lo_lut/hex_digit_hi_lut hex-digit LUTs
+;   registers clobbered: A, X, Y
 ;
 ;   read sid_chip_view; if SID#1 (=0), use the SID#1 filter accumulator (filter_cutoff_acc_lo / filter_cutoff_slide_acc_hi / filter_cutoff_slide_saturation_step); if SID#2 (=1), use the SID#2 mirror at sid2_voice_record_v2. jmp to common tail at seqED_paint_unroll which writes the cutoff display to screen RAM at SCREEN_RAM_ROW0_COL38/SCREEN_RAM_ROW0_COL39 (status-line cells).
 ;
@@ -12633,6 +12712,7 @@ l_92:                      lda  statusline_buffer,x    ; $A9F6
 ;   callers:             23 code sites: $8882, $8A0B, $8B8D, $8D0F, $8E91, $9013, $9195, $9317, +15 more
 ;   inputs:              Y = arranger row index. sid_chip_view selects SID#1 vs SID#2 view.
 ;   outputs:             $02/$03 = V0 pat_base, $FD/$FE = V1 pat_base, $9E/$9F = V2 pat_base.
+;   registers clobbered: A, X
 ;
 ;   SID#2 (sid_chip_view=1) branch at pat_base_resolve_v012 handles the parallel SID#2 arranger lookup. return. 23 callers in static image — the most-JSR'd target in player_helper_band-seqED_paint_band_padding. Used as the entry-point setup for any code that needs to read all three voice patterns at an arranger row simultaneously (e.g. screen paint, playback advance, save-encoder).
 pat_base_resolve_v012 .block
@@ -12678,6 +12758,7 @@ l_1:                       ldx  arranger_v3_sid2,y    ; $AA2F
 ; sta #$1F → VIC_SPRITE_ENABLE (sprite enable bits 0-4), VIC_SPRITE_BG_PRIO (sprite-bg priority), VIC_SPRITE_MC (multi-color), VIC_SPRITE_X_EXPAND (xscale); sta #$02 → VIC_SPRITE_MC0; sta #$24 → VIC_SPRITE_MC1.
 ;
 ;   callers:             5 code sites: $089B, $8255, $BC05, $BC45, $BC9C
+;   registers clobbered: A, X, Y
 ;
 ;   Sets up VIC-II sprites for the cursor highlight + scroll indicators.
 vic_sprite_init .block
@@ -13094,6 +13175,8 @@ l_1:                       cpy  #$6A    ; $AFCA
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED CRSRLR arm ($6A) → jump seqED_CRSRLR_bare_arm cursor wrap.
 ;
+;   registers clobbered: A
+;
 ;   code edges:          fall-through from $AFCC in seqED_cursor_step_1 (2 bytes earlier)
 ;
 ;   Followed by inline note-octave digit handler (keys $01..$06 are A-F-shifted nibbles for the sidCALL hex pair).
@@ -13194,6 +13277,7 @@ seqED_ctrl_prefix .block
 ; seqED CTRL super-set ($88, F1 key) → super-command page-jump: page_offset := $08, page_pair_counter := $FF, step_cursor := $19; jump seqLIST_step_auto_advance redraw.
 ;
 ;   callers:             1 code sites: $B070
+;   registers clobbered: A, X, Y
 seqED_super_set .block
                            cpy  #$88    ; $B075
                            bne  l_1    ; $B077  Y was not $88?
@@ -13515,6 +13599,7 @@ l_3:                       jmp  post_write_paint_tail    ; $B25E
 ;   callers:             10 code sites: $8165, $8885, $B0CA, $B0F0, $B107, $B11E, $B1E3, $B27D seqED_voice_selector_check, +2 more
 ;   inputs:              page_offset/page_pair_counter/step_cursor = current cursor state; page_offset = page boundary.
 ;   outputs:             page_offset advanced; editor_col_delta INCed unless we just crossed a page boundary.
+;   registers clobbered: A, Y
 ;
 ;   Walks one step forward in the seqED visible window.
 seqED_step_cursor_increment .block
@@ -13546,6 +13631,7 @@ l_2:                       tya    ; $B278
 ; seqED voice-selector arm.
 ;
 ;   callers:             2 code sites: $84D7, $B646
+;   registers clobbered: A, X, Y
 ;
 ;   Reads voice_selector, saves it, checks sid_chip_view; when SID#1: indexes arranger_v0/v1/v2_sid1 (arranger_v0_sid1/arranger_v1_sid1/arranger_v2_sid1). Resolves pat_num for the current voice and writes back to a temp slot used by the writer dispatch.
 seqED_voice_selector_check .block
@@ -13599,6 +13685,7 @@ note_arm_auto_writer .block
 ; seqED CRSRUD bare-arm — X-preload + cursor step.
 ;
 ;   callers:             seqED_cursor_step JMP (the CRSRUD branch of seqED_bare_arm seqED_cursor_step).
+;   registers clobbered: A, X, Y
 ;
 ;   X←$00 / Y←$FF / jump seqED_cursor_walk_dispatcher (the full cursor-walk dispatcher that re-uses auto_advance_writer_smc_lo/auto_advance_writer_smc_hi self-mod slots). Walks the cursor one step upward (Y=$FF) without an active writer.
 seqED_cursor_step_up_bare .block
@@ -13621,6 +13708,7 @@ l_1:                       lda  voice_selector    ; $B2CA
 ; seqED CRSRLR bare-arm — decrement voice_selector by 9 (one full voice's worth of cursor columns).
 ;
 ;   callers:             seqED_cursor_wrap JMP (the CRSRLR branch of seqED_bare_arm seqED_cursor_step — see seqED_cursor_wrap).
+;   registers clobbered: A
 ;
 ;   Subtract 9 from voice_selector; if that underflows the wrap exit returns without writing (cursor stays at column 0). On a successful step it decrements page_offset (the companion page index) so that the cursor and page counter stay in sync.
 seqED_CRSRLR_bare_arm .block
@@ -13731,6 +13819,7 @@ l_5:                       sta  step_cursor    ; $B390
 ; writes a sidCALL nibble.
 ;
 ;   inputs:              ($02) = pattern step row base; A from caller = nibble value; kbd_modifiers selects slot 1 vs slot 2
+;   registers clobbered: A, X, Y
 ;
 ;   Reads kbd_modifiers; CBM-only → X=$01 (sidCALL1 slot, +1 byte offset); CBM+SHIFT → X=$02 (sidCALL2 slot, +2 byte offset). read ($02),y / ora octave_offset,X to merge new nibble with the cell's existing high nibble. Caller (seqED_sidcall_arm) increments digit_phase after the call to flip to the second nibble next time.
 writer_sidcall .block
@@ -13767,6 +13856,8 @@ l_2:                       lda  (zp_ptr1_lo),y    ; $B3B9
 ; ──────────────────────────────────────────────────────────────────────
 ; Speed/value writer-arm dispatch (23 bytes).
 ;
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          none
 ;   apparent (from data): $C70F in seqED_disk_key_lut
 ;
@@ -13791,6 +13882,7 @@ l_1:                       ldy  #$00    ; $B3D3
 ; writes pattern note + sets GATE_N bit ($10) on the step flag.
 ;
 ;   inputs:              ($02) = pattern step row base; super_arg_count = note byte to write
+;   registers clobbered: A, Y
 ;
 ;   ORs $10 into the flag byte at ($02),0 (sets the GATE_N bit so the note will play), then writes the staged note byte from super_arg_count into ($02),3.
 ;
@@ -13814,6 +13906,8 @@ writer_note .block
 ; ──────────────────────────────────────────────────────────────────────
 ; masks bit 4 (GATE_N) out of the step flag.
 ;
+;   registers clobbered: A, Y
+;
 ;   A←$EF / Y←$00 / and ($02),y / write ($02),y / return. Leaves the note byte at offset +3 intact (player just stops triggering it).
 writer_clear_note .block
                            lda  #$EF    ; $B3F6
@@ -13827,6 +13921,8 @@ writer_clear_note .block
 ; $B3FF  writer_speed
 ; ──────────────────────────────────────────────────────────────────────
 ; writes duration nibble (low 4 bits of the step flag).
+;
+;   registers clobbered: A, Y
 ;
 ;   Reads super_arg_count - 1 → self-modifies the immediate at writer_speed; then read ($02),y / A&=$F0 / ora #(stored nibble) / write ($02),y. Preserves the high-nibble GATE bits. The 'speed' name is legacy; the low 4 bits of the flag byte are the inter-event duration.
 writer_speed .block
@@ -13879,6 +13975,7 @@ l_2:                       sta  octave_offset + $2D,x    ; $B59A
 ; seqED writer pat_base resolver.
 ;
 ;   callers:             4 code sites: $B5C3 writer_seqED_pattern_to_screen, $B5EB writer_seqED_screen_to_pattern, $B607 writer_seqED_pattern_copy_v3, $B626 writer_seqED_flag_byte_merge
+;   registers clobbered: A
 ;
 ;   Subtracts the cursor x-offset from the staged pattern_num, masks bit 7, and writes ($FD/$FE) = pattern base (in the cursor-cluster scratch). Called by all downstream copy routines in this band (writer_seqED_pattern_to_screen, writer_seqED_screen_to_pattern, writer_seqED_pattern_copy_v3, writer_seqED_flag_byte_merge).
 writer_seqED_pat_base_resolve .block
@@ -13900,6 +13997,8 @@ writer_seqED_pat_base_resolve .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Kbd-modifier → X/Y stride preload for the seqED row-copy writer arms.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Y←$01 / X←$40 / read kbd_modifiers / compare =KBD_MOD_CBM (CBM-only) / beq +4 (keep X=$40) / Y←$02 / X←KBD_MOD_CBM (CBM+SHIFT path) / return. Returns (X,Y) = stride values for the subsequent call writer_seqED_pat_base_resolve + copy body.
 writer_seqED_kbd_xy_preload .block
                            ldy  #$01    ; $B5B0
@@ -13916,6 +14015,8 @@ l_1:                       rts    ; $B5BF
 ; $B5C0  writer_seqED_jmp_to_paint
 ; ──────────────────────────────────────────────────────────────────────
 ; 1-byte jump writer_seqED_screen_to_pattern trampoline — alternate entry to the screen-to-pattern copy used by a sibling writer arm.
+;
+;   registers clobbered: A, Y
 writer_seqED_jmp_to_paint .block
                            jmp  writer_seqED_screen_to_pattern    ; $B5C0
 .bend
@@ -13924,6 +14025,8 @@ writer_seqED_jmp_to_paint .block
 ; $B5C3  writer_seqED_pattern_to_screen
 ; ──────────────────────────────────────────────────────────────────────
 ; Pattern-row → screen copy.
+;
+;   registers clobbered: A, Y
 ;
 ;   Sequence:
 ;     - call writer_seqED_pat_base_resolve (set ($FD) = pattern base).
@@ -13962,6 +14065,7 @@ writer_seqED_pattern_to_screen .block
 ; Screen → pattern-row copy (inverse of writer_seqED_pattern_to_screen).
 ;
 ;   callers:             2 code sites: $B5C0 writer_seqED_jmp_to_paint, $B623 writer_seqED_jmp_screen_to_pat
+;   registers clobbered: A, Y
 ;
 ;   Copies 3 bytes from screen RAM ($02) back into the pattern row buffer ($FD), used after the user edits a cell in seqED.
 writer_seqED_screen_to_pattern .block
@@ -13986,6 +14090,8 @@ writer_seqED_screen_to_pattern .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Pattern-row pull-from-buffer variant.
 ;
+;   registers clobbered: A, Y
+;
 ;   Pulls 4 bytes from the buffer ($FD) into screen RAM ($02).
 writer_seqED_pattern_copy_v3 .block
                            jsr  writer_seqED_pat_base_resolve    ; $B607
@@ -14008,6 +14114,8 @@ writer_seqED_pattern_copy_v3 .block
 ; $B623  writer_seqED_jmp_screen_to_pat
 ; ──────────────────────────────────────────────────────────────────────
 ; 3-byte jump writer_seqED_screen_to_pattern trampoline — alternate entry to the screen-to-pattern copy used by a sibling writer arm with different staging.
+;
+;   registers clobbered: A, Y
 writer_seqED_jmp_screen_to_pat .block
                            jmp  writer_seqED_screen_to_pattern    ; $B623
 .bend
@@ -14016,6 +14124,8 @@ writer_seqED_jmp_screen_to_pat .block
 ; $B626  writer_seqED_flag_byte_merge
 ; ──────────────────────────────────────────────────────────────────────
 ; Flag-byte merge — call writer_seqED_pat_base_resolve / Y←$00 / read ($02),Y / A&=$70 (mask off bits 0..3) / write ($02),Y / Y←$00 / read ($FD),Y / A&=$8F (mask off bits 4..6) / ora ($02),Y / write ($02),Y / return.
+;
+;   registers clobbered: A, Y
 ;
 ;   Merges the high nibble of one cell with the low nibble of another to compose the final flag byte.
 writer_seqED_flag_byte_merge .block
@@ -14054,6 +14164,8 @@ l_1:                       lda  #$06    ; $B63C
 ; ──────────────────────────────────────────────────────────────────────
 ; Alternate pat_base resolver for a writer arm.
 ;
+;   registers clobbered: A, Y
+;
 ;   Y←$00 / read $02 / A&=$7F / compare =$7C / →skip when zero / read ($02),Y / A^=$80 / write ($02),Y / return. Toggles bit 7 of the byte at ($02),Y after a range-bound check, used by writer arms that need to flip a flag bit without disturbing the rest of the cell.
 writer_seqED_pat_base_high .block
                            ldy  #$00    ; $B660
@@ -14079,6 +14191,7 @@ l_1:                       lda  (zp_ptr1_lo),y    ; $B671
 ; long body that walks the JP/marker tables at sidtab_row_lo/sidtab_row_hi against the current pattern's per-row sidcall slots, copying hex_digit_lo_lut,X hex-digit screen-codes into the editor's screen-RAM at ($9E),Y to repaint the affected cells.
 ;
 ;   callers:             editor_frame_supercmd_check JSR (the mid-body label editor_frame_supercmd_check inside editor_frame_barrier).
+;   registers clobbered: A, X, Y
 ;
 ;   Self-mods super_cmd_page_commit (operand of read sidtab_row_hi,X self-mod), super_cmd_page_commit (CBM-side operand). Called once when a super-command commits a value to a span of pattern rows; the 'commit' is what propagates the staged super-cmd opcode at super_cmd_staged into the actual pattern bank. The body is ~120 bytes and includes 3 self-mod slots (super_cmd_page_commit). When the staged super-cmd at super_cmd_staged is zero this routine is never called — the BEQ at editor_frame_supercmd_check short-circuits it.
 super_cmd_page_commit .block
@@ -14970,6 +15083,7 @@ sidtab_cascade_cbm_f5_arm .block
 ; sidTAB cascade CBM arm — CBM+SLASH ($2F → jump writer_sidtab_dec: ACID-column writer).
 ;
 ;   callers:             1 code sites: $BCA1
+;   registers clobbered: A
 sidtab_cascade_cbm_slash_arm .block
                            cpy  #KEY_SLASH    ; $BCAA
                            bne  l_1    ; $BCAC  kbd_decoded_key was not KEY_SLASH?
@@ -15102,6 +15216,7 @@ sidtab_cascade_lshift_f5_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+SLASH ($2F → jump writer_sidtab_dec = LSHIFT+slash writer / arm).
 ;
 ;   callers:             1 code sites: $BD0F
+;   registers clobbered: A
 sidtab_cascade_lshift_slash_arm .block
                            cpy  #KEY_SLASH    ; $BD18
                            bne  l_1    ; $BD1A  kbd_decoded_key was not KEY_SLASH?
@@ -15169,6 +15284,7 @@ l_1:                       jmp  sidtab_dispatch_bare_return    ; $BD43
 ; sidTAB cascade CTRL entry (compare X=$04).
 ;
 ;   callers:             1 code sites: $BD24
+;   registers clobbered: A, X, Y
 ;
 ;   3 arms: $6F → sidtab_scroll +8 (sidtab_cascade_ctrl_instdel_arm), $2F → mode_disk_set chain (sidTAB_ctrl_slash_arm), $1F → stereo toggle (sidtab_cascade_ctrl_leftarrow_arm).
 sidtab_cascade_ctrl_entry .block
@@ -15183,6 +15299,7 @@ sidtab_cascade_ctrl_entry .block
 ; sidTAB cascade CTRL arm — CTRL+INSTDEL ($6F → read sidtab_scroll / A+=$08 / write sidtab_scroll / jump cursor_redraw_request redraw flag).
 ;
 ;   callers:             1 code sites: $BD48
+;   registers clobbered: A, X, Y
 sidtab_cascade_ctrl_instdel_arm .block
                            cpy  #KEY_CRSRUD    ; $BD4D
                            bne  sidTAB_ctrl_slash_arm    ; $BD4F  kbd_decoded_key was not KEY_CRSRUD?
@@ -15199,6 +15316,7 @@ sidtab_cascade_ctrl_instdel_arm .block
 ; sidTAB CTRL+/ arm.
 ;
 ;   callers:             1 code sites: $BD4F
+;   registers clobbered: A, X, Y
 ;
 ;   On match of the slash key ($2F), tints the background (set_bg_blue), saves the outgoing ui_mode into ui_mode_prev, and falls into mode_disk_set to commit ui_mode = UI_MODE_DISK secondary disk mode. Only reachable from sidTAB.
 sidTAB_ctrl_slash_arm .block
@@ -15223,6 +15341,8 @@ sidtab_ctrl_slash_bg_blue_site .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Sole writer that sets ui_mode = UI_MODE_DISK (secondary_disk_mode).
 ;
+;   registers clobbered: A
+;
 ;   code edges:          fall-through from $BD67 in sidtab_ctrl_slash_bg_blue_site (3 bytes earlier)
 ;
 ;   After this writes ui_mode = UI_MODE_DISK, mode_dispatch will route to secondary_disk_mode_handler instead of one of the visible editor handlers.
@@ -15238,6 +15358,7 @@ mode_disk_set .block
 ; sidTAB cascade CTRL arm — CTRL+LEFTARROW ($1F → if stereo_enable: call chipview_toggle_helper chip-view toggle / jump sidTAB_handler_band stereo banner; else fall-through to bare-return).
 ;
 ;   callers:             1 code sites: $BD5F
+;   registers clobbered: A, X, Y
 sidtab_cascade_ctrl_leftarrow_arm .block
                            cpy  #KEY_LEFTARROW    ; $BD72
                            bne  l_1    ; $BD74  kbd_decoded_key was not KEY_LEFTARROW?
@@ -15254,6 +15375,7 @@ l_1:                       jmp  sidtab_dispatch_bare_return    ; $BD81
 ; sidTAB cascade CTRL+LSHIFT entry (compare X=$14).
 ;
 ;   callers:             1 code sites: $BD4A
+;   registers clobbered: A
 ;
 ;   Single arm: $6F → sidtab_scroll -8 (with $00 floor clamp via bcs+lda#0).
 sidtab_cascade_ctrl_lshift_entry .block
@@ -15265,6 +15387,8 @@ sidtab_cascade_ctrl_lshift_entry .block
 ; $BD88  sidtab_cascade_ctrl_lshift_instdel_arm
 ; ──────────────────────────────────────────────────────────────────────
 ; sidTAB cascade CTRL+LSHIFT arm — CTRL+LSHIFT+INSTDEL ($6F → read sidtab_scroll / A-=$08 / clamp at $00 / write sidtab_scroll / jump cursor_redraw_request redraw flag).
+;
+;   registers clobbered: A
 ;
 ;   code edges:          fall-through from $BD86 in sidtab_cascade_ctrl_lshift_entry (2 bytes earlier)
 sidtab_cascade_ctrl_lshift_instdel_arm .block
@@ -15299,6 +15423,7 @@ sidtab_dispatch_bare_return .block
 ; sidTAB staging buffer (sidTAB_staging..sidTAB_staging_buffer_ext).
 ;
 ;   callers:             26 code sites: $BE04, $BE7E pitch_lut_generator_inner_loop_8, $BE9E, $BF47, $C0AF, $C102, $C153, $C158, +18 more
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   79 bytes of working state used by the sidTAB writer cascade between cell-read, edit, and write-back. Layout includes the field mask table at sidTAB_staging_buffer_ext+ (per-column raw + mask pairs) and the digit-phase indices at sidTAB_staging_buffer_ext+. Pure data region. Loaded by pitch_lut_generator_inner_loop fan-out and read by every sidTAB writer arm.
 sidTAB_staging .block
@@ -15319,6 +15444,7 @@ sidTAB_staging .block
 ; sidTAB common entry helper.
 ;
 ;   callers:             10 code sites: $C146 writer_sidtab_toggle, $C15F writer_sidtab_digit, $C199 writer_sidtab_clear_advance, $C1AB writer_sidtab_inc, $C1CE writer_sidtab_dec, $C211 writer_sidtab_supercmd, $C2D8 sidTAB_C2D8_dispatch_body, $C352 writer_sidtab_cbm_shift_a, +2 more
+;   registers clobbered: A
 ;
 ;   Reads super_cmd_writer_step_smc (latched dispatcher destination addr) → sidTAB_staging_prefix; return. Every sidTAB writer (writer_sidtab_toggle/writer_sidtab_digit/writer_sidtab_clear_advance/writer_sidtab_inc/writer_sidtab_dec/writer_sidtab_supercmd/writer_sidtab_cbm_shift_a/writer_sidtab_inst_row/writer_sidtab_cbm_shift_b) calls this first.
 sidTAB_helper .block
@@ -15355,6 +15481,7 @@ sidTAB_handler_band_end .block
 ; sidTAB shifted-helper.
 ;
 ;   callers:             1 code sites: $BCCE
+;   registers clobbered: A, X
 ;
 ;   X←chip_view_cursor_x (cursor column index) / read sidtab_cell_descriptor_lut,X / return. Reads a per-column descriptor byte; sibling sidTAB_shifted_helper masks the result with #$7F.
 sidTAB_shifted_helper .block
@@ -15385,6 +15512,7 @@ l_2:                       dec  seqlist_cursor_aux1    ; $BE26
 ; sidtab_row_decoder helper — invoked per non-zero sidTAB row by secondary_song_position_transform.
 ;
 ;   callers:             13 code sites: $BDFC, $C228, $C276, $C2B0, $C2F7, $C334, $C381, $C39F, +5 more
+;   registers clobbered: A, X
 ;
 ;   Produces ($02,$03) from input state. Body lives in the sidTAB handler band ($BB-$BD).
 sidtab_row_decoder .block
@@ -15403,6 +15531,7 @@ sidtab_row_decoder .block
 ; Pitch-LUT generator inner loop.
 ;
 ;   callers:             1 code sites: $BE5B
+;   registers clobbered: A, X
 ;
 ;   A+=$0F per iteration, inc ZP $03 on carry.
 ;
@@ -15624,6 +15753,7 @@ l_38:                      rts    ; $BFF4
 ; Chip-view cursor step UP — X←$00 / Y←$FF / jump chipview_step_common (common body).
 ;
 ;   callers:             1 code sites: $BCEE
+;   registers clobbered: A, X, Y
 ;
 ;   Y=-1 column-major delta. Called from sidtab_cascade_lshift_instdel_arm (key-up arm of the chip-view input dispatcher).
 chipview_step_up .block
@@ -15638,6 +15768,7 @@ chipview_step_up .block
 ; Chip-view cursor step DOWN — X←$00 / Y←$01 / jump chipview_step_common (common body).
 ;
 ;   callers:             5 code sites: $BBF1, $BC6D, $BC90, $BCD9, $BD03
+;   registers clobbered: A, X, Y
 ;
 ;   Y=+1 column-major delta. Called from 5 sites in the sidTAB handler band (DOWN-arrow and chord-equivalents).
 chipview_step_down .block
@@ -15663,6 +15794,7 @@ sid2_player_band .block
 ; Chip-view cursor step RIGHT — X←$01 / Y←$00 / jump chipview_step_common (common body).
 ;
 ;   callers:             4 code sites: $BBDC, $BBF8, $BC13, $BCD3
+;   registers clobbered: A, X, Y
 ;
 ;   X=+1 column delta. Called from 4 sites in the sidTAB handler cascade (RIGHT-arrow and chord-equivalents).
 chipview_step_right .block
@@ -15677,6 +15809,7 @@ chipview_step_right .block
 ; Chip-view cursor step LEFT — X←$FF / Y←$00 / jump chipview_step_common (common body).
 ;
 ;   callers:             2 code sites: $BCD6 sidtab_cascade_lshift_hex_letter_arm_2, $BCF5
+;   registers clobbered: A, X, Y
 ;
 ;   X=-1 column delta. Called from 2 sites: sidtab_cascade_lshift_hex_letter_arm (jsr — called as subroutine after a →predicate) when negative and sidtab_cascade_lshift_f3_arm (jmp — LEFT-arrow arm).
 chipview_step_left .block
@@ -15691,6 +15824,7 @@ chipview_step_left .block
 ; Chip-view cursor step common body.
 ;
 ;   callers:             4 code sites: $BFF9, $C000 sid2_player_band, $C007, $C00E
+;   registers clobbered: A, X, Y
 ;
 ;   X→chipview_step_tail_zero_pad (signed X delta) / Y→chipview_step_tail_zero_pad (signed Y delta); read chip_view_cursor_x (cursor X) → chipview_step_tail_zero_pad, read chip_view_cursor_y (cursor Y) → chipview_step_tail_zero_pad. Adds X delta to X; →guard when positive clamps at -1 → $21 (33, last column); compare =$22 / →wraps when no-carry overshoot to 0. Indexes the sidtab_cell_descriptor_lut descriptor table to skip $FF-marked (non-editable) cells (loop back to chipview_step_common to re-step). Adds Y delta to Y at chipview_step_common (16-bit composite check at chipview_step_common). Writes back to chip_view_cursor_x/chip_view_cursor_y and JMPs cursor_redraw_request (cursor-redraw flag set). Reached only via the 4-arm entries at chipview_step_up/chipview_step_down/chipview_step_right/chipview_step_left; not called directly. chipview_step_tail_zero_pad are 4-byte scratch locals (cursor_x/y working copies + step deltas).
 chipview_step_common .block
@@ -15734,6 +15868,7 @@ l_3:                       sta  chipview_cursor_x_save    ; $C034
 ; Cursor-redraw flag set helper.
 ;
 ;   callers:             4 code sites: $BD5A, $BD99, $C05B, $C06C
+;   registers clobbered: A
 ;
 ;   A←UI_MODE_SIDTAB / write ui_mode_range_bound / return. Shared 1-instruction helper used by 4 sites in the SID#2 + secondary-disk handler band to request a cursor repaint from the editor frame body.
 cursor_redraw_request .block
@@ -15755,6 +15890,7 @@ l_3:                       rts    ; $C07A
 ; SID#2 V3 sidTAB row-apply dispatcher.
 ;
 ;   callers:             6 code sites: $C14E, $C168, $C1BB, $C1DE, $C3CA, $C453
+;   registers clobbered: A
 ;
 ;   read sidTAB_staging_buffer_ext,Y (per-voice row bitmap byte); compare $00 → exit sid2_v3_sidtab_row_apply; compare $02 → sid2_v3_sidtab_row_apply; compare $03 → sid2_v3_sidtab_row_apply; else fall-through path ORs sidTAB_staging_buffer_ext,Y into sidTAB_staging_prefix if sidTAB_staging_prefix != 0. Mirror of sidtab_row_apply (SID#1 V0) for SID#2 V3.
 sid2_v3_sidtab_row_apply .block
@@ -15799,6 +15935,7 @@ l_5:                       sec    ; $C0BE
 ; SID#2 V4 sidTAB row-apply dispatcher.
 ;
 ;   callers:             5 code sites: $C1A2, $C3D0 writer_sidtab_inst_row_3, $C3FC, $C459 writer_sidtab_cbm_shift_b_3, $C483
+;   registers clobbered: A, X
 ;
 ;   Mirror of sid2_v3_sidtab_row_apply but indexes the V4 staging slots. read sidTAB_staging_buffer_ext,Y / compare cascade on $00/$02/$03/else with different fall-through targets (sid2_v4_sidtab_row_apply/secondary_disk_handler_band).
 sid2_v4_sidtab_row_apply .block
@@ -15858,6 +15995,7 @@ l_1:                       sec    ; $C107
 ; SID#2 V5 sidTAB row-apply dispatcher.
 ;
 ;   callers:             2 code sites: $C3B3, $C43C
+;   registers clobbered: A
 ;
 ;   Third sibling of sid2_v3_sidtab_row_apply/sid2_v4_sidtab_row_apply. Same read sidTAB_staging_buffer_ext,Y / compare cascade shape; V5-specific staging targets.
 sid2_v5_sidtab_row_apply .block
@@ -15900,6 +16038,8 @@ l_5:                       sec    ; $C144
 ; ──────────────────────────────────────────────────────────────────────
 ; toggles bit 7 of a sidTAB staging cell.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Fan-in via sidTAB_helper + pitch_lut_generator_inner_loop; then A^=$80 into sidTAB_staging,Y. Used for the column flags whose semantic is 'on/off' rather than a hex value.
 writer_sidtab_toggle .block
                            jsr  sidTAB_helper    ; $C146
@@ -15918,6 +16058,8 @@ l_1:                       rts    ; $C15E
 ; $C15F  writer_sidtab_digit
 ; ──────────────────────────────────────────────────────────────────────
 ; write a hex digit to a sidTAB cell.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Fan-in: sidTAB_helper + pitch_lut_generator_inner_loop + sidTAB_shifted_helper (descriptor + mask). Looks up sidtab_cell_descriptor_lut,X to select first vs second nibble; merges A into sidTAB_staging,Y; calls advance / mask-paint helpers. Workhorse writer for the 30 hex-digit cells in a sidTAB row.
 writer_sidtab_digit .block
@@ -15952,6 +16094,8 @@ l_3:                       rts    ; $C198
 ; ──────────────────────────────────────────────────────────────────────
 ; SPACE in sidTAB.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Resets the staging cell to its default value and advances the cursor (via pitch_lut_generator_inner_loop). Default values per column (e.g. $2D '-' for value cells) come from the descriptor table at sidtab_cell_descriptor_lut.
 writer_sidtab_clear_advance .block
                            jsr  sidTAB_helper    ; $C199
@@ -15967,6 +16111,8 @@ l_1:                       rts    ; $C1AA
 ; $C1AB  writer_sidtab_inc
 ; ──────────────────────────────────────────────────────────────────────
 ; `>` (LSHIFT+PERIOD) in sidTAB.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Checks writer_loop_count: when ==1, advances cursor first; then increments the cell value (note:.
 writer_sidtab_inc .block
@@ -15990,6 +16136,8 @@ l_2:                       rts    ; $C1CD
 ; $C1CE  writer_sidtab_dec
 ; ──────────────────────────────────────────────────────────────────────
 ; `<` (LSHIFT+COMMA) in sidTAB.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Decrement-counterpart of writer_sidtab_inc. Same fan-in shape; A-=instead of adc.
 writer_sidtab_dec .block
@@ -16029,6 +16177,8 @@ l_6:                       lda  #$80    ; $C20B
 ; $C211  writer_sidtab_supercmd
 ; ──────────────────────────────────────────────────────────────────────
 ; CTRL-prefix super-command in sidTAB.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Reads the super-prefix arg. On $00 it returns immediately (no-op write); otherwise it patches the arg into sidtab_c2d7_smc and runs a multi-cell fill across the sidTAB column.
 writer_sidtab_supercmd .block
@@ -16121,6 +16271,7 @@ l_8:                       ldx  seqlist_cursor_aux3    ; $C2AA
 ; Shared bare-return in sidTAB writer band.
 ;
 ;   callers:             2 code sites: $C219, $C251
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Reached by 2 jump callers (writer_sidtab_supercmd, writer_sidtab_supercmd) that need to bypass the preceding read pattern_bank,Y at writer_sidtab_supercmd and exit cleanly. The preceding 4 bytes form a fast-out branch target for the writer_sidtab_supercmd supercmd writer (arg=$00 path) and the writer_sidtab_supercmd supercmd-related path.
 sidtab_writer_bare_return .block
@@ -16132,6 +16283,8 @@ sidtab_writer_bare_return .block
 ; $C2D8  sidTAB_C2D8_dispatch_body
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 sidTAB-mode dispatch body (122 bytes, sidTAB_dispatch_body-sidtab_dispatch_end).
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Sequence:
 ;     - call sidTAB_helper (sidTAB common entry).
@@ -16197,6 +16350,8 @@ sidTAB_dispatch_body_5:    rts    ; $C350
 ; ──────────────────────────────────────────────────────────────────────
 ; CBM+SHIFT 'A' branch.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Bulk-clears the sidTAB staging at sidTAB_staging_prefix/sidTAB_staging_buffer_ext then runs pitch_lut_generator_inner_loop paint.
 writer_sidtab_cbm_shift_a .block
                            jsr  sidTAB_helper    ; $C352
@@ -16214,6 +16369,8 @@ writer_sidtab_cbm_shift_a .block
 ; $C36A  writer_sidtab_inst_row
 ; ──────────────────────────────────────────────────────────────────────
 ; INSTDEL row delete.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Reads super_arg super-prefix; self-mods sid2_writer_tail_sentinel with the delta; calls sidTAB_shifted_helper + pitch_lut_generator_inner_loop to shift rows.
 writer_sidtab_inst_row .block
@@ -16285,6 +16442,8 @@ l_7:                       rts    ; $C405
 ; $C406  writer_sidtab_cbm_shift_b
 ; ──────────────────────────────────────────────────────────────────────
 ; CBM+SHIFT 'B' branch.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Reads super_arg super-prefix; self-mods secondary_disk_region_sentinel and writer_sidtab_cbm_shift_b with addresses; loads sidtab_scroll_bookkeeping (latched cell coordinates).
 writer_sidtab_cbm_shift_b .block
@@ -16406,6 +16565,7 @@ l_4:                       cpy  #KEY_COMMA    ; $C4DD
 ; Shared bare-return in secondary disk-mode handler band.
 ;
 ;   callers:             5 code sites: $C4AD, $C4C4 secondary_disk_mode_handler_2, $C4C9, $C4DF, $C4E4
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Reached by 2 jump callers (secondary_disk_mode_handler, secondary_disk_mode_handler); used as a no-op exit for branches that need to skip the set_bg_blue / set_bg_black background-color helpers immediately after.
 secondary_disk_bare_return .block
@@ -16418,6 +16578,7 @@ secondary_disk_bare_return .block
 ; Set screen background → blue.
 ;
 ;   callers:             1 code sites: $BD61 sidtab_ctrl_slash_bg_blue_site
+;   registers clobbered: A
 ;
 ;   UI feedback hook. Called once from sidtab_ctrl_slash_bg_blue_site (sidTAB writer-band path after a ui_mode mode check).
 set_bg_blue .block
@@ -16433,6 +16594,7 @@ set_bg_blue .block
 ; Set screen background → black.
 ;
 ;   callers:             1 code sites: $C49F
+;   registers clobbered: A
 ;
 ;   Companion to set_bg_blue; resets background to default. Called once from secondary_disk_mode_handler (secondary disk-mode path after a ui_mode_prev mode check).
 set_bg_black .block
@@ -16446,6 +16608,8 @@ set_bg_black .block
 ; $C4FA  writer_disk_filename
 ; ──────────────────────────────────────────────────────────────────────
 ; writes a character into the disk-menu filename buffer at v0_sc1_counter-v0_sc1_row_idx.
+;
+;   registers clobbered: A
 ;
 ;   Reads sidtab_scroll + chip_view_cursor_y to compute the cursor column, stores key into the slot at v0_sc1_counter+col.
 ;
@@ -16473,6 +16637,7 @@ writer_disk_filename .block
 ; SID#2 chip-view voice-mute applier.
 ;
 ;   callers:             3 code sites: $083B, $0843, $0AE0 nmi_sid2_silence_cont
+;   registers clobbered: A, X, Y
 ;
 ;   Reads sid_chip_view — if beq to sid2_chipview_voice_mute_apply (SID#1 view, no-op); else reads cursor_state_cluster (kbd voice-mute mask), if zero falls through to sid2_chipview_voice_mute_apply; else stages a SID#2 register write (A=$8E, X=$02, Y=$D5) before walking the voice-mute fan-out. Called from 3 sites around nmi_sid2_silence_branch-nmi_sid2_silence_cont (post-NMI exit branch).
 sid2_chipview_voice_mute_apply .block
@@ -16572,6 +16737,7 @@ l_14:                      rts    ; $C5F3
 ; Chip-view toggle helper (visual SID#1↔SID#2 swap).
 ;
 ;   callers:             3 code sites: $B0C0, $BD7B, $E71D
+;   registers clobbered: A, X, Y
 ;
 ;   Refuses the swap when stereo is disabled (single-SID mode has nothing to toggle). Otherwise flips sid_chip_view bit 0 and bumps editor_row_delta to force a frame repaint. Called by the CTRL+chip-toggle chord.
 chipview_toggle_helper .block
@@ -16598,6 +16764,7 @@ l_1:                       rts    ; $C618
 ; Stereo-enable toggle (CTRL+? super-cmd).
 ;
 ;   callers:             1 code sites: $8341
+;   registers clobbered: A, X, Y
 ;
 ;   read stereo_enable / A^=STEREO_ON / write stereo_enable — flip the stereo-enable flag. Then call statusline_clear (clear status line) and re-test stereo_enable; if now-on (→stereo_enable_toggle) when nonzero repaint a 'stereo on' status string, else fall through to 'stereo off'.
 stereo_enable_toggle .block
@@ -16654,6 +16821,7 @@ l_7:                       jsr  statusline_clear    ; $C673
 ; secondary_disk_mode_handler data-table reader.
 ;
 ;   callers:             4 code sites: $0846, $8333, $C64F, $C668
+;   registers clobbered: A, X, Y
 ;
 ;   Returns early when stereo is disabled. Otherwise assembles a 16-bit pointer in ($02/$03) from a 2-byte entry in seqED_disk_key_lut (already annotated as 2-byte filename-pointer pairs) and reads filename data through it. Called 4× from secondary_disk_mode_handler's body.
 secondary_disk_data_reader .block
@@ -16699,6 +16867,7 @@ l_3:                       rts    ; $C6DC
 ; SID#2 chip-view color-cell tinter.
 ;
 ;   callers:             4 code sites: $C6AA, $C6B8, $C6C1, $C6CA
+;   registers clobbered: A
 ;
 ;   A&=$1F (preserve low 5 bits of A — color/reverse nibble) / ora sid2_base_lo (mask in SID#2 chip-view flag bits — high 3 bits of sid2_base_lo) / return. Called by 4 sites at secondary_disk_data_reader that each read a color-attribute slot (sid2_chipview_voice_mute_apply voice-band attrs), tint it, and write it back. Used during the SID#2 chip-view paint to dim/highlight voice columns based on the current sid2_base_lo view-flag state.
 sid2_chipview_color_tinter .block
@@ -16719,6 +16888,7 @@ sid2_chipview_color_tinter .block
 ; SID#2 main_tick entry — jump sid2_main_tick.
 ;
 ;   callers:             1 code sites: $819D
+;   registers clobbered: A, X, Y
 ;
 ;   Mirror of player_play SID#1 main_tick. Called per-frame from the nmi_irq_entry when stereo is enabled.
 sid2_main_tick_entry .block
@@ -16731,6 +16901,7 @@ sid2_main_tick_entry .block
 ; SID#2 subframe entry — jump sid2_register_write_body.
 ;
 ;   callers:             1 code sites: $81D2
+;   registers clobbered: A, X, Y
 ;
 ;   Mirror of player_sound_update SID#1 subframe. Called per-NMI from nmi_irq_entry, conditional on SID#2 player_play state.
 sid2_subframe_entry .block
@@ -16745,6 +16916,7 @@ sid2_subframe_entry .block
 ; SID#2 register-write body.
 ;
 ;   callers:             1 code sites: $C803 sid2_subframe_entry
+;   registers clobbered: A, X, Y
 ;
 ;   Walks sid2_base_default-save_encoder_jp_chain_walker (24 SID#2 registers) writing the staged row bytes from the sidTAB staging buffer area area. Called by sid2_subframe_entry (normal) and sid2_subframe_forced_variant (forced). Mirror of SID#1's player_play_body register-write band.
 sid2_register_write_body .block
@@ -17100,6 +17272,7 @@ sid2_row_advance_step_smc .block
 ; SID#2 cascade post-tick gate with self-modifying counter.
 ;
 ;   callers:             3 code sites: $CA60, $CA8C, $CACB
+;   registers clobbered: A, X, Y
 ;
 ;   Self-modifying skip counter that re-arms after wrapping. The LDA #imm at sid2_cascade_post_tick_gate is the counter — patched in-place by DEC sid2_cascade_post_tick_gate. Three outcomes per frame: counter = 0 → jump to the JP-marker scan at sid2_v0_cascade_step_bytes (lets the cascade advance); counter bit 7 set → jump straight into the cascade body via sid2_silence_latch_path without decrementing; otherwise decrement and fall through to sid2_silence_latch_path. Called as a jump tail from sid2_subframe_forced_variant (post pop-A restore) and sid2_row_advance_ldy_smc (post sidcall init).
 sid2_cascade_post_tick_gate .block
@@ -17131,6 +17304,7 @@ l_2:                       sta  zp_sidtab_row_hi    ; $CAFC
 ; SID#2 silence-flag latch path — mirror of part of player_sound_update SID#1 subframe.
 ;
 ;   callers:             sid2_cascade_post_tick_gate BMI (the cascade gate fall-through in sid2_cascade_post_tick_gate post-tick), sid2_cascade_post_tick_gate JMP.
+;   registers clobbered: A, X, Y
 ;
 ;   A←$FF / →sid2_v0_cascade_slot_triple when zero (never — A=$FF) / →sid2_silence_latch_arm when negative (always — A=$FF) → jump sid2_silence_latch_arm via fall-through. Effectively a 1-instruction force-branch to sid2_silence_latch_arm (the SID#2 cascade tail) plus an unreached →side-arm when negative at sid2_silence_latch_path that DECs sid2_silence_latch_path (self-mod byte counter). Self-mod operand sid2_silence_latch_path is read by the next iteration's →test when negative. Reading sid2_silence_latch_path as data: it's the second byte of the LDA #$FF at sid2_silence_latch_path. The DEC self-mods that byte downward, which lets the next SID#2 cascade pass observe a different value at sid2_silence_latch_path's immediate slot.
 sid2_silence_latch_path .block
@@ -17292,6 +17466,7 @@ l_6:                       ldx  #$62    ; $CC05
 ; SID#2 pitch_slide_oscillator — direct mirror of pitch_oscillator_voice_loop_body (the per-voice X-loop body of pitch_slide_oscillator).
 ;
 ;   callers:             sid2_pitch_oscillator_wrap_tail JMP (the SID#2 cascade re-dispatch loop tail).
+;   registers clobbered: A, X, Y
 ;
 ;   Per-voice dispatch on slide mode (sid2_subframe_forced_variant,X = SID#2 mirror of slide_mode_v0,X):
 ;     - == 0     → sid2_pitch_oscillator_post_tail (no-slide).
@@ -17382,6 +17557,7 @@ l_2:                       clc    ; $CC69
 ; SID#2 per-voice cascade step-byte read & dispatcher.
 ;
 ;   callers:             2 code sites: $CC50, $CC66
+;   registers clobbered: A, X, Y
 ;
 ;   Per-voice dispatch on step-byte:
 ;     - Y ← sid2_subframe_forced_variant,X (per-voice step-byte slot — SID#2 mirror of SID#1's row_advance_band_end area).
@@ -17404,6 +17580,8 @@ sid2_cascade_step_dispatcher .block
 ; $CC9D  sid2_pitch_pw_clamp_commit
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 PS-sweep clamp + commit (37 bytes, sid2_pitch_pw_clamp_commit).
+;
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $CC9C in sid2_cascade_step_dispatcher (1 bytes earlier)
 ;
@@ -17445,6 +17623,7 @@ l_3:                       lda  sid2_v0_step_accumulator,x    ; $CCD0
 ; SID#2 cascade re-dispatch wrap guard.
 ;
 ;   callers:             6 code sites: $CC98, $CCA5, $CCB1, $CCBF, $CCCD, $CCD9
+;   registers clobbered: A, X, Y
 ;
 ;   A←X / SBX #$31 (illegal opcode — X := (A & X) - $31 = X - $31, flags from result) / →sid2_pitch_oscillator_wrap_tail when negative (X was < $31 → return, end of cascade chain) / jump sid2_pitch_oscillator (X >= $31 → continue cascade with X reduced by $31). The $31 = 49 = #SID#2 cascade row-table size. Reached by 3 jump callers from the sid2_cascade_step_dispatcher dispatch arms (sid2_pitch_pw_clamp_commit) after they update per-voice cascade state slots. SBX is an undocumented 6502 opcode (CB imm). After TXA the accumulator equals X, so (A & X) = X, and SBX effectively does X := X - $31 + flag-set. Used here as a 'reduce X by $31 with underflow branch' primitive.
 sid2_cascade_dispatch_wrap_guard .block
@@ -17511,6 +17690,7 @@ l_3:                       sta  sid2_register_write_body.l_10    ; $CD1D
 ; SID#2 main_tick body — direct mirror of player_play SID#1 main_tick.
 ;
 ;   callers:             sid2_main_tick_entry JMP (the SID#2 main_tick entry — see sid2_main_tick_entry).
+;   registers clobbered: A, X, Y
 ;
 ;   write sid2_base_default,Y / decrement Y / bpl — clears the 24 SID#2 voice/filter registers (sid2_base_default-save_encoder_jp_chain_walker).
 ;     - write sid2_voice_record_v2 / sid2_silence_latch_acc / sid2_voice_record_v2 (zero the SID#2 filter-cutoff accumulator + voice control slots).
@@ -17578,6 +17758,7 @@ sid2_player_init_tail .block
 ; SID#2 sidtab_row_apply body (sister of sidtab_row_apply SID#1).
 ;
 ;   callers:             6 code sites: $CB0D, $CB3E, $CB6F, $CBA0, $CBD1, $CC02
+;   registers clobbered: A, X, Y
 ;
 ;   write $FB / Y←$00 / read ($FB),Y bitmap byte; shift stores left low/high split into ZP $96; bit-dispatched into per-field handlers at sid2_sidtab_row_apply+. Writes go to sid2_register_write_body+X (SID#2 staging mirror of current_note_v0 for current_note). Called 6× from the SID#2 cascade tail at sid2_v0_cascade_step_bytes/sid2_v0_cascade_slot_triple/sid2_v1_cascade_slot_triple/sid2_v2_cascade_slot_triple/sid2_v0_sc2_cascade_slot_triple/sid2_v1_sc2_cascade_slot_triple.
 sid2_sidtab_row_apply .block
@@ -17665,6 +17846,7 @@ l_11:                      lda  sid2_silence_latch_acc    ; $CE09
 ; SID#2 sidtab_row_apply CTRL accumulator write.
 ;
 ;   callers:             2 code sites: $CDFD, $CE06
+;   registers clobbered: A, X, Y
 ;
 ;   Confluence point for SID#2's CTRL row-apply: three mutation modes (replace, AND-with-mask, OR-with-mask) all converge on the STA sid2_silence_latch_acc here. The two non-fall-through arms (single-source replace, AND-mask) jump in from sid2_sidtab_row_apply; the OR-mask fall-through arrives directly. sid2_silence_latch_acc is the single-byte CTRL combiner slot mirroring the equivalent area in SID#1's sidtab_row_apply body.
 sid2_sidtab_row_apply_ctrl_write .block
@@ -17677,6 +17859,7 @@ sid2_sidtab_row_apply_ctrl_write .block
 ; SID#2 sidtab_row_apply CTRL accumulator (71 bytes, sid2_sidtab_ctrl_accumulator).
 ;
 ;   callers:             1 code sites: $CDF0
+;   registers clobbered: A, X, Y
 ;
 ;   Y←$96 / beq +43 / A&=$40 / beq +6 / increment Y / read ($FB),Y / write sid2_voice_record_v2 / A←X / and … — CTRL-accumulator merge logic feeding the sid2_sidtab_row_apply_ctrl_write write sid2_silence_latch_acc write. Mirror of SID#1's sidtab_row_apply cascade CTRL handling.
 sid2_sidtab_ctrl_accumulator .block
@@ -17724,6 +17907,7 @@ l_4:                       rts    ; $CE5D
 ; Self-modifier-setup.
 ;
 ;   callers:             1 code sites: $CE4C
+;   registers clobbered: A
 ;
 ;   Sequence:
 ;     - X→sid2_voice_record_v2.
@@ -17749,6 +17933,8 @@ sid2_self_modifier_setup .block
 ; $CE81  save_prep_orchestrator
 ; ──────────────────────────────────────────────────────────────────────
 ; pre-save preparation chain.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Calls save_prep_markers (write $11 markers into empty song-position slots), save_prep_arranger_scan (arranger pat-num scan), save_prep_zero_pat_base (zero pat_base_lo/hi tables), then continues with the SAVE setup beyond save_prep_orchestrator.
 ;
@@ -17780,6 +17966,8 @@ save_prep_orchestrator .block
 ; ──────────────────────────────────────────────────────────────────────
 ; patches the decoder's end-of-stream bound from KERNAL_LOAD_END_LO/KERNAL_LOAD_END_HI (KERNAL LOAD's end-of-program pointer).
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Sets $02/$03 src start to ($AE-3, $AF) so decoder_block_helper walks backward from there. Called immediately after KERNAL LOAD completes, before JMP decoder_block_helper to run the decoder. The SBC #$03 backs the pointer up by 3 bytes so the first read at offset +0/+1/+2 examines the last 3 bytes of the loaded body.
 decoder_load_setup .block
 ;     read $AE / set-carry / A -= $03 / write decoder_byte_count / write $FD.
@@ -17809,6 +17997,8 @@ decoder_load_setup .block
 ; ──────────────────────────────────────────────────────────────────────
 ; LOAD-decoder src-floor patcher — sets the sbc-immediate operand bytes at decoder_term_lo_smc / decoder_term_hi_smc to lo/hi of the src_floor (typically $00 / $18 = sidtab_row_lo).
 ;
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          fall-through from $CED4 in decoder_load_setup (3 bytes earlier)
 ;
 ;   Static image has $FF $FF at those operands (compares src against VEC_IRQ_HI, never matching). Patches the lo/hi pair to $00/$18 (= sidtab_row_lo) before the call to decoder_block_helper. Net effect: the termination check inside decoder_block_helper compares src against sidtab_row_lo and terminates when src < sidtab_row_lo (NOT src < pitch_lut_band_alt_base).
@@ -17825,6 +18015,7 @@ load_decoder_src_floor_patch .block
 ;
 ;   inputs:              sidtab_row_lo..super_cmd_staged (raw saved body in memory at load addr); flags post_load_xform_gate/post_load_pat_base_gate/post_load_pattern_marker_gate (set by main decoder's emit if present in trailer)
 ;   outputs:             live RAM load_decoder_dest_floor..super_cmd_staged fully populated; pat_base_lo/hi initialised by secondary_pat_base_init; per-pattern bit-7 marker set by secondary_pattern_marker; sidTAB rows transformed by secondary_song_position_transform
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $CEDC in load_decoder_src_floor_patch (2 bytes earlier)
 ;
@@ -17866,6 +18057,8 @@ l_3:                       clc    ; $CEFC
 ; ──────────────────────────────────────────────────────────────────────
 ; SID#2 JP-marker mirror walker (44 bytes, sid2_jp_marker_walker).
 ;
+;   registers clobbered: A, X
+;
 ;   Sequence:
 ;     - X ← $00.
 ;     - Loop:
@@ -17904,6 +18097,7 @@ l_2:                       lda  pat_base_lo,x    ; $CF14
 ; walk X=0..255; for each X where sidtab_row_hi,X == $00, write $11 to both sidtab_row_lo,X and sidtab_row_hi,X.
 ;
 ;   callers:             1 code sites: $CE81 save_prep_orchestrator
+;   registers clobbered: A, X
 ;
 ;   Fills empty song-position slots with the $11 marker that secondary_song_position_transform expects on LOAD.
 ;
@@ -17930,6 +18124,7 @@ l_2:                       inx    ; $CF39
 ;   callers:             1 code sites: $CEE9
 ;   inputs:              sidtab_row_lo/sidtab_row_hi song_position_arrays (decoder scratch), post_load_xform_gate gate
 ;   outputs:             sidtab_row_lo/sidtab_row_hi rewritten in-place to runtime row pointers
+;   registers clobbered: A, X
 ;
 ;   Clears post_load_xform_gate gate flag.
 ;
@@ -17965,6 +18160,7 @@ l_2:                       inx    ; $CF5D
 ; walks A=0..N with Y=0..(arranger length) doing A←X / compare arranger_v0_sid1,Y / beq +57 / compare arranger_v1_sid1,Y / beq +52 / compare arranger_v2_sid1,Y /...
 ;
 ;   callers:             1 code sites: $CE84
+;   registers clobbered: A, X, Y
 ;
 ;   Looks for whether each pattern number is referenced by any arranger column.
 ;
@@ -18017,6 +18213,7 @@ l_5:                       inx    ; $CFAD
 ;   callers:             1 code sites: $CEF9
 ;   inputs:              post_load_pattern_marker_gate gate; LIVE pattern bank starting at pattern_bank
 ;   outputs:             each pattern's V2 step-0 NOTE byte (pattern_bank_v2_step0_note, pat01_default_base, pat02_default_base, ...) has bit 7 set.
+;   registers clobbered: A, X
 ;
 ;   Clears post_load_pattern_marker_gate gate.
 ;
@@ -18056,6 +18253,7 @@ l_2:                       dex    ; $CFE6
 ; A←$00 / X←$00 / write pat_base_lo,X / write pat_base_hi,X / increment X / compare X=$80 / bne -.
 ;
 ;   callers:             1 code sites: $CE87
+;   registers clobbered: A, X
 ;
 ;   Zeros all 128 bytes of pat_base_lo and pat_base_hi.
 ;
@@ -18097,6 +18295,7 @@ VIC_SP1_Y:                 rts    ; $D003
 ;   callers:             2 code sites: $AA76, $CEF1
 ;   inputs:              post_load_pat_base_gate gate
 ;   outputs:             pat_base_lo = $00, $80, $00, $80,...; pat_base_hi-pat_base_hi_end = $1F, $1F, $20, $20, $21,... covering up to 128 patterns starting at pattern_bank.
+;   registers clobbered: A, X
 ;
 ;   Clears post_load_pat_base_gate gate.
 ;
@@ -18396,6 +18595,7 @@ load_decoder_main_entry_chain_end .block
 ; Save-encoder bytes-remaining check / commit branch.
 ;
 ;   callers:             2 code sites: $D29B, $D2B6
+;   registers clobbered: A, X, Y
 ;
 ;   Size-class dispatch:
 ;     - read pat_num_occupancy_table (HI byte of 16-bit byte counter) / →save_encoder_bytes_remaining_check when nonzero (HI nonzero — too many bytes, take the A-=$11 commit path).
@@ -18481,6 +18681,7 @@ load_decoder_commit_arm_7: rts    ; $D2F3
 ; Save-encoder Y += 4 stride helper.
 ;
 ;   callers:             4 code sites: $D22E load_decoder_setup_chain_27, $D298, $D2B3, $D2D6
+;   registers clobbered: A, Y
 ;
 ;   A←Y / clear-carry / A+=$04 / Y←A / return. Walks the per-row 4-byte staging stride during save-encoder packing. Called by 4 call sites in load_decoder_setup_chain-save_encoder_bytes_remaining_check that need to advance Y to the next row's staging slot.
 save_encoder_y_plus_4_stride .block
@@ -18497,6 +18698,7 @@ save_encoder_y_plus_4_stride .block
 ; Save-encoder 16-bit byte-counter accumulator.
 ;
 ;   callers:             2 code sites: $D23F, $D244
+;   registers clobbered: A
 ;
 ;   Adds A (a sub-byte length) to the 16-bit counter at pat_num_occupancy_table. Used by the save-encoder size-tracking path before the save_encoder_bytes_remaining_check size-class dispatch. Called by 2 sites at load_decoder_setup_chain (mask-and result) and load_decoder_setup_chain (literal $02 increment). pat_num_occupancy_table is read by save_encoder_bytes_remaining_check to dispatch on escape-group size.
 save_encoder_byte_counter_acc .block
@@ -18765,6 +18967,7 @@ load_decoder_patbody_32:   rts    ; $D4F5
 ; Save-encoder JP-chain row walker.
 ;
 ;   callers:             2 code sites: $D400 SID_V1_FREQ_LO, $D40B SID_V2_CTRL
+;   registers clobbered: A, X
 ;
 ;   Per-row visit:
 ;     - A←X / push A (save caller's X).
@@ -18919,6 +19122,7 @@ l_19:                      rts    ; $D60A
 ;   callers:             2 code sites: $D62B, $D6C9 decoder_block_helper
 ;   inputs:              decoder_byte_count (caller-prepared 4-byte block: src_lo, src_hi, dest_lo, dest_hi)
 ;   outputs:             $02/$03 = src start; $FD/$FE = dest start
+;   registers clobbered: A
 ;
 ;   Copies decoder_byte_count → $02/$03 (src) and decoder_byte_count → $FD/$FE (dest). return.
 decoder_pointer_init .block
@@ -19035,6 +19239,7 @@ l_2:                       rts    ; $D6C8
 ;   callers:             1 code sites: $CEE1 load_decoder_block_call_site
 ;   inputs:              decoder_byte_count caller-prepared; $02/$03 walks down file body; $FD/$FE walks down dest region
 ;   outputs:             Dest region filled with decoded bytes; decoder_byte_count running byte count
+;   registers clobbered: A, X, Y
 ;
 ;   Reads file body BACKWARDS through src ($02/$03), writes LIVE form
 ;   BACKWARDS through dest ($FD/$FE). Both pointers walk DOWN, not up.
@@ -19135,6 +19340,7 @@ l_2:                       ldy  #$00    ; $D701
 ; Decoder Path A/C single-byte emit.
 ;
 ;   callers:             3 code sites: $D6E7, $D6F1, $D6FE
+;   registers clobbered: A, X, Y
 ;
 ;   Reached after the path-selector at decoder_term_gate decides src+1 != $FF
 ;   (or the dual-$FF degenerate Path C). The write loop at decoder_emit_byte_dec is
@@ -19151,6 +19357,8 @@ decoder_loop_entry .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Decoder fill-jump.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          fall-through from $D70F in decoder_loop_entry (3 bytes earlier)
 ;
 ;   jump decoder_emit_byte_dec = enter the descending fill loop. Reached from decoder_loop_entry (Path A single emit, X=$00 falls into one-byte fill) or from decoder_rle_fill_path (Path D RLE-fill, X = count_byte + 1).
@@ -19164,6 +19372,7 @@ decoder_fill_jump .block
 ; Decoder RLE-fill path.
 ;
 ;   callers:             1 code sites: $D707
+;   registers clobbered: A, X, Y
 ;
 ;   Reads count via read A=X=($02),Y at decoder_rle_lax_indy_site; src -= 3; fall into decoder_emit_byte_dec descending fill.
 ;
@@ -19208,6 +19417,7 @@ l_2:                       pla    ; $D731
 ; Decoder descending-fill entry (load Y=#$00).
 ;
 ;   callers:             2 code sites: $D712 decoder_fill_jump, $D746
+;   registers clobbered: A, X, Y
 ;
 ;   Loops X+1 times, writing the next source byte through the ($FD/$FE) destination pointer and decrementing both src and dest after each write. Exits when X wraps past $FF. Entered by the path-A/C/RLE-fill decoder arms after they've loaded the count into X and the byte (or count) into the indirect pointers.
 decoder_emit_byte_dec .block
@@ -19221,6 +19431,7 @@ decoder_emit_byte_dec .block
 ;
 ;   inputs:              A = byte to fill, $FD/$FE = dest pointer (filled downward), X = byte-count - 1
 ;   outputs:             X bytes of value A written into [$FD-X, $FD] (descending), $FD/$FE = $FD - X.
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $D732 decoder_emit_byte_dec (2 bytes earlier)
 ;
@@ -19252,6 +19463,7 @@ l_2:                       rts    ; $D74B
 ; Decoder source-pointer decrement.
 ;
 ;   callers:             5 code sites: $D6CC, $D6CF, $D6FB, $D70F, $D722
+;   registers clobbered: A
 ;
 ;   Preserves A on stack; A-=$01 from $02/$03; pop A; return.
 ;
@@ -19275,6 +19487,7 @@ l_1:                       pla    ; $D758
 ; Configurable-emitter target setup.
 ;
 ;   callers:             2 code sites: $D36B, $D524
+;   registers clobbered: A
 ;
 ;   X→self_modifying_byte_emitter; Y→self_modifying_byte_emitter; A←$00; write configurable_emitter_target_smc; return. Sets the sta-target operand of self_modifying_byte_emitter.
 configurable_emitter_target_setup .block
@@ -19291,6 +19504,7 @@ configurable_emitter_target_setup .block
 ; Configurable-emitter post-write hook = configurable_emitter_advance_hook (advance-and-count).
 ;
 ;   callers:             2 code sites: $D36E, $D527
+;   registers clobbered: A
 ;
 ;   Writes jump configurable_emitter_advance_hook into the self-modifying jmp at self_modifying_byte_emitter.
 configurable_emitter_post_write_hook_advance .block
@@ -19337,6 +19551,7 @@ self_modifying_byte_emitter .block
 ; Bounded forward memcpy.
 ;
 ;   callers:             1 code sites: $D065
+;   registers clobbered: A, Y
 ;
 ;   Copies ($02) → ($FD) byte-by-byte while incrementing both pointers, until $02/$03 equals a self-modified end-bound (set up by decoder_context_struct_setup).
 ;
@@ -19380,6 +19595,7 @@ l_4:                       ldy  #$04    ; $D7B5
 ;
 ;   callers:             1 code sites: $D791 bounded_forward_memcpy
 ;   inputs:              X = struct lo, Y = struct hi. Struct layout: [+0..1] length, [+2..3] src, [+4..5] dest.
+;   registers clobbered: A, Y
 ;
 ;   Caller passes struct ptr in X/Y; routine loads src ($02/$03), dest ($FD/$FE), and computes a 16-bit end-bound stored into the self-modifying compare operand at bounded_forward_memcpy.
 decoder_context_struct_setup .block
@@ -19451,6 +19667,7 @@ decoder_context_struct_setup .block
 ;   callers:             editor_frame_work_tail JSR (the mode-2 paint arm inside editor_frame_barrier's editor_frame_mode2_arm fall-through region).
 ;   inputs:              seqlist_scroll = seqLIST column-cursor; seqlist_col_cursor / seqlist_row_counter = visible row range; screen_row_addr_lo / screen_row_addr_hi = screen-row-addr LUTs.
 ;   outputs:             Screen RAM at ($02),Y populated with the current seqLIST row's V0/V1/V2 arranger entries.
+;   registers clobbered: A, X, Y
 ;
 ;   Resolves a screen-RAM pointer ($02/$03) from screen_row_addr_lo/screen_row_addr_hi row LUTs at Y=$02 + #$20 column offset; stages the seqLIST column-cursor at seqlist_scroll into the seqlist_paint_loop_end self-mod operand (used by seqlist_step_row_smc paint loop) and pre-loads paint counter seqLIST_paint_loop_tail := #$16; loops X = screen_row_addr_hi[seqlist_paint_loop_end] writing screen-codes from hex_digit_hi_lut,X (hi-nibble) / hex_digit_lo_lut,X (lo-nibble) to ($02),Y across 22 cells (one full seqLIST row). Called once per main-loop iteration from editor_frame_work_tail (mode-2 paint arm in editor_frame_barrier).
 seqLIST_status_painter .block
@@ -19483,6 +19700,8 @@ l_2:                       ldx  seqlist_paint_loop_end    ; $E01E
 ; $E036  seqLIST_hex_byte_paint
 ; ──────────────────────────────────────────────────────────────────────
 ; seqLIST hex-byte screen paint.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $E034 in seqLIST_status_painter_2 (2 bytes earlier)
 ;
@@ -19543,6 +19762,7 @@ l_1:                       lax  arranger_v3_sid2,y    ; $E06F
 ; Loop tail for seqLIST_hex_byte_paint.
 ;
 ;   callers:             seqLIST_hex_byte_paint (JMP seqLIST_paint_loop_tail), seqLIST_hex_byte_paint+ fallthrough
+;   registers clobbered: A, X, Y
 ;
 ;   increment seqlist_paint_loop_end (counter) / advance ($02) pointer by $28 (40-byte row stride) / decrement seqLIST_paint_loop_tail / beq → screen-paint exit branch involving ui_mode_mirror vs seqlist_scroll (visible row vs cursor row, ORs $80 markers via screen_row_addr_resolver); else jump seqLIST_status_painter.
 seqLIST_paint_loop_tail .block
@@ -19628,6 +19848,7 @@ l_7:                       jsr  vic_sprite_init_internal.l_91    ; $E138
 ; seqLIST common entry helper.
 ;
 ;   callers:             5 code sites: $816F, $8513, $E244 writer_seqlist_supercmd_1, $E41E writer_seqlist_row_clone, $E64D
+;   registers clobbered: A
 ;
 ;   seqlist_scroll + seqed_col_cursor (seqlist_row_counter) → seqlist_row_counter. Every seqLIST writer (writer_seqlist_digit/writer_seqlist_supercmd/writer_seqlist_row_clone/writer_seqlist_row_insert/writer_seqlist_dec/writer_seqlist_inc) calls this first to derive the effective row index.
 seqLIST_helper .block
@@ -19644,6 +19865,7 @@ seqLIST_helper .block
 ; CRSRUD in seqLIST.
 ;
 ;   callers:             7 code sites: $E564, $E617, $E633, $E66B, $E6B4, $E6FA, $E73C
+;   registers clobbered: A, X, Y
 ;
 ;   X←$00 / Y←$01 / jump seqLIST_cursor_step_body (shared cursor-step helper). Y=$01 = direction down.
 writer_seqlist_advance .block
@@ -19671,6 +19893,7 @@ l_3:                       ldx  #$FF    ; $E15F
 ;   callers:             4 sites: writer_seqlist_advance JMP (seqLIST PgUp / PgDn arms), writer_seqlist_advance JSR (seqLIST inner cursor arms).
 ;   inputs:              X = column delta (signed), Y = row delta (signed); seqlist_col_cursor/seqlist_row_counter = current cursor row/col.
 ;   outputs:             seqlist_col_cursor/seqlist_row_counter advanced by (X,Y); seqlist_step_smc/seqlist_step_col_smc/seqlist_step_dx_smc/seqlist_step_dy_smc self-modified.
+;   registers clobbered: A, X
 ;
 ;   Setup:
 ;     - X→seqlist_step_dx_smc / Y→seqlist_step_dy_smc (self-mod the X,Y step deltas into the loop body's operand slots).
@@ -19736,6 +19959,7 @@ l_6:                       jmp  l_2    ; $E1D1
 ; seqLIST step auto-advance — mirror of seqED_auto_advance for the seqLIST mode.
 ;
 ;   callers:             5 callers: playhead_follows_cursor JSR (super-cmd speed-adjust block in speedadj_block_header), seqED_sidcall_arm / seqED_cursor_wrap / post_write_paint_tail JSR (seqLIST CTRL/CBM/SHIFT arms), seqED_super_set JMP (the CBM+SHIFT octave arm's fall-through).
+;   registers clobbered: A, Y
 seqLIST_step_auto_advance .block
 ;     call seqED_step_cursor_increment (step-cursor increment — shared with seqED).
                            jsr  seqED_step_cursor_increment    ; $E1D4
@@ -19780,6 +20004,8 @@ l_5:                       lda  #$04    ; $E20E
 ; ──────────────────────────────────────────────────────────────────────
 ; seqLIST digit writer.
 ;
+;   registers clobbered: A, X, Y
+;
 ;   Bare hex-digit dispatch from seqLIST_handler routes here via the field_writer_dispatcher self-modifying jsr. Writes high nibble at col stop 2N then ORs in the low nibble at stop 2N+1 for voice N, walking $1B/$1C/$1D (SID#1) or $6E/$6F/$70 (SID#2 when chip-view=SID#2).
 writer_seqlist_digit .block
                            ldy  #$00    ; $E211
@@ -19806,6 +20032,8 @@ l_1:                       ldy  #$00    ; $E229
 ; ──────────────────────────────────────────────────────────────────────
 ; SPACE in seqLIST.
 ;
+;   registers clobbered: A, Y
+;
 ;   A←$00 / Y←A / write ($02),Y → zero the pattern_num at the cursor cell; increment editor_row_delta (screen-dirty flag); return.
 writer_seqlist_clear .block
                            lda  #$00    ; $E233
@@ -19819,6 +20047,8 @@ writer_seqlist_clear .block
 ; $E23C  writer_seqlist_supercmd
 ; ──────────────────────────────────────────────────────────────────────
 ; CTRL super-command in seqLIST.
+;
+;   registers clobbered: A, X, Y
 ;
 ;   Reads super_arg super arg; on $00 jump seqLIST_screen_dirty_bump (fallback); else self-mods writer_seqlist_supercmd with the arg and runs a CTRL-N (clone-to-next-empty) or CTRL-U style action.
 writer_seqlist_supercmd .block
@@ -19917,6 +20147,7 @@ l_20:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E2FB
 ; seqLIST screen-dirty mini-bump — increment editor_row_delta / return.
 ;
 ;   callers:             writer_seqlist_supercmd JMP (the writer_seqlist_supercmd fallback path), writer_seqlist_supercmd BEQ (the writer_seqlist_clear/insert no-op exit).
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   2-byte helper called from 2 sites in the seqLIST writer band that need to flag the screen as dirty without doing additional cell work.
 seqLIST_screen_dirty_bump .block
@@ -19979,6 +20210,8 @@ l_7:                       rts    ; $E356
 ; ──────────────────────────────────────────────────────────────────────
 ; clones the current arranger row across V0/V1/V2 (or V3/V4/V5 when sid_chip_view = SID#2).
 ;
+;   registers clobbered: A, Y
+;
 ;   Branches on sid_chip_view to pick the SID#1 vs SID#2 arranger triple, then writes the same row value into all three voice arrangers at the current row index.
 writer_seqlist_row_clone .block
                            jsr  seqLIST_helper    ; $E41E
@@ -20002,6 +20235,8 @@ l_2:                       inc  editor_row_delta    ; $E440
 ; $E444  writer_seqlist_row_insert
 ; ──────────────────────────────────────────────────────────────────────
 ; `RETURN` in seqLIST (insert row).
+;
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          none
 ;   apparent (from data): $E4D6 in pattern_bank_lookup_helper
@@ -20061,6 +20296,8 @@ l_5:                       lda  #$02    ; $E48A
 ; ──────────────────────────────────────────────────────────────────────
 ; `<` in seqLIST.
 ;
+;   registers clobbered: A, Y
+;
 ;   A-=super_arg from cell value; →keep when carry / else clamp to $00; write ($02),y; bump editor_row_delta screen-dirty flag.
 writer_seqlist_dec .block
                            ldy  #$00    ; $E52C
@@ -20078,6 +20315,8 @@ l_1:                       sta  (zp_ptr1_lo),y    ; $E538
 ; $E53E  writer_seqlist_inc
 ; ──────────────────────────────────────────────────────────────────────
 ; `>` in seqLIST.
+;
+;   registers clobbered: A, Y
 ;
 ;   A+=super_arg to cell value; →keep when no-carry / else clamp to $FF; write ($02),y; bump editor_row_delta screen-dirty flag.
 writer_seqlist_inc .block
