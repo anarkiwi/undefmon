@@ -19,6 +19,18 @@
       "is_primary": true
     },
     {
+      "addr": "$007D",
+      "name": "DAT_007d",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$007E",
+      "name": "DAT_007e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$0096",
       "name": "DAT_0096",
       "source": "DEFAULT",
@@ -6909,6 +6921,12 @@
     {
       "addr": "$1B7E",
       "name": "BYTE_1b7e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$1B7F",
+      "name": "BYTE_1b7f",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -20834,13 +20852,13 @@
     },
     {
       "addr": "$E150",
-      "name": "LAB_e150",
+      "name": "FUN_e150",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$E157",
-      "name": "LAB_e157",
+      "name": "FUN_e157",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -20888,7 +20906,7 @@
     },
     {
       "addr": "$E1AC",
-      "name": "LAB_e1ac",
+      "name": "FUN_e1ac",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -20900,13 +20918,13 @@
     },
     {
       "addr": "$E1C3",
-      "name": "LAB_e1c3",
+      "name": "FUN_e1c3",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$E1C9",
-      "name": "LAB_e1c9",
+      "name": "FUN_e1c9",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -21333,6 +21351,72 @@
     {
       "addr": "$E48A",
       "name": "LAB_e48a",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E491",
+      "name": "pattern_bank_lookup_helper",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E4C8",
+      "name": "seqlist_pattern_bank_full",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E4CF",
+      "name": "seqlist_row_clone_setup",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E4DC",
+      "name": "LAB_e4db+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E4FD",
+      "name": "seqlist_row_insert_setup",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E50A",
+      "name": "LAB_e509+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E517",
+      "name": "seqlist_row_copy_loop",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$E519",
+      "name": "LAB_e519",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E51A",
+      "name": "LAB_e519+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E51B",
+      "name": "LAB_e519+2",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$E527",
+      "name": "LAB_e527",
       "source": "DEFAULT",
       "is_primary": true
     },

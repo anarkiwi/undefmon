@@ -6416,3 +6416,23 @@ notes = "Not code (decodes as 7 BRKs); a small parameter/marker table in the SID
 name = "raster_irq_entry"
 role = "Raster-IRQ entry: services the VIC raster interrupt."
 notes = "Saves A/X/Y into self-mod restore slots, bumps a frame counter, calls iec_recv_primitive_a, restores A/X/Y, acknowledges the VIC raster-IRQ latch, and RTIs. Reached only via the IRQ vector, so seeded explicitly (see SEED_LANDMARKS) rather than statically."
+
+[function."$E4C8"]
+name = "seqlist_pattern_bank_full"
+role = "Pattern-bank-full handler for the seqLIST row-duplicate helpers."
+notes = "Flashes the border (color 2 via border_set_b) and returns carry clear to signal that no free pattern slot was available."
+
+[function."$E4CF"]
+name = "seqlist_row_clone_setup"
+role = "seqLIST row-duplicate (via row-insert): copies the current arranger row into a freshly inserted pattern."
+notes = "Stamps the source row into the writer_seqlist_row_insert SMC operand, calls writer_seqlist_row_insert, and on success points the copy source at the new pattern's pat_base_lo/pat_base_hi and jumps to seqlist_row_copy_loop."
+
+[function."$E4FD"]
+name = "seqlist_row_insert_setup"
+role = "seqLIST row-duplicate (via bank lookup): copies the current arranger row into a looked-up free pattern."
+notes = "Stamps the source row into the pattern_bank_lookup_helper SMC operand (the LDX immediate slot selfmod_smc_entry_e50a), calls pattern_bank_lookup_helper, and on success sets the copy source from pat_base_lo/pat_base_hi, falling through to seqlist_row_copy_loop."
+
+[function."$E517"]
+name = "seqlist_row_copy_loop"
+role = "Copies one 128-byte pattern row from an SMC-patched source into the destination row."
+notes = "Walks Y = $7F..0, reading the source via an LDA abs,Y whose operand is patched by the row-duplicate setups, and storing through zp_decoder_dst. The shared tail of seqlist_row_clone_setup / seqlist_row_insert_setup."

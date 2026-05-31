@@ -1451,22 +1451,9 @@ seqlist_step_row_smc     = $E1A8
 seqlist_step_col_smc     = $E1A9
 seqlist_step_dx_smc      = $E1AA
 seqlist_step_dy_smc      = $E1AB
-pattern_bank_lookup_helper = $E491
-;   notes:
-;     Sequence:
-;       - Y←$00 / read A=X=($02),Y (pat_num); increment X.
-;       - if →($FF when negative jump marker) → pattern_bank_lookup_helper jump-target branch.
-;       - else read pat_base_lo,X / write $FD / read pat_base_hi,X / write $FE — load pat_base pointer.
-;       - Y←$7C / read ($FD),Y / A&=$70 — examine step-31 flag byte.
-;       - →pattern_bank_lookup_helper when nonzero — return-with-clear.
-;       - else fall back through earlier steps clearing each.
-;
-;     Returns CARRY=SET on success. Called from pattern_bank_lookup_helper (JSR pattern_bank_lookup_helper) inside the selfmod_smc_entry_e50a self-modified pattern-copy routine. The BCC at pattern_bank_lookup_helper takes the fast-path skip when pat_num is the $FF marker, bypassing the full lookup.
-;   code edges:          none
-;   apparent (from data): $E504 in pattern_bank_lookup_helper
 selfmod_smc_entry_e50a   = $E50A
 ;   notes:
-;     pattern_bank_lookup_helper (`write selfmod_smc_entry_e50a`) writes into the second byte of the X←immediate at pattern_bank_lookup_helper-selfmod_smc_entry_e50a before flow lands here, so the runtime instruction differs from the static image (which would decode as `LDX #$FF`). At runtime, dispatch lands inside that instruction after self-mod. Treat as a self-modifying jump-table or counter slot.
+;     At runtime, dispatch lands inside that instruction after self-mod. Treat as a self-modifying jump-table or counter slot.
 ;
 ;     Body at selfmod_smc_entry_e50a onward:
 ;       - LDA pat_base_lo,X / STA selfmod_smc_entry_e50a.
@@ -1476,8 +1463,6 @@ selfmod_smc_entry_e50a   = $E50A
 ;           LDA VEC_IRQ_HI,Y / STA ($FD),Y / DEY / CPY #$FF / BNE.
 ;
 ;     i.e. copies 128 bytes (a full pattern bank slot) from a self-modified source addr to ($FD).
-;   code edges:          none
-;   apparent (from data): $E501 in pattern_bank_lookup_helper
 
 ; ── KERNAL JUMPTABLE ($FF00-$FFFF) ─────────────────────────────────────
 high_mem_scratch_ff00    = $FF00
@@ -2590,7 +2575,7 @@ border_set_a .block
 ; ──────────────────────────────────────────────────────────────────────
 ; Border-color set + state mirror — companion to border_set_a with a second slot at ui_mode_range_bound.
 ;
-;   callers:             4 code sites: $B679, $C24E, $C256, $E48C
+;   callers:             6 code sites: $B679, $C24E, $C256, $E48C, $E4CA, $E529
 ;   inputs:              A = palette index.
 ;   registers clobbered: none (preserves A/X/Y)
 ;
@@ -20817,10 +20802,8 @@ l_2:                       inc  editor_row_delta    ; $E440
 ; ──────────────────────────────────────────────────────────────────────
 ; `RETURN` in seqLIST (insert row).
 ;
+;   callers:             1 code sites: $E4D6
 ;   registers clobbered: A, X, Y
-;
-;   code edges:          none
-;   apparent (from data): $E4D6 in pattern_bank_lookup_helper
 ;
 ;   read ($02),y / bmi +bail (FF jump marker means don't insert); else A+=$01 / bmi +bail; read arranger_v0_sid1,Y into X to shift the row block down.
 writer_seqlist_row_insert .block
@@ -20860,16 +20843,146 @@ l_5:                       lda  #$02    ; $E48A
                            jsr  border_set_b    ; $E48C
                            clc    ; $E48F
                            rts    ; $E490
-        .byte $A0, $00, $B3, $02, $E8, $30, $30, $BD, $00, $1A, $85, $FD, $BD, $80, $1A, $85    ; $E491
-        .byte $FE, $A0, $7C, $B1, $FD, $29, $70, $D0, $11, $A0, $78, $B1, $FD, $29, $F0, $D0    ; $E4A1
-        .byte $09, $88, $88, $88, $88, $10, $F4, $4C, $BE, $E4, $4C, $95, $E4, $8A, $A0, $00    ; $E4B1
-        .byte $91, $02, $EE, $F5, $08, $38, $60, $A9, $02, $20, $D7, $0C, $18, $60, $A0, $00    ; $E4C1
-        .byte $B1, $02, $8D, $DC, $E4, $20, $44, $E4, $90, $4C, $A2, $FF, $BD, $00, $1A, $8D    ; $E4D1
-        .byte $1A, $E5, $BD, $80, $1A, $8D, $1B, $E5, $A0, $00, $B3, $02, $BD, $00, $1A, $85    ; $E4E1
-        .byte $FD, $BD, $80, $1A, $85, $FE, $EE, $F5, $08, $4C, $17, $E5, $A0, $00, $B1, $02    ; $E4F1
-        .byte $8D, $0A, $E5, $20, $91, $E4, $90, $1E, $A2, $FF, $BD, $00, $1A, $8D, $1A, $E5    ; $E501
-        .byte $BD, $80, $1A, $8D, $1B, $E5, $A0, $7F, $B9, $FF, $FF, $91, $FD, $88, $C0, $FF    ; $E511
-        .byte $D0, $F6, $EE, $F5, $08, $60, $A9, $02, $4C, $D7, $0C    ; $E521
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E491  pattern_bank_lookup_helper
+; ──────────────────────────────────────────────────────────────────────
+; Pattern-bank lookup helper.
+;
+;   callers:             1 code sites: $E504
+;   registers clobbered: A, X, Y
+;
+;   Sequence:
+;     - Y←$00 / read A=X=($02),Y (pat_num); increment X.
+;     - if →($FF when negative jump marker) → pattern_bank_lookup_helper jump-target branch.
+;     - else read pat_base_lo,X / write $FD / read pat_base_hi,X / write $FE — load pat_base pointer.
+;     - Y←$7C / read ($FD),Y / A&=$70 — examine step-31 flag byte.
+;     - →pattern_bank_lookup_helper when nonzero — return-with-clear.
+;     - else fall back through earlier steps clearing each.
+;
+;   Returns CARRY=SET on success. Called from pattern_bank_lookup_helper (JSR pattern_bank_lookup_helper) inside the selfmod_smc_entry_e50a self-modified pattern-copy routine. The BCC at pattern_bank_lookup_helper takes the fast-path skip when pat_num is the $FF marker, bypassing the full lookup.
+pattern_bank_lookup_helper .block
+                           ldy  #$00    ; $E491
+                           lax  (zp_ptr1_lo),y    ; $E493
+l_1:                       inx    ; $E495
+;   step-idiom: source = (zp_ptr1_lo),Y  (= $0002)
+;               decremented 1× via DEX/DEY/DEC     ; final step @ $E495
+;               test     = BMI "had bit 7 set?"
+                           bmi  seqlist_pattern_bank_full    ; $E496  (zp_ptr1_lo),Y stepped 1 and had bit 7 set?
+                           lda  pat_base_lo,x    ; $E498
+                           sta  zp_decoder_dest_lo    ; $E49B
+                           lda  pat_base_hi,x    ; $E49D
+                           sta  zp_decoder_dest_hi    ; $E4A0
+                           ldy  #$7C    ; $E4A2
+                           lda  (zp_decoder_dest_lo),y    ; $E4A4
+                           and  #$70    ; $E4A6
+                           bne  l_3    ; $E4A8  ((zp_decoder_dest_lo),Y & $70) was non-zero?
+                           ldy  #$78    ; $E4AA
+l_2:                       lda  (zp_decoder_dest_lo),y    ; $E4AC
+                           and  #$F0    ; $E4AE
+                           bne  l_3    ; $E4B0  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
+                           dey    ; $E4B2
+                           dey    ; $E4B3
+                           dey    ; $E4B4
+                           dey    ; $E4B5
+                           bpl  l_2    ; $E4B6  $78 walked back 4 and had bit 7 clear?
+                           jmp  l_4    ; $E4B8
+l_3:                       jmp  l_1    ; $E4BB
+l_4:                       txa    ; $E4BE
+                           ldy  #$00    ; $E4BF
+                           sta  (zp_ptr1_lo),y    ; $E4C1
+                           inc  editor_row_delta    ; $E4C3
+                           sec    ; $E4C6
+                           rts    ; $E4C7
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E4C8  seqlist_pattern_bank_full
+; ──────────────────────────────────────────────────────────────────────
+; Pattern-bank-full handler for the seqLIST row-duplicate helpers.
+;
+;   callers:             1 code sites: $E496
+;   registers clobbered: A
+;
+;   Flashes the border (color 2 via border_set_b) and returns carry clear to signal that no free pattern slot was available.
+seqlist_pattern_bank_full .block
+                           lda  #$02    ; $E4C8
+                           jsr  border_set_b    ; $E4CA
+                           clc    ; $E4CD
+                           rts    ; $E4CE
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E4CF  seqlist_row_clone_setup
+; ──────────────────────────────────────────────────────────────────────
+; seqLIST row-duplicate (via row-insert): copies the current arranger row into a freshly inserted pattern.
+;
+;   registers clobbered: A, X, Y
+;
+;   Stamps the source row into the writer_seqlist_row_insert SMC operand, calls writer_seqlist_row_insert, and on success points the copy source at the new pattern's pat_base_lo/pat_base_hi and jumps to seqlist_row_copy_loop.
+seqlist_row_clone_setup .block
+                           ldy  #$00    ; $E4CF
+                           lda  (zp_ptr1_lo),y    ; $E4D1
+                           sta  seqlist_row_clone_setup + $0D    ; $E4D3
+                           jsr  writer_seqlist_row_insert    ; $E4D6
+                           bcc  seqlist_row_copy_loop.l_2    ; $E4D9  writer_seqlist_row_insert returned carry clear?
+                           ldx  #$FF    ; $E4DB  ; ← (SMC operand at $E4DC, no name)
+                           lda  pat_base_lo,x    ; $E4DD
+                           sta  seqlist_row_copy_loop + $03    ; $E4E0
+                           lda  pat_base_hi,x    ; $E4E3
+                           sta  seqlist_row_copy_loop + $04    ; $E4E6
+                           ldy  #$00    ; $E4E9
+                           lax  (zp_ptr1_lo),y    ; $E4EB
+                           lda  pat_base_lo,x    ; $E4ED
+                           sta  zp_decoder_dest_lo    ; $E4F0
+                           lda  pat_base_hi,x    ; $E4F2
+                           sta  zp_decoder_dest_hi    ; $E4F5
+                           inc  editor_row_delta    ; $E4F7
+                           jmp  seqlist_row_copy_loop    ; $E4FA
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E4FD  seqlist_row_insert_setup
+; ──────────────────────────────────────────────────────────────────────
+; seqLIST row-duplicate (via bank lookup): copies the current arranger row into a looked-up free pattern.
+;
+;   registers clobbered: A, X, Y
+;
+;   Stamps the source row into the pattern_bank_lookup_helper SMC operand (the LDX immediate slot selfmod_smc_entry_e50a), calls pattern_bank_lookup_helper, and on success sets the copy source from pat_base_lo/pat_base_hi, falling through to seqlist_row_copy_loop.
+seqlist_row_insert_setup .block
+                           ldy  #$00    ; $E4FD
+                           lda  (zp_ptr1_lo),y    ; $E4FF
+                           sta  selfmod_smc_entry_e50a    ; $E501
+                           jsr  pattern_bank_lookup_helper    ; $E504
+                           bcc  seqlist_row_copy_loop.l_2    ; $E507  pattern_bank_lookup_helper returned carry clear?
+                           ldx  #$FF    ; $E509  ; ← selfmod_smc_entry_e50a
+                           lda  pat_base_lo,x    ; $E50B
+                           sta  seqlist_row_copy_loop + $03    ; $E50E
+                           lda  pat_base_hi,x    ; $E511
+                           sta  seqlist_row_copy_loop + $04    ; $E514
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E517  seqlist_row_copy_loop
+; ──────────────────────────────────────────────────────────────────────
+; Copies one 128-byte pattern row from an SMC-patched source into the destination row.
+;
+;   callers:             1 code sites: $E4FA
+;   registers clobbered: A, Y
+;
+;   Walks Y = $7F..0, reading the source via an LDA abs,Y whose operand is patched by the row-duplicate setups, and storing through zp_decoder_dst. The shared tail of seqlist_row_clone_setup / seqlist_row_insert_setup.
+seqlist_row_copy_loop .block
+                           ldy  #$7F    ; $E517
+l_1:                       lda  VEC_IRQ_HI,y    ; $E519
+                           sta  (zp_decoder_dest_lo),y    ; $E51C
+                           dey    ; $E51E
+                           cpy  #$FF    ; $E51F
+                           bne  l_1    ; $E521  ($7F − 1) was not $FF?
+                           inc  editor_row_delta    ; $E523
+                           rts    ; $E526
+l_2:                       lda  #$02    ; $E527
+                           jmp  border_set_b    ; $E529
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
