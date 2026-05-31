@@ -5699,6 +5699,16 @@ name  = "pat_num_occupancy_table"
 role  = "8-byte zero pad (pat_num_occupancy_table) — pat-num occupancy/counter table used by the LOAD-decoder pat_base walk at load_decoder_pat_base_walk."
 notes = "Indexed by X = pat-num; each byte is bumped or cleared by the decoder to track which pat-nums were assigned a base address."
 
+[region."$D30F"]
+name  = "load_decoder_patbody"
+role  = "LOAD-time pattern-body decoder in RAM-under-I/O: per pat-num it loads the pat_base pointer, walks the body via the zero-page pointer, and rewrites the markers in place."
+notes = "Entered via the post-LOAD banking dispatch (caller-supplied target through the jsr_with_ram_helper trampoline), so it is not reachable by a static call edge — named here so the routine is documented and the callgraph seeds it as a real entry. Loops until X reaches the pat-num limit, then returns."
+
+[region."$D28C"]
+name  = "load_decoder_commit_arm"
+role  = "Pattern-body decoder commit arm in RAM-under-I/O: marks the pat-num occupancy slot, clears the working counter, applies the relocated marker, and re-enters the decoder loop."
+notes = "Reached via the decoder's self-modified dispatch jump (the operand is patched at runtime), so it has no static inbound edge; named so it is documented and seeded as a real entry."
+
 [region."$D364"]
 name  = "save_encoder_pad_byte"
 role  = "Single $00 pad byte between pat_num_occupancy_table return and the save_encoder_pad_byte decoder helper."
