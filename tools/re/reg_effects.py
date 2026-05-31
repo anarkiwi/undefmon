@@ -483,13 +483,20 @@ def analyze(
     end_excl: int = END_ADDR_EXCL,
     smc: dict[int, frozenset[int]] | None = None,
 ) -> dict:
-    # Self-modified dispatch sites resolve to their enumerated targets; keep
-    # only classified ones (so they compose as real callees).
+    # Self-modified dispatch sites resolve to their enumerated targets — but
+    # only when EVERY target is classified code. If any annotated target is
+    # not classified (e.g. a trampoline target still emitted as a .byte run),
+    # resolving from the classified subset would silently drop that target's
+    # effects and could under-report; so leave the whole site opaque instead,
+    # and the function stays conservatively uncertain.
+    def _all_classified(tgts: frozenset[int]) -> bool:
+        return all(start <= t < end_excl and t in instr_at for t in tgts)
+
     smc = {
-        site: frozenset(t for t in tgts if start <= t < end_excl and t in instr_at)
+        site: frozenset(tgts)
         for site, tgts in (smc or {}).items()
+        if tgts and _all_classified(frozenset(tgts))
     }
-    smc = {site: tgts for site, tgts in smc.items() if tgts}
     smc_targets = frozenset().union(*smc.values()) if smc else frozenset()
     # Analyse every subroutine entry (named functions + all JSR targets, plus
     # the targets of self-modified dispatch sites) so the transitive closure

@@ -19729,6 +19729,12 @@
       "is_primary": true
     },
     {
+      "addr": "$D92A",
+      "name": "BYTE_d92a",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$D92C",
       "name": "BYTE_d92c",
       "source": "DEFAULT",

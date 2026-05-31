@@ -1,7 +1,7 @@
 {
   "$0BB2": {
     "jsr_pc": 2994,
-    "description": "Trampoline \u2014 caller supplies target address in (X = low byte, Y = high byte). Used by the kbd-modifier dispatch chain at $0B9A-$0BB2 to call into per-modifier handlers without a switch.",
+    "description": "Banking trampoline (jsr_with_ram_helper) \u2014 the caller supplies the target in (X = low byte, Y = high byte), which the helper stores into this JSR operand before banking RAM in over the I/O area and calling. All 5 call sites are in the disk load/save path and pass an immediate target, so the dispatch set is statically complete: the four RAM-under-I/O routines below.",
     "patch_sources_annotated": [
       2980,
       2983
@@ -10,7 +10,28 @@
       2980,
       2983
     ],
-    "targets": [],
+    "targets": [
+      {
+        "addr": 52914,
+        "name": "decoder_load_setup",
+        "context": "load ($76D5, $7731)"
+      },
+      {
+        "addr": 52865,
+        "name": "save_prep_orchestrator",
+        "context": "save ($771F)"
+      },
+      {
+        "addr": 53292,
+        "name": "save_encode_orchestrator",
+        "context": "save ($783A)"
+      },
+      {
+        "addr": 55594,
+        "name": "ram_screen_repaint",
+        "context": "post-load screen ($7856)"
+      }
+    ],
     "annotated": true,
     "discovered": true
   },
