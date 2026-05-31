@@ -5924,13 +5924,14 @@ def main() -> None:
     reg_effects: dict[int, dict] = {}
     if not args.bytes_only and args.annotations:
         from tools.re.reg_effects import analyze as _analyze_reg_effects
-        from tools.re.reg_effects import _function_entries
+        from tools.re.reg_effects import _function_entries, _smc_dispatch_targets
 
         fn_entries = _function_entries(Path(args.annotations))
+        smc_targets = _smc_dispatch_targets(Path(args.annotations))
         reg_effects = {
             int(k.lstrip("$"), 16): v
             for k, v in _analyze_reg_effects(
-                mem, instr_at, fn_entries, args.start, args.end
+                mem, instr_at, fn_entries, args.start, args.end, smc=smc_targets
             ).items()
         }
 
