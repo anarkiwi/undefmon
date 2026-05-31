@@ -96,10 +96,11 @@ Annotation catalogue (`tools/re/annotations.toml`):
 
 Comparison-site dataflow (`build/cmp_facts.json`, 1,630 branches):
 
-- 1,533 with a renderable lhs (94.0%) — operand-based, var-load,
+- 1,566 with a renderable lhs (96.1%) — operand-based, var-load,
   indirect-load, immediate, transformed, carried from the JSR caller,
-  or a register-level lhs (`A < #imm?`) for ALU-computed values
-- 48 unknown (2.9%) — 33 JSR-return, 15 stack-pull (PLA)
+  a register-level lhs (`A < #imm?`) for ALU-computed values, or a
+  callee-result lhs (`kbd_scan->A was $FF?`) for values a JSR returned
+- 15 unknown (0.9%) — all stack-pull (PLA)
 - 39 with no flag-setter in range
 - 10 multi-source (flag-setter reachable from multiple lhs values)
 
@@ -179,13 +180,12 @@ reproducing the build.)
    floor — those `role`s already explain the bytes, so further `notes`
    would restate rather than inform.
 
-2. **48 branches have `unknown` lhs** in `cmp_facts.json` (down from 92:
-   the `izy` indirect-load setters and the 33 ALU-computed `CMP`
-   operands are now modelled — the latter render a register-level
-   condition like `A < #imm?`). The remainder need harder analysis —
-   `unmodeled_jsr` (33, value is a JSR return) and `pla`-from-stack
-   (15). Extend `tools/re/cmp_facts.py` with cross-call dataflow, or add
-   manual `[branch."$XXXX"]` overrides. List them with:
+2. **15 branches have `unknown` lhs** in `cmp_facts.json` (down from 92:
+   `izy` indirect loads, ALU-computed `CMP` operands, and JSR-return
+   values are now modelled). All 15 remaining are `pla`-from-stack —
+   the tested register was pulled off the stack, so resolving it needs
+   PHA/PLA stack-discipline tracking. Add manual `[branch."$XXXX"]`
+   overrides, or extend `tools/re/cmp_facts.py`. List them with:
 
         python3 -c "import json; cf=json.load(open('build/cmp_facts.json'));\
         print('\n'.join(pc for pc,f in cf['facts'].items() \

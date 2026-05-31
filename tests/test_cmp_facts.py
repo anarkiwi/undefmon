@@ -1,8 +1,23 @@
 """Unit tests for cmp_facts lhs resolution of operand-based setters."""
 
+import types
 import unittest
 
-from tools.re.cmp_facts import _lhs_from_operand_setter
+from tools.re.cmp_facts import _lhs_from_operand_setter, _resolve_lhs
+
+
+class TestResolveLhsJsrReturn(unittest.TestCase):
+    def test_jsr_before_setter_resolves_to_jsr_return(self):
+        """Walking back the consumed register to a JSR yields a
+        jsr_return lhs naming the callee + register. Lays out JSR $E000
+        at $1000 then CMP #$05 (the A-consuming setter) at $1003."""
+        mem = bytearray(0x10000)
+        mem[0x1000:0x1003] = bytes([0x20, 0x00, 0xE0])
+        mem[0x1003:0x1005] = bytes([0xC9, 0x05])
+        instr_at = {0x1000: ("JSR", "abs", 3), 0x1003: ("CMP", "imm", 2)}
+        graph = types.SimpleNamespace(fall_through_in={0x1003: 0x1000}, code_in={})
+        lhs = _resolve_lhs(0x1003, "A", mem, instr_at, graph)
+        self.assertEqual(lhs, {"kind": "jsr_return", "target": 0xE000, "reg": "A"})
 
 
 class TestOperandSetterLhs(unittest.TestCase):
