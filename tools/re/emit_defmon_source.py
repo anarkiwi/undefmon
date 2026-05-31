@@ -1146,6 +1146,7 @@ SEED_LANDMARKS = {
     # so seed it explicitly to decode as code instead of a .byte run.
     0x0889: "post_load_startup",
     0x0AD9: "nmi_sid2_silence_count",
+    0xD92A: "ram_screen_repaint",
     0xE491: "pattern_bank_lookup_helper",
     0xE4C8: "seqlist_pattern_bank_full",
     0xE4CF: "seqlist_row_clone_setup",
@@ -3163,6 +3164,25 @@ def emit_source(
     labels = dict(labels) if labels else {}
     segments = segments or []
     annotations = annotations or {}
+
+    # bank="ram" functions run with RAM banked in under I/O, so operands
+    # they make into the colour-RAM range address RAM/code rather than the
+    # COLOR_RAM hardware overlay. Collect their instruction PCs so operand
+    # resolution can pick the RAM view for those referrers (and the I/O
+    # view for everyone else). A bank=ram routine is a straight-line run
+    # from its entry to its first flow terminator.
+    ram_banked_pcs: set[int] = set()
+    ram_banked_ranges: list[tuple[int, int]] = []
+    for _addr, _body in annotations.items():
+        if isinstance(_body, dict) and _body.get("bank") == "ram" and _addr in instr_at:
+            _pc = _addr
+            while _pc in instr_at:
+                ram_banked_pcs.add(_pc)
+                _m, _mo, _n = instr_at[_pc]
+                _pc += _n
+                if _m in ("RTS", "RTI", "JMP", "BRK"):
+                    break
+            ram_banked_ranges.append((_addr, _pc))
     text_segments = text_segments or {}
     byte_runs = byte_runs or {}
     imm_subs = imm_subs or {}
@@ -4336,6 +4356,8 @@ def emit_source(
             struct_segments=struct_segments,
             name_spans=name_spans,
             anchor_spans=HW_ANCHOR_REGIONS,
+            bank_ram=pc in ram_banked_pcs,
+            ram_banked_ranges=ram_banked_ranges,
         )
 
     def _bullet_matches_instr(bullet: str, pc: int) -> bool:
@@ -4899,6 +4921,8 @@ def emit_source(
                 struct_segments=struct_segments,
                 name_spans=name_spans,
                 anchor_spans=HW_ANCHOR_REGIONS,
+                bank_ram=pc in ram_banked_pcs,
+                ram_banked_ranges=ram_banked_ranges,
             )
             if pc in function_entries_set:
                 # The `funcname .block` directive above already declares

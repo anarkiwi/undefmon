@@ -253,6 +253,7 @@ OPS: dict[int, tuple[str, str, int]] = {
 KICKASS_DUP_MNEMONICS = {0x2B: "anc2", 0xEB: "sbc2"}
 
 
+
 # Operand suffix per addressing mode.
 def fmt_operand(
     mode: str, p1: int, p2: int, pc: int, labels: dict[int, str]
@@ -385,6 +386,8 @@ def emit_instruction(
     struct_segments: list[dict] | None = None,
     name_spans: list[tuple[int, int, str]] | None = None,
     anchor_spans: list[tuple[int, int, str]] | None = None,
+    bank_ram: bool = False,
+    ram_banked_ranges: list[tuple[int, int]] | None = None,
 ) -> str:
     """Format a 6502 instruction operand.
 
@@ -453,14 +456,33 @@ def emit_instruction(
         return name if offset == 0 else f"{name} + ${offset:02X}"
 
     def lbl(addr: int) -> str:
+        # Bank-aware overlay resolution: a target address that lives inside a
+        # RAM-banked routine's code (``ram_banked_ranges``) is RAM/code only
+        # when the *referrer* also runs RAM-banked. A normal (I/O-mapped)
+        # referrer sees that same address as the hardware overlay, so prefer
+        # the anchor label (COLOR_RAM, ...) over the RAM-view code label.
+        # Addresses outside those ranges (named colour-RAM rows, real I/O
+        # registers) keep their normal label order.
+        in_overlay = 0xD800 <= addr < 0xDC00
+        if not bank_ram and ram_banked_ranges:
+            for _s, _e in ram_banked_ranges:
+                if _s <= addr < _e:
+                    anchor_text = _lookup_span(anchor_spans, addr)
+                    if anchor_text is not None:
+                        return anchor_text
+                    break
         if addr in labels:
             return labels[addr]
         struct_text = _struct_label(addr)
         if struct_text is not None:
             return struct_text
-        anchor_text = _lookup_span(anchor_spans, addr)
-        if anchor_text is not None:
-            return anchor_text
+        # A RAM-banked referrer into the colour-RAM overlay addresses RAM,
+        # not the COLOR_RAM hardware cells — skip the anchor so the operand
+        # reads as a RAM name/hex rather than a misleading COLOR_RAM + $off.
+        if not (in_overlay and bank_ram):
+            anchor_text = _lookup_span(anchor_spans, addr)
+            if anchor_text is not None:
+                return anchor_text
         span_text = _lookup_span(name_spans, addr)
         if span_text is not None:
             return span_text

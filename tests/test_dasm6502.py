@@ -68,6 +68,50 @@ class TestEmitInstruction(unittest.TestCase):
     def test_zero_page(self):
         self.assertEqual(emit_instruction("zp", 0xFB, 0, 0x0800), "$FB")
 
+    def test_bank_aware_io_referrer_sees_overlay(self):
+        """A normal (I/O-mapped) referrer to an address inside a RAM-banked
+        routine's code gets the COLOR_RAM overlay label, not the code label."""
+        out = emit_instruction(
+            "abs",
+            0x4C,
+            0xD9,
+            0x923D,
+            labels={0xD94C: "ram_screen_repaint.l_3"},
+            anchor_spans=[(0xD800, 0xDC00, "COLOR_RAM")],
+            bank_ram=False,
+            ram_banked_ranges=[(0xD92A, 0xD9C8)],
+        )
+        self.assertEqual(out, "COLOR_RAM + $14C")
+
+    def test_bank_aware_ram_referrer_sees_code(self):
+        """A RAM-banked referrer to the same address gets the code label."""
+        out = emit_instruction(
+            "abs",
+            0x4C,
+            0xD9,
+            0xD940,
+            labels={0xD94C: "ram_screen_repaint.l_3"},
+            anchor_spans=[(0xD800, 0xDC00, "COLOR_RAM")],
+            bank_ram=True,
+            ram_banked_ranges=[(0xD92A, 0xD9C8)],
+        )
+        self.assertEqual(out, "ram_screen_repaint.l_3")
+
+    def test_bank_aware_named_colorram_row_preserved(self):
+        """A named colour-RAM row outside any RAM-banked range keeps its
+        label even for a normal referrer (the override is range-scoped)."""
+        out = emit_instruction(
+            "abx",
+            0x18,
+            0xD9,
+            0xAAFB,
+            labels={0xD918: "color_ram_row07"},
+            anchor_spans=[(0xD800, 0xDC00, "COLOR_RAM")],
+            bank_ram=False,
+            ram_banked_ranges=[(0xD92A, 0xD9C8)],
+        )
+        self.assertEqual(out, "color_ram_row07,x")
+
     def test_implicit(self):
         self.assertEqual(emit_instruction("imp", 0, 0, 0x0800), "")
 
