@@ -4711,6 +4711,30 @@
       "is_primary": true
     },
     {
+      "addr": "$0AE4",
+      "name": "LAB_0ae3+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0AE6",
+      "name": "LAB_0ae5+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0AE8",
+      "name": "LAB_0ae7+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0AED",
+      "name": "nmi_irq_entry",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$0AF7",
       "name": "BYTE_0af7",
       "source": "DEFAULT",
@@ -4718,31 +4742,121 @@
     },
     {
       "addr": "$0AFB",
-      "name": "DAT_0afb",
+      "name": "LAB_0afa+1",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$0B0D",
-      "name": "DAT_0b0d",
+      "name": "LAB_0b0c+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B14",
+      "name": "LAB_0b14",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B17",
+      "name": "LAB_0b17",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$0B18",
-      "name": "DAT_0b18",
+      "name": "LAB_0b17+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B21",
+      "name": "LAB_0b21",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B24",
+      "name": "LAB_0b24",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$0B25",
-      "name": "DAT_0b25",
+      "name": "LAB_0b24+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B2E",
+      "name": "LAB_0b2e",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B33",
+      "name": "LAB_0b33",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B44",
+      "name": "LAB_0b44",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B50",
+      "name": "LAB_0b50",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B63",
+      "name": "LAB_0b63",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$0B6A",
-      "name": "DAT_0b6a",
+      "name": "LAB_0b69+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B7B",
+      "name": "LAB_0b7b",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B88",
+      "name": "LAB_0b88",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B8B",
+      "name": "raster_irq_entry",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B9B",
+      "name": "LAB_0b9a+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B9D",
+      "name": "LAB_0b9c+1",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$0B9F",
+      "name": "LAB_0b9e+1",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -8667,6 +8781,12 @@
     {
       "addr": "$7F8F",
       "name": "LAB_7f8f",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$8008",
+      "name": "FUN_8008",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -16513,8 +16633,14 @@
       "is_primary": true
     },
     {
+      "addr": "$C806",
+      "name": "FUN_c806",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
       "addr": "$C819",
-      "name": "DAT_c819",
+      "name": "BYTE_c819",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -16803,6 +16929,12 @@
     {
       "addr": "$C8D4",
       "name": "LAB_c8d4",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$C8D8",
+      "name": "LAB_c8d8",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -17204,13 +17336,13 @@
     },
     {
       "addr": "$CADF",
-      "name": "LAB_cadf",
+      "name": "FUN_cadf",
       "source": "DEFAULT",
       "is_primary": true
     },
     {
       "addr": "$CAE0",
-      "name": "LAB_cadf+1",
+      "name": "FUN_cadf+1",
       "source": "DEFAULT",
       "is_primary": true
     },
