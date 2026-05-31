@@ -17492,7 +17492,7 @@
     },
     {
       "addr": "$CCEC",
-      "name": "DAT_ccec",
+      "name": "BYTE_ccec",
       "source": "DEFAULT",
       "is_primary": true
     },
@@ -20636,7 +20636,7 @@
     },
     {
       "addr": "$E13C",
-      "name": "DAT_e13c",
+      "name": "BYTE_e13c",
       "source": "DEFAULT",
       "is_primary": true
     },

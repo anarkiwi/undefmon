@@ -128,19 +128,44 @@ OPS: dict[int, tuple[str, str, int]] = {
     0xE8: ("INX", "imp", 1), 0xC8: ("INY", "imp", 1),
     0xCA: ("DEX", "imp", 1), 0x88: ("DEY", "imp", 1),
     # Undocumented NMOS opcodes defMON uses (64tass needs `-i` to
-    # assemble these):
-    #   LAX (zp),Y ($B3) — LOAD-time RLE-fill path; loads the count byte
-    #     into A and X at once.
-    #   LAX abs ($AF) — super_arg_extract entry (`lax super_arg_slot..`),
-    #     loads the staged super-command arg into A and X simultaneously.
-    #   SAX abs ($8F) — row_read_body gate sites: stores A&X over the
-    #     `lda #$FF` gate-mask immediate to self-modify the gate selector.
-    # Without these, the host instruction renders as `.byte` and its
-    # whole fall-through run is mis-classified as unreachable data.
+    # assemble these). Without them the host renders as `.byte` and its
+    # whole fall-through run is mis-classified as unreachable.
+    #   LAX — load A and X together (count bytes, super-command args,
+    #     pitch-LUT reads). Modes: (zp),Y / abs / #imm / zp / zp,Y /
+    #     abs,Y / (zp,X).
+    #   SAX — store A & X (row-timer dur-nibble writes; gate-mask SMC).
+    #     Modes: abs / zp / zp,Y / (zp,X).
+    #   ALR/ARR/AXS — AND-then-shift / AND-then-ROR / (A&X)-imm→X combine
+    #     ops in the pitch-slide and sweep math.
     0xB3: ("LAX", "izy", 2),
     0xAF: ("LAX", "abs", 3),
+    0xAB: ("LAX", "imm", 2),
+    0xA7: ("LAX", "zp", 2),
+    0xB7: ("LAX", "zpy", 2),
+    0xBF: ("LAX", "aby", 3),
+    0xA3: ("LAX", "izx", 2),
     0x8F: ("SAX", "abs", 3),
+    0x87: ("SAX", "zp", 2),
+    0x97: ("SAX", "zpy", 2),
+    0x83: ("SAX", "izx", 2),
+    0x4B: ("ALR", "imm", 2),
+    0x6B: ("ARR", "imm", 2),
+    0xCB: ("AXS", "imm", 2),
+    # ANC ($2B) and SBC ($EB) are DUPLICATE encodings: 64tass canonicalises
+    # `anc`->$0B and `sbc`->$E9, so these specific bytes can't round-trip
+    # through the mnemonic. They are kept in the table so classify follows
+    # their fall-through (fixing reachability), but the emitter renders
+    # them as `.byte` (see ROUND_TRIP_UNSAFE_OPCODES in emit) with the
+    # decoded instruction in the comment.
+    0x2B: ("ANC", "imm", 2),
+    0xEB: ("SBC", "imm", 2),
 }
+
+# Opcodes whose byte 64tass will not reproduce from the mnemonic (it emits
+# the canonical duplicate instead). The emitter renders these as `.byte`
+# to preserve the byte-exact round-trip; they stay in OPS so classify
+# still treats them as instructions for reachability.
+ROUND_TRIP_UNSAFE_OPCODES = frozenset({0x2B, 0xEB})
 
 # Operand suffix per addressing mode.
 def fmt_operand(mode: str, p1: int, p2: int, pc: int, labels: dict[int, str]) -> tuple[str, int | None]:
