@@ -1,10 +1,15 @@
-"""Per-function register-clobber analysis.
+"""Per-function register-effect analysis (clobbers + inputs).
 
-For every ``[function]`` entry, computes which of A / X / Y the function
-destroys — the ``registers_clobbered`` interface field. A register is
-clobbered if some path from the entry writes it before the function
-returns, INCLUDING via the functions it calls (transitive closure over
-JSR targets and tail-JMPs).
+For every ``[function]`` entry, computes two interface fields over A/X/Y:
+  - ``registers_clobbered`` — registers the function destroys (written on
+    some path before it returns), transitive over its callees.
+  - ``inputs`` — registers it reads before defining (live-in): what the
+    caller must set up, also transitive over its callees.
+
+Both compose across JSR/tail-call edges via a fixed-point. A register is
+clobbered if any path writes it; an input if any path reads it before a
+definite write. Computed/self-modified/out-of-image calls are treated
+conservatively (clobber A/X/Y; read A/X/Y) so neither field UNDER-reports.
 
 Method
 ======
@@ -97,6 +102,51 @@ def _writes(mnem: str, mode: str) -> frozenset[str]:
     return _WRITES.get(mnem, frozenset())
 
 
+# Which of A / X / Y each mnemonic READS (before any write it also does).
+# Index registers used by the addressing mode are added separately.
+_READS: dict[str, frozenset[str]] = {
+    "STA": frozenset("A"),
+    "STX": frozenset("X"),
+    "STY": frozenset("Y"),
+    "SAX": frozenset("AX"),
+    "CMP": frozenset("A"),
+    "CPX": frozenset("X"),
+    "CPY": frozenset("Y"),
+    "AND": frozenset("A"),
+    "ORA": frozenset("A"),
+    "EOR": frozenset("A"),
+    "ADC": frozenset("A"),
+    "SBC": frozenset("A"),
+    "BIT": frozenset("A"),
+    "ANC": frozenset("A"),
+    "ALR": frozenset("A"),
+    "ARR": frozenset("A"),
+    "AXS": frozenset("AX"),
+    "TAX": frozenset("A"),
+    "TAY": frozenset("A"),
+    "TXA": frozenset("X"),
+    "TXS": frozenset("X"),
+    "TYA": frozenset("Y"),
+    "INX": frozenset("X"),
+    "DEX": frozenset("X"),
+    "INY": frozenset("Y"),
+    "DEY": frozenset("Y"),
+    "PHA": frozenset("A"),
+}
+# Addressing modes whose effective-address computation reads an index reg.
+_MODE_INDEX = {"abx": "X", "zpx": "X", "izx": "X", "aby": "Y", "zpy": "Y", "izy": "Y"}
+
+
+def _reads(mnem: str, mode: str) -> frozenset[str]:
+    base = set(_READS.get(mnem, ()))
+    if mode == "acc" and mnem in _SHIFTS:
+        base.add("A")
+    idx = _MODE_INDEX.get(mode)
+    if idx is not None:
+        base.add(idx)
+    return frozenset(base)
+
+
 _ALL = frozenset("AXY")
 
 
@@ -107,26 +157,23 @@ def _walk_subroutine(
     entries: frozenset[int],
     start: int,
     end_excl: int,
-) -> tuple[set[str], set[int], bool]:
-    """Direct register writes + callee entries for one subroutine, plus an
-    ``uncertain`` flag set when control leaves through an edge whose effect
-    we can't follow statically (computed/self-modified JSR or JMP to a
-    target that isn't a classified instruction). Uncertain subroutines are
-    forced to clobber A/X/Y so the result never UNDER-reports."""
-    direct: set[str] = set()
+):
+    """Build one subroutine's intra-procedural CFG.
+
+    Returns (nodes, callees, uncertain) where nodes[pc] = {reads, writes,
+    calls, succs}: ``calls`` is the set of subroutine entries invoked at
+    pc (a JSR target, or a tail JMP/fall-through into another entry) whose
+    inputs/clobbers compose at fixpoint; ``succs`` are the intra-procedural
+    continuation PCs. ``uncertain`` is set for a computed/self-modified/
+    out-of-image transfer whose effect can't be followed."""
+    nodes: dict[int, dict] = {}
     callees: set[int] = set()
-    seen: set[int] = set()
     uncertain = False
+    seen: set[int] = set()
     frontier = [entry]
 
     def reachable(pc: int) -> bool:
         return start <= pc < end_excl and pc in instr_at
-
-    def successor(pc: int) -> None:
-        if pc != entry and pc in entries:
-            callees.add(pc)  # tail-continuation into another subroutine
-        elif reachable(pc):
-            frontier.append(pc)
 
     while frontier:
         pc = frontier.pop()
@@ -137,35 +184,106 @@ def _walk_subroutine(
         if info is None:
             continue
         mnem, mode, n = info
-        direct |= _writes(mnem, mode)
+        reads = set(_reads(mnem, mode))
+        writes = set(_writes(mnem, mode))
+        calls: set[int] = set()
+        succs: list[int] = []
         op = mem[pc]
+
+        def go(dst: int) -> None:
+            # A continuation that lands on another subroutine's entry is a
+            # tail-call (compose its effects); a reachable address is an
+            # intra edge; anything else (data) is simply not followed —
+            # matching the clobbers walk, which only flags `uncertain`
+            # for computed JSR / unresolved JMP.
+            if dst != entry and dst in entries:
+                calls.add(dst)
+            elif reachable(dst):
+                succs.append(dst)
+                frontier.append(dst)
+
         if op in _RETURNS:
-            continue
-        if op == _JMP_IND:
-            uncertain = True  # indirect jump — target unknown
-            continue
-        if op == _JSR and n == 3:
+            pass
+        elif op == _JMP_IND:
+            uncertain = True
+            reads |= _ALL  # tail to an unknown target — may read anything
+        elif op == _JSR and n == 3:
             tgt = mem[pc + 1] | (mem[pc + 2] << 8)
             if reachable(tgt):
+                calls.add(tgt)
                 callees.add(tgt)
             else:
-                uncertain = True  # computed / out-of-image / self-mod call
-            successor(pc + 3)
+                uncertain = True
+                reads |= _ALL  # computed callee — may read anything
+            go(pc + 3)
         elif op == _JMP_ABS and n == 3:
             tgt = mem[pc + 1] | (mem[pc + 2] << 8)
-            if tgt in entries:
-                callees.add(tgt)
-            elif reachable(tgt):
-                frontier.append(tgt)
+            if tgt in entries or reachable(tgt):
+                go(tgt)
             else:
                 uncertain = True
         elif op in _BRANCHES and n == 2:
             off = mem[pc + 1]
-            successor((pc + 2 + (off - 256 if off >= 0x80 else off)) & 0xFFFF)
-            successor(pc + 2)
+            go((pc + 2 + (off - 256 if off >= 0x80 else off)) & 0xFFFF)
+            go(pc + 2)
         else:
-            successor(pc + n)
-    return direct, callees, uncertain
+            go(pc + n)
+
+        callees |= calls
+        nodes[pc] = {"reads": reads, "writes": writes, "calls": calls, "succs": succs}
+    return nodes, callees, uncertain
+
+
+def _live_in(entry: int, nodes: dict, clob: dict, inputs: dict, unc: dict) -> set[str]:
+    """Registers this subroutine reads before defining (live-in / inputs),
+    composing callee inputs/clobbers. Forward 'definite-written' must-
+    analysis: in[pc] = ∩ out[pred]; a read of R not in in[pc] is an input;
+    out[pc] = in[pc] ∪ writes(pc) ∪ clobbers(callees). Over-approximates
+    (never under-reports an input) — joins shrink the must-set."""
+    preds: dict[int, list[int]] = {pc: [] for pc in nodes}
+    for pc, nd in nodes.items():
+        for s in nd["succs"]:
+            if s in preds:
+                preds[s].append(pc)
+
+    def node_reads(nd: dict) -> set[str]:
+        r = set(nd["reads"])
+        for c in nd["calls"]:
+            r |= inputs.get(c, set())  # callee's unmet inputs propagate
+        return r
+
+    def node_writes(nd: dict) -> set[str]:
+        w = set(nd["writes"])
+        for c in nd["calls"]:
+            w |= _ALL if unc.get(c) else clob.get(c, set())
+        return w
+
+    # Fixed-point on the must-set (start optimistic = all-written, except
+    # the entry which has nothing written before it).
+    out: dict[int, set[str]] = {pc: set(_ALL) for pc in nodes}
+    changed = True
+    while changed:
+        changed = False
+        for pc, nd in nodes.items():
+            in_set = set() if pc == entry else set(_ALL)
+            for p in preds[pc]:
+                in_set &= out[p]
+            if not preds[pc] and pc != entry:
+                in_set = set()  # unreachable-from-entry node: assume nothing
+            new_out = in_set | node_writes(nd)
+            if new_out != out[pc]:
+                out[pc] = new_out
+                changed = True
+
+    inp: set[str] = set()
+    for pc, nd in nodes.items():
+        in_set = set() if pc == entry else set(_ALL)
+        for p in preds[pc]:
+            in_set &= out[p]
+        if not preds[pc] and pc != entry:
+            in_set = set()
+        inp |= node_reads(nd) - in_set
+    return inp
 
 
 def _jsr_targets(mem: bytes, instr_at: dict) -> set[int]:
@@ -191,15 +309,21 @@ def analyze(
         for e in (fn_entries | _jsr_targets(mem, instr_at))
         if start <= e < end_excl and e in instr_at
     )
+    nodes_of: dict[int, dict] = {}
     direct: dict[int, set[str]] = {}
     callees: dict[int, set[int]] = {}
     uncertain: dict[int, bool] = {}
     for e in entries:
-        direct[e], callees[e], uncertain[e] = _walk_subroutine(
+        nodes_of[e], callees[e], uncertain[e] = _walk_subroutine(
             e, mem, instr_at, entries, start, end_excl
         )
+        direct[e] = (
+            set().union(*(nd["writes"] for nd in nodes_of[e].values()))
+            if nodes_of[e]
+            else set()
+        )
 
-    # Fixed-point: clobbers and uncertainty both flow up from callees.
+    # Clobbers + uncertainty flow up from callees (transitive fixed-point).
     clob = {e: set(d) for e, d in direct.items()}
     unc = dict(uncertain)
     changed = True
@@ -216,6 +340,18 @@ def analyze(
             if len(clob[e]) != cb or unc[e] != uc:
                 changed = True
 
+    # Inputs (live-in) need the now-final clobbers + their own fixed-point:
+    # a function's inputs grow as its callees' inputs are discovered.
+    inputs = {e: set() for e in entries}
+    changed = True
+    while changed:
+        changed = False
+        for e in entries:
+            new = _live_in(e, nodes_of[e], clob, inputs, unc)
+            if new != inputs[e]:
+                inputs[e] = new
+                changed = True
+
     out: dict = {}
     for f in sorted(fn_entries):
         if f not in clob:
@@ -223,6 +359,7 @@ def analyze(
         regs = _ALL if unc[f] else clob[f]
         out[f"${f:04X}"] = {
             "clobbers": "".join(sorted(regs)),
+            "inputs": "".join(sorted(inputs[f])),
             "direct": "".join(sorted(direct[f])),
             "uncertain": unc[f],
             "callees": sorted(f"${c:04X}" for c in callees.get(f, ())),
@@ -275,29 +412,37 @@ def main(argv: list[str] | None = None) -> int:
     if args.report:
         from collections import Counter  # noqa: PLC0415
 
-        dist = Counter(v["clobbers"] or "(none)" for v in facts.values())
         print(f"functions analysed: {len(facts)}")
-        for combo, n in sorted(dist.items(), key=lambda x: (-x[1], x[0])):
-            print(f"  clobbers {combo:6s} {n}")
-        # cross-check vs hand annotations
+        for field in ("clobbers", "inputs"):
+            dist = Counter(v[field] or "(none)" for v in facts.values())
+            print(f"  {field} distribution:")
+            for combo, n in sorted(dist.items(), key=lambda x: (-x[1], x[0])):
+                print(f"    {combo:6s} {n}")
+        # Cross-check only registers_clobbered (a clean A/X/Y reg-list).
+        # The hand `inputs` field is free prose ("A = palette index"), not
+        # a reg-set, so a char-extraction comparison there is meaningless.
         mism = []
+        n_hand = 0
         for k, v in facts.items():
-            a = ann.get(int(k.lstrip("$"), 16), {})
-            hand = a.get("registers_clobbered")
+            hand = ann.get(int(k.lstrip("$"), 16), {}).get("registers_clobbered")
             if isinstance(hand, str) and hand:
+                n_hand += 1
                 hand_set = "".join(sorted(c for c in hand.upper() if c in "AXY"))
                 if hand_set and hand_set != v["clobbers"]:
-                    mism.append((k, a.get("name", ""), hand_set, v["clobbers"]))
+                    mism.append(
+                        (
+                            k,
+                            ann.get(int(k.lstrip("$"), 16), {}).get("name", ""),
+                            hand_set,
+                            v["clobbers"],
+                        )
+                    )
         print(
-            f"\nhand-annotated registers_clobbered checked: "
-            f"{sum(1 for v in ann.values() if isinstance(v, dict) and v.get('registers_clobbered'))}"
+            f"\nhand-annotated registers_clobbered checked: {n_hand}; "
+            f"mismatches vs derived: {len(mism)}"
         )
-        if mism:
-            print(f"mismatches vs derived ({len(mism)}):")
-            for k, nm, h, d in mism[:30]:
-                print(f"  {k} {nm}: hand={h or '∅'} derived={d or '∅'}")
-        else:
-            print("no hand/derived mismatches.")
+        for k, nm, h, d in mism[:20]:
+            print(f"  {k} {nm}: hand={h or '∅'} derived={d or '∅'}")
         return 0
 
     out = Path(args.out)

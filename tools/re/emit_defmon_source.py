@@ -3231,6 +3231,21 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         regs = rec.get("clobbers", "")
         return ", ".join(regs) if regs else "none (preserves A/X/Y)"
 
+    def _derived_inputs_line(addr: int, ann: dict | None) -> str:
+        """Graph-derived `inputs:` (live-in registers) rendering. Like the
+        clobbers line: hand annotation wins, uncertain functions are
+        skipped (their inputs are only the conservative bound), and only
+        a non-empty result renders — `A, X` means the caller must set A
+        and X. A certain function with no derived line takes no register
+        input."""
+        if ann and isinstance(ann.get("inputs"), str) and ann["inputs"]:
+            return ""
+        rec = reg_effects.get(addr)
+        if not rec or rec.get("uncertain"):
+            return ""
+        regs = rec.get("inputs", "")
+        return ", ".join(regs) if regs else ""
+
     def _constraints_lines(ann: dict | None) -> list[str]:
         """Lines for the `constraints` block (do_not_reorder / load-
         bearing offsets / because). Returns [] when no constraints set.
@@ -4203,8 +4218,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
         # code-start gets one) without forcing 600+ hand entries.
         derived_callers = _derived_callers_line(addr, ann)
         derived_clobbers = _derived_clobbers_line(addr, ann)
-        any_struct = (any(v for _, v in structured)
-                      or bool(derived_callers) or bool(derived_clobbers))
+        derived_inputs = _derived_inputs_line(addr, ann)
+        any_struct = (any(v for _, v in structured) or bool(derived_callers)
+                      or bool(derived_clobbers) or bool(derived_inputs))
         if any_struct:
             fh.write(";\n")
             for label, val in structured:
@@ -4212,6 +4228,9 @@ def emit_source(mem: bytes, base: int, end_excl: int,
                     if label == "callers" and derived_callers:
                         pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                         fh.write(f";   {label}:{pad} {derived_callers}\n")
+                    elif label == "inputs" and derived_inputs:
+                        pad = " " * (_FIELD_LABEL_WIDTH - len(label))
+                        fh.write(f";   {label}:{pad} {derived_inputs}\n")
                     elif label == "registers clobbered" and derived_clobbers:
                         pad = " " * (_FIELD_LABEL_WIDTH - len(label))
                         fh.write(f";   {label}:{pad} {derived_clobbers}\n")
