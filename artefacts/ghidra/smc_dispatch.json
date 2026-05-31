@@ -163,7 +163,7 @@
   },
   "$B251": {
     "jsr_pc": 45649,
-    "description": "Auto-advance dispatch \u2014 4 (lo, hi) pairs at $B20F/$B214, $B21C/$B221, $B229/$B22E, $B236/$B23B select among 4 per-mode auto-advance handlers. Targets read from a 4-entry LUT indexed by the current ui_mode slot.",
+    "description": "Auto-advance dispatch \u2014 one of four entry arms ($B20D, $B21A, $B227, $B234) loads an immediate (lo, hi) and stores it into this JSR's operand at $B252/$B253 before falling through to the shared tail at $B241. The four targets are therefore statically fixed (the immediates), not runtime data: the step_cursor up/down and inc/dec handlers below.",
     "patch_sources_annotated": [
       45583,
       45588,
@@ -184,7 +184,28 @@
       45622,
       45627
     ],
-    "targets": [],
+    "targets": [
+      {
+        "addr": 45763,
+        "name": "seqED_cursor_step_up_bare",
+        "context": "step_cursor up ($B21A arm)"
+      },
+      {
+        "addr": 45756,
+        "name": "seqED_cursor_step_down_bare",
+        "context": "step_cursor down ($B20D arm)"
+      },
+      {
+        "addr": 45931,
+        "name": "step_cursor_inc_wrap",
+        "context": "step_cursor +1 mod $20 ($B227 arm)"
+      },
+      {
+        "addr": 45952,
+        "name": "step_cursor_dec_wrap",
+        "context": "step_cursor -1 ($B234 arm)"
+      }
+    ],
     "annotated": true,
     "discovered": true
   },

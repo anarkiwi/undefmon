@@ -14204,7 +14204,7 @@
     },
     {
       "addr": "$B380",
-      "name": "LAB_b380",
+      "name": "FUN_b380",
       "source": "DEFAULT",
       "is_primary": true
     },
