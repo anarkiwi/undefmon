@@ -2,7 +2,7 @@
 
 [`defmon.s`](defmon.s) — a 1.3 MB annotated 64tass-assemblable
 disassembly of [defMON](https://defmon.vandervecken.com), produced
-semti-automatically and round-tripped byte-for-byte against the
+semi-automatically and round-tripped byte-for-byte against the
 original binary. The rest of this repo is the toolchain that emits
 and verifies it.
 
@@ -80,10 +80,7 @@ sidTAB and `$DD01-$DFFE` tail both 100% zero) are initialised working RAM,
 named at their boundaries — not reverse-engineering gaps. The remaining
 role-only residue is **86 non-zero bytes (0.2%)** across 15 small spans —
 SMC operand slots, 1-byte state vars, and one screen template — whose
-`role` already explains them; a `notes` line there would restate. (An
-earlier table here reported "29% uncategorised"; that figure presented an
-instruction *count*, 11,500, as a byte share and predated full region
-coverage.)
+`role` already explains them; a `notes` line there would restate.
 
 Annotation catalogue (`tools/re/annotations.toml`):
 
@@ -129,7 +126,7 @@ Only one input remains hand-curated with no regeneration path:
    base — 317 function entries, 356 region entries, 89 branch
    overrides, value-name catalogues. Reproducible only in the sense
    that it's committed; the *content* is the result of human
-   reverse-engineering. Drift is now guarded by `make lint` (10
+   reverse-engineering. Drift is guarded by `make lint` (10
    checks: schema shape, orphan addresses, no raw `$XXXX` / asm
    mnemonics / RE narrative in prose, enum-value reachability, hex/
    byte ref substitution, data-region coverage, callgraph callers
@@ -180,12 +177,11 @@ reproducing the build.)
    floor — those `role`s already explain the bytes, so further `notes`
    would restate rather than inform.
 
-2. **15 branches have `unknown` lhs** in `cmp_facts.json` (down from 92:
-   `izy` indirect loads, ALU-computed `CMP` operands, and JSR-return
-   values are now modelled). All 15 remaining are `pla`-from-stack —
-   the tested register was pulled off the stack, so resolving it needs
-   PHA/PLA stack-discipline tracking. Add manual `[branch."$XXXX"]`
-   overrides, or extend `tools/re/cmp_facts.py`. List them with:
+2. **15 branches have `unknown` lhs** in `cmp_facts.json`. All are
+   `pla`-from-stack — the tested register was pulled off the stack, so
+   resolving it needs PHA/PLA stack-discipline tracking. Add manual
+   `[branch."$XXXX"]` overrides, or extend `tools/re/cmp_facts.py`. List
+   them with:
 
         python3 -c "import json; cf=json.load(open('build/cmp_facts.json'));\
         print('\n'.join(pc for pc,f in cf['facts'].items() \
@@ -203,20 +199,11 @@ reproducing the build.)
 4. **`[refuted]` has 1 entry.** Record dead-end hypotheses there so
    future work doesn't re-walk them.
 
-5. **Every code-start is now statically reachable** (`make
-   unreachable-triage` → 0). This was 3,234 unreachable until two
-   fixes: (a) the `OPS` table learned the undocumented opcodes defMON
-   uses (LAX/SAX in every mode + the combine-ops ANC/ALR/ARR/AXS),
-   which had rendered as `.byte` and fragmented the callgraph's
-   fall-through across genuine code (the unrolled `paint_page` routine,
-   the row-timer stores, the pitch-slide math); and (b) naming the two
-   RAM-under-I/O decoder routines reached only via banking / a
-   self-modified dispatch jump (`load_decoder_patbody`,
-   `load_decoder_commit_arm`) so the callgraph seeds them as the real
-   (indirectly-dispatched) entries they are. The two duplicate-encoding
-   bytes (`$2B` ANC, `$EB` SBC) that 64tass can't reproduce from a
-   mnemonic are classified as instructions but rendered as `.byte` with
-   the decoded op in the comment.
+5. **Every code-start is statically reachable** (`make
+   unreachable-triage` → 0). The two duplicate-encoding bytes (`$2B`
+   ANC, `$EB` SBC) that 64tass can't reproduce from a mnemonic are
+   classified as instructions but rendered as `.byte` with the decoded
+   op in the comment.
 
 6. **SMC catalogue is curated** (dispatch + opcode + branch). 11
    genuine `smc_opcode` flips and the 9 `smc_branch` gate sites at
