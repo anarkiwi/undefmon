@@ -1001,7 +1001,11 @@ SEED_LANDMARKS = {
     # beq tail; DEC $0ADA (self-patches that imm); jsr $C51F; ...; rti`.
     # Statically unreachable (entered via the post-NMI branch fan-out),
     # so seed it explicitly to decode as code instead of a .byte run.
+    0x0889: "post_load_startup",
     0x0AD9: "nmi_sid2_silence_count",
+    0x7735: "save_failure_panic_loop",
+    0xD772: "configurable_emitter_post_write_hook_writeonly",
+    0xE357: "seqLIST_writer_super_arg_dispatch",
     0x0AED: "nmi_irq_entry",
     0x0B8B: "raster_irq_entry",
     # $D780 auto-advance dispatch targets (reached only via the

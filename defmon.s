@@ -1102,10 +1102,6 @@ dir_paint_cell_offset    = $75CB
 dir_paint_name_col_smc   = $75CF
 dir_paint_name_col_smc_hi = $75D0
 save_overwrite_state_byte = $7723
-save_failure_panic_loop  = $7735
-;   notes: increment VIC_BORDER / jump save_failure_panic_loop. Reached only on SAVE-failure error paths.
-;   code edges:          none
-;   apparent (from data): $7738 in save_failure_panic_loop
 disk_title_bar_template  = $773B
 ;   notes: Sits in the screen-template band alongside disk_subtitle_template and the hex-digit LUTs (hex_digit_lo_lut/hex_digit_hi_lut/hex_digit_rvs_screencode) plus the no-op slide scratch (no_op_slide_scratch-data_band_no_op_tail).
 disk_subtitle_template   = $7755
@@ -1374,7 +1370,6 @@ decoder_term_hi_smc      = $D6E0
 ;   notes: Together with decoder_term_lo_smc patches the LOAD-decoder's termination check to compare src against src_floor.
 configurable_emitter_target_smc = $D75A
 ;   notes: Adjacent to the patched decoder_term_lo_smc/decoder_term_hi_smc A-=operands documented elsewhere.
-configurable_emitter_post_write_hook_writeonly = $D772
 selfmod_emitter_target_lo = $D77E
 selfmod_emitter_target_hi = $D77F
 load_decoder_noop_tail_return = $D783
@@ -1456,9 +1451,6 @@ seqlist_step_row_smc     = $E1A8
 seqlist_step_col_smc     = $E1A9
 seqlist_step_dx_smc      = $E1AA
 seqlist_step_dy_smc      = $E1AB
-seqLIST_writer_super_arg_dispatch = $E357
-;   notes: Dispatches on super_arg (super-arg) and super_arg_count (super-flag), branches into the post_load_decoder_internal_label cluster. Self-modifies post_load_decoder_internal_label inline.
-post_load_decoder_internal_label = $E394
 pattern_bank_lookup_helper = $E491
 ;   notes:
 ;     Sequence:
@@ -6386,7 +6378,21 @@ l_2:                       ldx  #$81    ; $771B
                            ldy  #$CE    ; $772F
                            jsr  jsr_with_ram_helper    ; $7731
                            rts    ; $7734
-        .byte $EE, $20, $D0, $4C, $35, $77    ; $7735
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $7735  save_failure_panic_loop
+; ──────────────────────────────────────────────────────────────────────
+; SAVE-failure / encoder-error border-flash panic loop.
+;
+;   callers:             save_failure_panic_loop (self-jump tail). Entry is fall-through from save_overwrite_body, reachable on BCS/BCC from an earlier IEC routine in the save-side disk band.
+;   inputs:              (none — terminal loop)
+;   registers clobbered: none (preserves A/X/Y)
+;
+;   increment VIC_BORDER / jump save_failure_panic_loop. Companion to load_failure_panic_loop — reached during the SAVE / encode chain when an IEC bit-bang write or RLE encode step fails. Same shape as panic_color_loop / border_flash_panic / load_failure_panic_loop. Reached only on SAVE-failure error paths.
+save_failure_panic_loop .block
+                           inc  VIC_BORDER    ; $7735
+                           jmp  save_failure_panic_loop    ; $7738
         .text "PACKING IS VERY DANGEROUS.PROCEED? Y/N"    ; $773B
         .text "DATA FOR SID #2 WILL NOT BE INCLUDED"    ; $7761
         .text "SAVE AS EXECUTABLE OR RAW? E/R"    ; $7785
@@ -19944,7 +19950,22 @@ configurable_emitter_post_write_hook_advance .block
                            lda  #$D7    ; $D76C
                            sta  self_modifying_byte_emitter + $05    ; $D76E
                            rts    ; $D771
-        .byte $A9, $90, $8D, $81, $D7, $A9, $D7, $8D, $82, $D7, $60    ; $D772
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D772  configurable_emitter_post_write_hook_writeonly
+; ──────────────────────────────────────────────────────────────────────
+; Configurable-emitter post-write hook = configurable_emitter_advance_hook (return — write-only, no advance).
+;
+;   registers clobbered: A
+;
+;   Writes jump configurable_emitter_advance_hook into the self-modifying jmp at self_modifying_byte_emitter.
+configurable_emitter_post_write_hook_writeonly .block
+                           lda  #$90    ; $D772
+                           sta  self_modifying_byte_emitter + $04    ; $D774
+                           lda  #$D7    ; $D777
+                           sta  self_modifying_byte_emitter + $05    ; $D779
+                           rts    ; $D77C
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -19969,7 +19990,7 @@ configurable_emitter_post_write_hook_advance .block
 self_modifying_byte_emitter .block
                            sta  VEC_IRQ_HI    ; $D77D
 ; ──── SMC-patched JMP (2 catalogued targets) ────
-;   Patched at: $D769, $D76E
+;   Patched at: $D769, $D76E, $D774, $D779
 ;   SMC-JMP selecting the configurable emitter's post-write hook. Two
 ;   arms patch the operand with immediates: $D767/$D769/$D76E (advance
 ;   hook -> $D784) and $D772/$D774/$D779 (write-only/noop -> $D790). The
@@ -20304,7 +20325,7 @@ l_7:                       jsr  vic_sprite_init_internal.l_91    ; $E138
 ; ──────────────────────────────────────────────────────────────────────
 ; seqLIST common entry helper.
 ;
-;   callers:             5 code sites: $816F, $8513, $E244 writer_seqlist_supercmd_1, $E41E writer_seqlist_row_clone, $E64D
+;   callers:             6 code sites: $816F, $8513, $E244 writer_seqlist_supercmd_1, $E35F seqLIST_writer_super_arg_dispatch_1, $E41E writer_seqlist_row_clone, $E64D
 ;   outputs:             A
 ;   registers clobbered: A
 ;
@@ -20652,19 +20673,117 @@ l_5:                       lda  super_arg_count    ; $E33C
 l_6:                       pla    ; $E352
                            sta  arranger_v5_sid2,y    ; $E353
 l_7:                       rts    ; $E356
-        .byte $AE, $C8, $71, $D0, $03, $4C, $1A, $E4, $20, $3E, $E1, $8D, $AD, $E3, $A8, $C0    ; $E357
-        .byte $FF, $D0, $03, $4C, $11, $E4, $AD, $C7, $71, $29, $01, $F0, $54, $AD, $71, $71    ; $E367
-        .byte $D0, $06, $B9, $01, $1B, $4C, $82, $E3, $B9, $01, $6E, $C9, $FF, $D0, $31, $48    ; $E377
-        .byte $AD, $71, $71, $D0, $07, $68, $99, $00, $1B, $4C, $97, $E3, $68, $99, $00, $6E    ; $E387
-        .byte $AD, $C7, $71, $29, $02, $F0, $50, $AD, $71, $71, $D0, $06, $B9, $01, $1C, $4C    ; $E397
-        .byte $AC, $E3, $B9, $01, $6F, $C9, $FF, $90, $2D, $F0, $2B, $E9, $01, $4C, $DD, $E3    ; $E3A7
-        .byte $48, $AD, $71, $71, $D0, $07, $68, $99, $00, $1B, $4C, $C8, $E3, $68, $99, $00    ; $E3B7
-        .byte $6E, $AD, $C7, $71, $29, $02, $F0, $1F, $AD, $71, $71, $D0, $06, $B9, $01, $1C    ; $E3C7
-        .byte $4C, $DD, $E3, $B9, $01, $6F, $48, $AD, $71, $71, $D0, $07, $68, $99, $00, $1C    ; $E3D7
-        .byte $4C, $EE, $E3, $68, $99, $00, $6F, $AD, $C7, $71, $29, $04, $F0, $14, $AD, $71    ; $E3E7
-        .byte $71, $D0, $09, $B9, $01, $1D, $99, $00, $1D, $4C, $09, $E4, $B9, $01, $70, $99    ; $E3F7
-        .byte $00, $70, $C8, $C0, $FF, $F0, $03, $4C, $6D, $E3, $20, $08, $E3, $CA, $F0, $03    ; $E407
-        .byte $4C, $5F, $E3, $EE, $F5, $08, $60    ; $E417
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E357  seqLIST_writer_super_arg_dispatch
+; ──────────────────────────────────────────────────────────────────────
+; Super-arg / chip-view dispatch in the seqLIST writer band.
+;
+;   registers clobbered: A, X, Y
+;
+;   Dispatch:
+;     - X ← super_arg / →seqLIST_writer_super_arg_dispatch when nonzero / jump post_load_decoder_internal_label.
+;     - else: call seqLIST_helper / write post_load_decoder_internal_label (self-mod) / Y ← A / compare Y = $FF / →seqLIST_writer_super_arg_dispatch when nonzero / jump post_load_decoder_internal_label.
+;     - else: read super_arg_count / A &= SID_VIEW_2 / →post_load_decoder_internal_label when zero / read sid_chip_view / ...
+;
+;   Dispatches on super_arg (super-arg) and super_arg_count (super-flag), branches into the post_load_decoder_internal_label cluster. Self-modifies post_load_decoder_internal_label inline. Reachable only by indirect dispatch in the seqLIST writer family (writer_seqlist_digit+). Body extends through post_load_decoder_internal_label, falls into the annotated writer_seqlist_row_clone.
+seqLIST_writer_super_arg_dispatch .block
+                           ldx  super_arg    ; $E357
+                           bne  l_1    ; $E35A  super_arg was non-zero?
+                           jmp  post_load_decoder_internal_label.l_14    ; $E35C
+l_1:                       jsr  seqLIST_helper    ; $E35F
+                           sta  post_load_decoder_internal_label + $19    ; $E362
+                           tay    ; $E365
+                           cpy  #$FF    ; $E366
+                           bne  l_2    ; $E368  seqLIST_helper->A was not $FF?
+                           jmp  post_load_decoder_internal_label.l_13    ; $E36A
+l_2:                       lda  super_arg_count    ; $E36D
+                           and  #$01    ; $E370
+                           beq  post_load_decoder_internal_label.l_6    ; $E372  (super_arg_count & $01) was zero?
+                           lda  sid_chip_view    ; $E374
+                           bne  l_3    ; $E377  sid_chip_view was not SID_VIEW_1?
+                           lda  arranger_v0_sid1_byte1,y    ; $E379
+                           jmp  l_4    ; $E37C
+l_3:                       lda  arranger_v3_sid2_byte1,y    ; $E37F
+l_4:                       cmp  #$FF    ; $E382
+                           bne  post_load_decoder_internal_label.l_4    ; $E384
+                           pha    ; $E386
+                           lda  sid_chip_view    ; $E387
+                           bne  l_5    ; $E38A  sid_chip_view was not SID_VIEW_1?
+                           pla    ; $E38C
+                           sta  arranger_v0_sid1,y    ; $E38D
+                           jmp  post_load_decoder_internal_label.l_1    ; $E390
+l_5:                       pla    ; $E393
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $E394  post_load_decoder_internal_label
+; ──────────────────────────────────────────────────────────────────────
+; Internal label under RAM-with-I/O at the post-LOAD decoder band (the RAM-with-I/O decoder band).
+;
+;   code edges:          fall-through from $E393 seqLIST_writer_super_arg_dispatch_5 (1 bytes earlier)
+;
+;   Reached during load_decoder_block_call_site call decoder_block_helper + tail unpack.
+post_load_decoder_internal_label .block
+                           sta  arranger_v3_sid2,y    ; $E394
+l_1:                       lda  super_arg_count    ; $E397
+                           and  #$02    ; $E39A
+                           beq  l_10    ; $E39C  (super_arg_count & $02) was zero?
+                           lda  sid_chip_view    ; $E39E
+                           bne  l_2    ; $E3A1  sid_chip_view was not SID_VIEW_1?
+                           lda  arranger_v1_sid1 + $01,y    ; $E3A3
+                           jmp  l_3    ; $E3A6
+l_2:                       lda  sidtab_data + 273*SidtabRow_size + $02,y    ; $E3A9
+l_3:                       cmp  #$FF    ; $E3AC  ; ← (SMC operand at $E3AD, no name)
+                           bcc  l_8    ; $E3AE
+                           beq  l_8    ; $E3B0
+                           sbc  #$01    ; $E3B2
+                           jmp  l_8    ; $E3B4
+l_4:                       pha    ; $E3B7
+                           lda  sid_chip_view    ; $E3B8
+                           bne  l_5    ; $E3BB  sid_chip_view was not SID_VIEW_1?
+                           pla    ; $E3BD
+                           sta  arranger_v0_sid1,y    ; $E3BE
+                           jmp  l_6    ; $E3C1
+l_5:                       pla    ; $E3C4
+                           sta  arranger_v3_sid2,y    ; $E3C5
+l_6:                       lda  super_arg_count    ; $E3C8
+                           and  #$02    ; $E3CB
+                           beq  l_10    ; $E3CD  (super_arg_count & $02) was zero?
+                           lda  sid_chip_view    ; $E3CF
+                           bne  l_7    ; $E3D2  sid_chip_view was not SID_VIEW_1?
+                           lda  arranger_v1_sid1 + $01,y    ; $E3D4
+                           jmp  l_8    ; $E3D7
+l_7:                       lda  sidtab_data + 273*SidtabRow_size + $02,y    ; $E3DA
+l_8:                       pha    ; $E3DD
+                           lda  sid_chip_view    ; $E3DE
+                           bne  l_9    ; $E3E1  sid_chip_view was not SID_VIEW_1?
+                           pla    ; $E3E3
+                           sta  arranger_v1_sid1,y    ; $E3E4
+                           jmp  l_10    ; $E3E7
+l_9:                       pla    ; $E3EA
+                           sta  arranger_v4_sid2,y    ; $E3EB
+l_10:                      lda  super_arg_count    ; $E3EE
+                           and  #$04    ; $E3F1
+                           beq  l_12    ; $E3F3  (super_arg_count & $04) was zero?
+                           lda  sid_chip_view    ; $E3F5
+                           bne  l_11    ; $E3F8  sid_chip_view was not SID_VIEW_1?
+                           lda  arranger_v2_sid1 + $01,y    ; $E3FA
+                           sta  arranger_v2_sid1,y    ; $E3FD
+                           jmp  l_12    ; $E400
+l_11:                      lda  sidtab_data + 290*SidtabRow_size + $03,y    ; $E403
+                           sta  arranger_v5_sid2,y    ; $E406
+l_12:                      iny    ; $E409
+                           cpy  #$FF    ; $E40A
+                           beq  l_13    ; $E40C  seqLIST_helper->A was $FF?
+                           jmp  seqLIST_writer_super_arg_dispatch.l_2    ; $E40E
+l_13:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E411
+                           dex    ; $E414
+                           beq  l_14    ; $E415  (seqLIST_screen_dirty_bump_1->X − 1) was zero?
+                           jmp  seqLIST_writer_super_arg_dispatch.l_1    ; $E417
+l_14:                      inc  editor_row_delta    ; $E41A
+                           rts    ; $E41D
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
