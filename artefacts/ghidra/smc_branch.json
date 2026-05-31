@@ -1,4 +1,44 @@
 {
+  "$0C9E": {
+    "branch_pc": 3230,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55683
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$0E56": {
+    "branch_pc": 3670,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55662
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$0E7D": {
+    "branch_pc": 3709,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55677
+    ],
+    "annotated": false,
+    "discovered": true
+  },
+  "$0ECD": {
+    "branch_pc": 3789,
+    "description": "",
+    "patch_sources_annotated": [],
+    "patch_sources_discovered": [
+      55707
+    ],
+    "annotated": false,
+    "discovered": true
+  },
   "$1183": {
     "branch_pc": 4483,
     "description": "GATE branch (voice 0, sidcall-1). BPL offset set to $0A once at load by $D1B8; skips the sc1 row-index + counter latch when the sidcall-1 gate bit is clear.",
