@@ -1,5 +1,11 @@
 name: tests
-on: [push, pull_request]
+# Run on pushes to main and on PRs. Avoid double-triggering a PR branch
+# (push + pull_request at once), which makes two concurrent requests to
+# the KickAss download host and trips its rate limit.
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   unittest:
     runs-on: ubuntu-latest
@@ -18,8 +24,10 @@ jobs:
       - name: Install Kick Assembler (for round-trip)
         run: |
           mkdir -p "$HOME/kickass"
-          # theweb.dk 415s the default curl User-Agent, so pose as a browser.
+          # theweb.dk 415s the default curl User-Agent (pose as a browser)
+          # and rate-limits bursts, so retry on any error with a delay.
           curl -fsSL -A "Mozilla/5.0" \
+            --retry 6 --retry-all-errors --retry-delay 10 \
             http://theweb.dk/KickAssembler/KickAssembler.zip \
             -o /tmp/kickass.zip
           unzip -q /tmp/kickass.zip -d "$HOME/kickass"
