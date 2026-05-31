@@ -1,4 +1,5 @@
-"""Unit + smoke tests for the per-function register-clobber analyzer."""
+"""Unit + smoke tests for the per-function register-effect analyzer
+(clobbers + inputs + outputs)."""
 
 import json
 import unittest
@@ -81,6 +82,105 @@ class TestAnalyze(unittest.TestCase):
         out = R.analyze(mem, instr, frozenset({0x1000, 0x2000}))
         self.assertEqual(out["$1000"]["inputs"], "A")
 
+    def test_output_returned_value_consumed_by_caller(self):
+        """Callee loads A and returns; caller reads A after the call, so A
+        is a return register (output) of the callee."""
+        mem = _img(
+            {
+                0x1000: bytes([0x20, 0x00, 0x20, 0x8D, 0x00, 0x04, 0x60]),
+                0x2000: bytes([0xA9, 0x05, 0x60]),
+            }
+        )
+        instr = _instr(
+            [
+                (0x1000, ("JSR", "abs", 3)),
+                (0x1003, ("STA", "abs", 3)),
+                (0x1006, ("RTS", "imp", 1)),
+                (0x2000, ("LDA", "imm", 2)),
+                (0x2002, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(mem, instr, frozenset({0x1000, 0x2000}))
+        self.assertEqual(out["$2000"]["outputs"], "A")
+
+    def test_no_output_for_scratch_register(self):
+        """Callee leaves a value in X but no caller reads X back, so X is
+        scratch, not a return register."""
+        mem = _img(
+            {
+                0x1000: bytes([0x20, 0x00, 0x20, 0xA9, 0x01, 0x8D, 0x00, 0x04, 0x60]),
+                0x2000: bytes([0xA2, 0x00, 0x60]),
+            }
+        )
+        instr = _instr(
+            [
+                (0x1000, ("JSR", "abs", 3)),
+                (0x1003, ("LDA", "imm", 2)),
+                (0x1005, ("STA", "abs", 3)),
+                (0x1008, ("RTS", "imp", 1)),
+                (0x2000, ("LDX", "imm", 2)),
+                (0x2002, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(mem, instr, frozenset({0x1000, 0x2000}))
+        self.assertEqual(out["$2000"]["outputs"], "")
+
+    def test_no_output_for_conditionally_defined_register(self):
+        """X is written on only one path to the callee's RTS (not a must-
+        define), so even though the caller reads X it is not a return
+        register — the callee may pass X through unchanged."""
+        mem = _img(
+            {
+                0x1000: bytes([0x20, 0x00, 0x20, 0x8E, 0x00, 0x04, 0x60]),
+                0x2000: bytes([0xA5, 0x00, 0xF0, 0x02, 0xA2, 0x05, 0x60]),
+            }
+        )
+        instr = _instr(
+            [
+                (0x1000, ("JSR", "abs", 3)),
+                (0x1003, ("STX", "abs", 3)),
+                (0x1006, ("RTS", "imp", 1)),
+                (0x2000, ("LDA", "zp", 2)),
+                (0x2002, ("BEQ", "rel", 2)),
+                (0x2004, ("LDX", "imm", 2)),
+                (0x2006, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(mem, instr, frozenset({0x1000, 0x2000}))
+        self.assertNotIn("X", out["$2000"]["outputs"])
+
+    def test_no_output_for_function_without_caller(self):
+        """A function no one calls returns nothing to a caller — its
+        outputs set is empty regardless of what it computes."""
+        mem = _img({0x1000: bytes([0xA9, 0x05, 0x60])})
+        instr = _instr([(0x1000, ("LDA", "imm", 2)), (0x1002, ("RTS", "imp", 1))])
+        out = R.analyze(mem, instr, frozenset({0x1000}))
+        self.assertEqual(out["$1000"]["outputs"], "")
+
+    def test_output_transitive_via_tail_call(self):
+        """A tail-call function inherits the callee's must-define and the
+        caller's demand: both the tail-caller and the tail callee return A."""
+        mem = _img(
+            {
+                0x1000: bytes([0x20, 0x00, 0x20, 0x8D, 0x00, 0x04, 0x60]),
+                0x2000: bytes([0x4C, 0x00, 0x30]),
+                0x3000: bytes([0xA9, 0x05, 0x60]),
+            }
+        )
+        instr = _instr(
+            [
+                (0x1000, ("JSR", "abs", 3)),
+                (0x1003, ("STA", "abs", 3)),
+                (0x1006, ("RTS", "imp", 1)),
+                (0x2000, ("JMP", "abs", 3)),
+                (0x3000, ("LDA", "imm", 2)),
+                (0x3002, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(mem, instr, frozenset({0x1000, 0x2000, 0x3000}))
+        self.assertEqual(out["$2000"]["outputs"], "A")
+        self.assertEqual(out["$3000"]["outputs"], "A")
+
     def test_memory_only_clobbers_nothing(self):
         """sta (zp),y; rts writes memory, not a register."""
         mem = _img({0x1000: bytes([0x91, 0xFB, 0x60])})
@@ -131,6 +231,9 @@ class TestRealImageSmoke(unittest.TestCase):
         for v in facts.values():
             self.assertTrue(set(v["clobbers"]) <= set("AXY"))
             self.assertTrue(set(v["direct"]) <= set(v["clobbers"]) | set("AXY"))
+            self.assertTrue(set(v["outputs"]) <= set("AXY"))
+            if not v["uncertain"]:
+                self.assertTrue(set(v["outputs"]) <= set(v["clobbers"]))
 
 
 if __name__ == "__main__":
