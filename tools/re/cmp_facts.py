@@ -463,6 +463,13 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
 
         # ── Kill / neutral / unmodeled ───────────────────────────
         if _is_writer(mnem, mode, cur):
+            # An ALU op computed `cur` in-function from a value we can't
+            # name. The register itself is still the honest lhs: the
+            # branch condition surfaces the comparison (e.g. `A < #imm?`)
+            # even though the operand isn't a variable. Other writers
+            # (PLA from stack, etc.) stay unknown.
+            if mnem in ("ADC", "SBC", "ORA", "EOR", "AND"):
+                return {"kind": "computed_reg", "reg": cur, "via": mnem}
             return {"kind": "unknown", "reason": f"clobber_{mnem.lower()}"}
 
         if _is_neutral(mnem, mode, cur):
@@ -640,6 +647,7 @@ def collect_facts(mem: bytes,
         "resolved_imm": 0,
         "transformed": 0,
         "from_caller": 0,
+        "computed_reg": 0,     # ALU-computed register (ADC/SBC/ORA/EOR/AND)
         "multi_source": 0,
         "unknown": 0,
     }
@@ -722,7 +730,9 @@ def collect_facts(mem: bytes,
         # If the setter itself transforms the tested value (e.g. INX, or
         # acc-mode ASL), record the post-op on the lhs so the renderer
         # can surface it as (X + 1), shifted-A bit 7, etc.
-        if post_op is not None and lhs["kind"] in ("var", "imm", "from_caller"):
+        if post_op is not None and lhs["kind"] in (
+            "var", "imm", "from_caller", "computed_reg"
+        ):
             lhs = dict(lhs)
             lhs["post_op"] = post_op
 
@@ -738,6 +748,8 @@ def collect_facts(mem: bytes,
             stats["resolved_imm"] += 1
         elif lhs["kind"] == "from_caller":
             stats["from_caller"] += 1
+        elif lhs["kind"] == "computed_reg":
+            stats["computed_reg"] += 1
         elif lhs["kind"] == "multi_source":
             stats["multi_source"] += 1
         else:
@@ -870,7 +882,7 @@ def main(argv: list[str] | None = None) -> int:
     for key in ("branches", "no_flag_setter", "operand_based",
                 "resolved_var", "resolved_var_indirect",
                 "resolved_imm", "transformed",
-                "from_caller", "multi_source", "unknown"):
+                "from_caller", "computed_reg", "multi_source", "unknown"):
         print(f"  {key:<22} = {stats[key]}")
     resolved = (stats["operand_based"] + stats["resolved_var"]
                 + stats["resolved_var_indirect"]
@@ -878,11 +890,12 @@ def main(argv: list[str] | None = None) -> int:
     if stats["branches"]:
         pct = 100.0 * resolved / stats["branches"]
         print(f"  resolved (any kind)    = {resolved}  ({pct:.1f}%)")
-        # from_caller is genuine information too — it tells the emitter
-        # the lhs is a caller-supplied parameter on this register.
-        with_caller = resolved + stats["from_caller"]
-        pct2 = 100.0 * with_caller / stats["branches"]
-        print(f"  + from_caller          = {with_caller}  ({pct2:.1f}%)")
+        # from_caller + computed_reg are register-level lhs: not a named
+        # variable, but the branch condition still surfaces the
+        # comparison (`A < #imm?`) so they are genuine information.
+        with_reg = resolved + stats["from_caller"] + stats["computed_reg"]
+        pct2 = 100.0 * with_reg / stats["branches"]
+        print(f"  + register-level lhs   = {with_reg}  ({pct2:.1f}%)")
     return 0
 
 

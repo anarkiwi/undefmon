@@ -231,6 +231,12 @@ def _render_lhs_expr(lhs: dict,
         # Register parameter from caller. Bare register letter is the
         # honest rendering — we don't know what the caller loaded.
         expr = lhs.get("reg", "?")
+    elif kind == "computed_reg":
+        # Register holds a value computed in-function by an ALU op
+        # (ADC/SBC/ORA/EOR/AND) we can't name. The register letter is
+        # the honest lhs — the condition still surfaces the comparison
+        # (e.g. `A < #$XX?`) even though the operand isn't a variable.
+        expr = lhs.get("reg", "?")
     else:
         return None
 
