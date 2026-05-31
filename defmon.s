@@ -1856,7 +1856,7 @@ l_5:                       lda  digit_phase    ; $0967
 ;   callers:             mode_dispatch (mode_dispatch arms, JMP not JSR), main_loop_postscan BEQ shortcut → mode_dispatch fall-through
 ;   inputs:              kbd_modifiers, kbd_decoded_key, ui_mode, page_offset (per-key dispatch index), voice_selector_lut_v0+ (voice-stop tables per modifier nibble)
 ;   outputs:             digit_phase cleared when no modifier; super_cmd_flags := $01 when no modifier; voice_selector updated when seqED + matching voice-stop; ui_mode_range_bound (repaint flag) := $04 on voice change
-;   registers clobbered: A, X
+;   registers clobbered: A, X, Y
 ;
 ;   Joined from every mode_dispatch arm and from the no-key shortcut at main_loop_postscan. Resets digit_phase when no modifier is held, arms super_cmd_flags := $01 when no modifier is held, and in seqED (ui_mode = $01) walks the per-key voice-selector lookup tables (voice_selector_lut_v0 .. voice_selector_lut_v4) to advance voice_selector when the key matches that voice's chord slot.
 ;
@@ -2128,7 +2128,7 @@ l_1:                       lda  #$00    ; $0AE3
 ;
 ;   callers:             5 sites in the disk-band LOAD chain: disk_menu_return_handler, save_overwrite_body, save_overwrite_body, disk_menu_ui_band_end (all part of disk_menu_return_handler load_tune + post-LOAD secondary-pass dispatch). Lets callers invoke the RAM-with-I/O LOAD-decoder without exposing the bank-swap dance.
 ;   inputs:              X = target addr lo, Y = target addr hi.
-;   registers clobbered: A (preserves X/Y via the self-mod path).
+;   registers clobbered: A, X, Y
 ;
 ;   Caller passes (X = target lo, Y = target hi); jsr_with_ram_helper self-mods the call operand at jsr_with_ram_helper, raises IRQ-off, saves $01 banking byte, sets $01=#$30 (RAM visible at ram_under_io-ram_under_io_end, KERNAL/CHARGEN/I/O all banked out), JSRs the target, restores $01, IRQ-on, return.
 ;
@@ -2511,7 +2511,7 @@ screen_row_addr_resolver .block
 ;   callers:             editor_frame_work_tail (editor frame body, unconditional JSR each iteration)
 ;   inputs:              playback_state (player playing flag), current_arranger_row / sid2_voice_record_v2 (V0 arranger row indices), sid_chip_view, ui_mode_mirror (prev arranger row mirror), digit_phase (cursor-follow flag), v0_row_timer (gate byte), v0_freq_lookup_smc (sub-position within pattern)
 ;   outputs:             ui_mode_mirror (updated arranger row mirror), step_cursor, page_pair_counter, editor_row_delta/editor_col_delta (per-voice row-changed flags), screen via seqLIST_step_auto_advance repaint
-;   registers clobbered: A, X
+;   registers clobbered: A, X, Y
 ;
 ;   Called once per editor main-loop iteration from editor_frame_work_tail. If playback_state (player tick-enable) is zero, beq to early-exit at speedadj_block_header (return). Otherwise: reads arranger row index current_arranger_row (or sid2_voice_record_v2 for SID#2 view per sid_chip_view); decrement X; if it has changed since last frame (ui_mode_mirror mirror), update ui_mode_mirror and increment editor_col_delta (V1 row-changed flag); then walks digit_phase (a step-cursor-follow flag) + v0_row_timer; conditionally fires call seqLIST_step_auto_advance to repaint plus updates step_cursor + page_pair_counter + bumps editor_row_delta (V0 row-changed flag).
 ;
@@ -5485,7 +5485,7 @@ screen_ram_zero_fill .block
 ;
 ;   callers:             disk_menu_screen_init (disk_menu_screen_init paints green color RAM); disk_menu_drive_info_paint (save-overwrite path repaint)
 ;   inputs:              A = palette index (e.g. $05 = green for the disk-menu repaint)
-;   registers clobbered: A, X
+;   registers clobbered: X
 ;
 ;   X←$00; write COLOR_RAM,X / load_decoder_tail_jump,X / load_decoder_tail_jump,X / load_decoder_tail_jump,X; decrement X; bne — writes A into all 1000 color-RAM bytes (COLOR_RAM-load_decoder_tail_jump). Companion to screen_ram_zero_fill's screen-RAM zero-fill.
 color_ram_fill .block
@@ -5727,7 +5727,7 @@ l_4:                       jsr  KERNAL_CHRIN    ; $7528
 ; Directory-line advance.
 ;
 ;   callers:             dir_entry_inner_loop inner loop (fall-through from name-paint), disk_menu_B_handler (dir_entry_inner_loop's 'B'-arm = blocks-free entry hits dir_line_advance directly)
-;   registers clobbered: A
+;   registers clobbered: A, X, Y
 ;
 ;   Bumps both paint cursors (name column and blocks column) by $28 = one screen row, resets the within-row cell offset, and increments the line counter. After 24 lines (dir_line_counter == $18) it jumps to disk_confirm_prompt_template to paint the final 'blocks free' line; otherwise it falls through into dir_chrin_drain to drain the remaining entry chars before continuing the directory loop.
 dir_line_advance .block
@@ -5780,7 +5780,7 @@ dir_chrin_drain .block
 ; Directory-read close tail.
 ;
 ;   callers:             dir_read_open (CHKOUT error); dir_read_open (CHKIN error); dir_entry_inner_loop (CLR-abort); dir_entry_inner_loop (KERNAL_READST STATUS-error); disk_confirm_prompt_loop (RUN/STOP cancel branch from input loop); fall-through from disk_confirm_prompt_template (24-line cap)
-;   registers clobbered: A
+;   registers clobbered: A, X, Y
 ;
 ;   Reached from any error path in dir_read_open/dir_entry_inner_loop (4 jump sites) plus the natural disk_clear_loop_smc → dir_read_open return — every directory-listing path funnels back here to release the IEC channel (CLOSE 1 + CLRCHN).
 dir_read_close_tail .block
@@ -6015,7 +6015,7 @@ disk_menu_prev_drive_arm .block
 ;   callers:             disk_menu_next_drive_arm (`.` key handler `INC $BA; JMP wrap_drive_number_redraw`)
 ;   inputs:              $BA = caller-incremented drive byte
 ;   outputs:             $BA = wrapped drive number ($08..$0B); enters disk_menu_input_loop
-;   registers clobbered: A
+;   registers clobbered: A, X, Y
 ;
 ;   `read $BA; A&=$0B; A|=$08; write $BA; jump disk_menu_input_loop`. Masks the KERNAL active-drive byte $BA so bits 1,3 stay and bit 3 is forced on — produces the cycle $08 → $09 → $0A → $0B → $08 as $BA is INCed by callers. Tail-jumps into disk_menu_input_loop (disk-menu input loop) to redraw with the new drive number.
 wrap_drive_number_redraw .block
@@ -6255,7 +6255,7 @@ l_2:                       ldx  #$81    ; $771B
 ;   callers:             disk_menu_shift_dispatch (CTRL+I or similar from disk-menu input loop)
 ;   inputs:              stereo_enable (stereo enable flag)
 ;   outputs:             Top 2 rows of screen RAM painted with disk-menu title; color RAM green.
-;   registers clobbered: A, X
+;   registers clobbered: A, X, Y
 ;
 ;   Repaints the top 2 rows of the disk menu: fills colour RAM green, clears the rows to space, then blits the title bar (26 bytes) and sub-title (12 bytes) templates into screen RAM. When stereo is enabled it falls through to an alternate 36-byte template paint; in mono mode it short-circuits to disk_menu_save_banner_dismiss.
 disk_menu_drive_info_paint .block
@@ -6390,8 +6390,8 @@ l_2:                       jmp  l_2    ; $7883
 ;
 ;   callers:             disk_menu_return_handler (disk-menu RETURN)
 ;   inputs:              $BA (cbm_drive_num), save_name_input_state.. (filename buffer), save_name_input_state (filename length)
-;   outputs:             RAM[sidtab_row_lo+filesize] = file body verbatim
-;   registers clobbered: carry = LOAD error
+;   outputs:             RAM[sidtab_row_lo+filesize] = file body verbatim; carry set on LOAD error
+;   registers clobbered: A, X, Y
 tune_load_entry .block
                            lda  #$00    ; $7886
                            sta  save_name_input_state    ; $7888
@@ -19279,9 +19279,9 @@ l_12:                      lda  #$FF    ; $D6A0  ; ← (SMC operand at $D6A1, no
 ; Decoder emit-byte (ascending).
 ;
 ;   callers:             10 code sites: $D674, $D67B, $D680, $D686, $D68C decoder_pointer_init_10, $D693, $D696 decoder_pointer_init_11, $D69D, +2 more
-;   inputs:              A = byte to emit, $FD/$FE = dest pointer
+;   inputs:              A = byte to emit, Y = $00 (page offset for the store), $FD/$FE = dest pointer
 ;   outputs:             $FD/$FE += 1, decoder_byte_count += 1
-;   registers clobbered: Y (loaded with #$00 implicitly), Z/N flags
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   write ($FD),Y; advance dest pointer; increment running count at decoder_byte_count; return.
 ;
