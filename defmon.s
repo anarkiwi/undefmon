@@ -1834,7 +1834,7 @@ main_loop .block
 ;   The instruction at main_loop_postscan (compare =$FF) acts on the decoded keycode in A returned by kbd_scan; control then flows to modifier_extract → mode_dispatch.
 main_loop_postscan .block
                            cmp  #$FF    ; $092F
-                           beq  mode_dispatch.l_5    ; $0931
+                           beq  mode_dispatch.l_5    ; $0931  kbd_scan->A was $FF?
                            jsr  global_pre_dispatch    ; $0933
                            jsr  super_cmd_dispatch    ; $0936
 .bend
@@ -2798,7 +2798,7 @@ speedadj_status_repaint .block
 l_1:                       lda  kbd_scan_modifier_operand_bytes,x    ; $0DF2
                            jsr  statusline_print_char    ; $0DF5
                            dex    ; $0DF8
-                           bpl  l_1    ; $0DF9
+                           bpl  l_1    ; $0DF9  statusline_print_char->X walked back 1 and had bit 7 clear?
                            ldx  sub_frame_count    ; $0DFB
                            lda  hex_digit_lo_lut,x    ; $0DFE
                            jmp  statusline_print_char    ; $0E01
@@ -5606,26 +5606,26 @@ l_1:                       jsr  KERNAL_CHRIN    ; $74EC
                            bne  dir_read_close_tail    ; $7502
 l_2:                       jsr  KERNAL_CHRIN    ; $7504
                            tax    ; $7507
-                           beq  dir_entry_inner_loop    ; $7508
+                           beq  dir_entry_inner_loop    ; $7508  KERNAL_CHRIN->A was zero?
                            cmp  #KEY_SPACE    ; $750A
-                           beq  l_2    ; $750C
+                           beq  l_2    ; $750C  KERNAL_CHRIN->A was $20?
                            cmp  #KEY_R    ; $750E
-                           beq  disk_menu_R_handler    ; $7510
+                           beq  disk_menu_R_handler    ; $7510  KERNAL_CHRIN->A was $12?
                            cmp  #$42    ; $7512
-                           beq  disk_menu_B_handler    ; $7514
+                           beq  disk_menu_B_handler    ; $7514  KERNAL_CHRIN->A was $42?
                            lda  #$22    ; $7516
                            jsr  dir_paint_glyph    ; $7518
 l_3:                       jsr  KERNAL_CHRIN    ; $751B
                            tax    ; $751E
-                           beq  dir_entry_inner_loop    ; $751F
+                           beq  dir_entry_inner_loop    ; $751F  KERNAL_CHRIN->A was zero?
                            jsr  dir_paint_blocks_glyph    ; $7521
                            cmp  #$22    ; $7524
-                           bne  l_3    ; $7526
+                           bne  l_3    ; $7526  dir_paint_blocks_glyph->A was not $22?
 l_4:                       jsr  KERNAL_CHRIN    ; $7528
                            tax    ; $752B
-                           beq  dir_entry_inner_loop    ; $752C
+                           beq  dir_entry_inner_loop    ; $752C  KERNAL_CHRIN->A was zero?
                            cmp  #$20    ; $752E
-                           beq  l_4    ; $7530
+                           beq  l_4    ; $7530  KERNAL_CHRIN->A was $20?
                            jsr  dir_paint_glyph    ; $7532
 .bend
 
@@ -5678,7 +5678,7 @@ l_2:                       jsr  dir_paint_reset_cell    ; $7557
 dir_chrin_drain .block
                            jsr  KERNAL_CHRIN    ; $7564
                            tax    ; $7567
-                           bne  dir_chrin_drain    ; $7568
+                           bne  dir_chrin_drain    ; $7568  KERNAL_CHRIN->A was non-zero?
                            jmp  dir_entry_inner_loop    ; $756A
 .bend
 
@@ -5889,7 +5889,7 @@ l_1:                       cmp  VIC_RASTER    ; $760D
 disk_menu_kbd_scan .block
                            jsr  kbd_scan    ; $7618
                            cmp  #$FF    ; $761B
-                           beq  disk_menu_input_wait    ; $761D
+                           beq  disk_menu_input_wait    ; $761D  kbd_scan->A was $FF?
                            lda  kbd_decoded_key    ; $761F
                            ldx  kbd_modifiers    ; $7622
                            cpx  #$00    ; $7625
@@ -6201,7 +6201,7 @@ l_1:                       cmp  VIC_RASTER    ; $77D3
                            bne  l_1    ; $77D6  $60 was not VIC_RASTER?
                            jsr  kbd_scan    ; $77D8
                            cmp  #$FF    ; $77DB
-                           beq  disk_menu_save_banner_dismiss    ; $77DD
+                           beq  disk_menu_save_banner_dismiss    ; $77DD  kbd_scan->A was $FF?
                            lda  kbd_decoded_key    ; $77DF
                            cmp  #KEY_Y    ; $77E2
                            beq  l_2    ; $77E4  kbd_decoded_key was KEY_Y?
@@ -6213,13 +6213,13 @@ l_3:                       lda  disk_subtitle_template + $30,x    ; $77EB
                            bpl  l_3    ; $77F2  $1D walked back 1 and had bit 7 clear?
 l_4:                       jsr  kbd_scan    ; $77F4
                            cmp  #KEY_NONE    ; $77F7
-                           bne  l_4    ; $77F9
+                           bne  l_4    ; $77F9  kbd_scan->A was not $FF?
 l_5:                       lda  #$60    ; $77FB
 l_6:                       cmp  VIC_RASTER    ; $77FD
                            bne  l_6    ; $7800  $60 was not VIC_RASTER?
                            jsr  kbd_scan    ; $7802
                            cmp  #$FF    ; $7805
-                           beq  l_5    ; $7807
+                           beq  l_5    ; $7807  kbd_scan->A was $FF?
                            lda  #$00    ; $7809
                            sta  save_end_ptr_hi_read + $04    ; $780B
                            lda  kbd_decoded_key    ; $780E
@@ -6410,7 +6410,7 @@ l_2:                       cmp  VIC_RASTER    ; $78FB
                            bne  l_2    ; $78FE  $60 was not VIC_RASTER?
                            jsr  kbd_scan    ; $7900
                            cmp  #$FF    ; $7903
-                           beq  l_1    ; $7905
+                           beq  l_1    ; $7905  kbd_scan->A was $FF?
                            lda  #$A0    ; $7907
                            ldx  save_name_buf_len    ; $7909
                            sta  SCREEN_RAM + $29,x    ; $790C
@@ -7675,7 +7675,7 @@ print_zstring_1:           lda  VEC_IRQ_HI,x    ; $83ED
                            jsr  statusline_print_char    ; $83F0
                            inx    ; $83F3
                            cpx  #$FF    ; $83F4  ; ← (SMC operand at $83F5, no name)
-                           bne  print_zstring_1    ; $83F6
+                           bne  print_zstring_1    ; $83F6  statusline_print_char->X was not $FF?
                            rts    ; $83F8
 .bend
 
@@ -15977,7 +15977,7 @@ l_4:                       ldx  seqlist_cursor_aux3    ; $C25E
                            stx  sidTAB_staging_prefix    ; $C273
                            jsr  sidtab_row_decoder    ; $C276
 l_5:                       cpx  #$FF    ; $C279  ; ← (SMC operand at $C27A, no name)
-                           beq  l_8    ; $C27B
+                           beq  l_8    ; $C27B  pitch_lut_generator_inner_loop_5->X was $FF?
                            jsr  pitch_lut_generator_inner_loop.l_9    ; $C27D
                            lda  sidtab_staging_field3    ; $C280
                            bne  l_7    ; $C283  sidtab_staging_field3 was non-zero?
@@ -16075,7 +16075,7 @@ sidTAB_dispatch_body_3:    dex    ; $C316
                            jsr  pitch_lut_generator_inner_loop.l_5    ; $C31A
                            jsr  pitch_lut_generator_inner_loop.l_23    ; $C31D
                            cpx  #$FF    ; $C320  ; ← (SMC operand at $C321, no name)
-                           beq  sidTAB_dispatch_body_4    ; $C322
+                           beq  sidTAB_dispatch_body_4    ; $C322  pitch_lut_generator_inner_loop_23->X was $FF?
                            inx    ; $C324
                            stx  sidTAB_staging_prefix    ; $C325
                            jsr  pitch_lut_generator_inner_loop.l_3    ; $C328
@@ -17707,7 +17707,7 @@ l_1:                       lda  song_position_arrays_hi,x    ; $CF48
                            lda  zp_ptr1_hi    ; $CF58
                            sta  song_position_arrays_hi,x    ; $CF5A
 l_2:                       inx    ; $CF5D
-                           bne  l_1    ; $CF5E
+                           bne  l_1    ; $CF5E  (sidtab_row_decoder->X + 1) was non-zero?
                            pla    ; $CF60
                            sta  sidTAB_staging_prefix    ; $CF61
                            lda  #$00    ; $CF64
@@ -18109,7 +18109,7 @@ l_26:                      lda  (zp_decoder_dest_lo),y    ; $D1FB
                            jmp  l_28    ; $D22B
 l_27:                      jsr  save_encoder_y_plus_4_stride    ; $D22E
                            cpy  #$80    ; $D231
-                           beq  l_28    ; $D233
+                           beq  l_28    ; $D233  save_encoder_y_plus_4_stride->Y was $80?
                            lda  (zp_decoder_dest_lo),y    ; $D235
                            and  #$F0    ; $D237
                            bne  l_28    ; $D239  ((zp_decoder_dest_lo),Y & $F0) was non-zero?
@@ -18217,7 +18217,7 @@ l_8:                       lda  pat_num_occupancy_table    ; $D2C5
                            jmp  load_decoder_setup_chain.l_26    ; $D2E7
 l_9:                       inx    ; $D2EA
                            cpx  save_chain_counter    ; $D2EB
-                           beq  l_10    ; $D2EE
+                           beq  l_10    ; $D2EE  save_encoder_y_plus_4_stride->X was save_chain_counter?
                            jmp  load_decoder_setup_chain.l_25    ; $D2F0
 l_10:                      rts    ; $D2F3
 .bend
@@ -18344,10 +18344,10 @@ l_12:                      iny    ; $D3B6
                            and  #$80    ; $D3B9
                            bne  l_13    ; $D3BB  (zp_scratch_9e & $80) was non-zero?
                            cpy  #$80    ; $D3BD
-                           bne  l_9    ; $D3BF
+                           bne  l_9    ; $D3BF  self_modifying_byte_emitter->Y was not $80?
 l_13:                      inx    ; $D3C1
                            cpx  save_chain_counter    ; $D3C2
-                           bne  l_8    ; $D3C5
+                           bne  l_8    ; $D3C5  self_modifying_byte_emitter->X was not save_chain_counter?
                            lda  selfmod_emitter_target_lo    ; $D3C7
                            sec    ; $D3CA
                            sbc  pat_base_lo    ; $D3CB
@@ -18395,10 +18395,10 @@ SID_V3_FREQ_HI:            iny    ; $D40F
 SID_V3_PW_LO:              lda  decoder_xy_smc_pair    ; $D410
 SID_V3_AD:                 bmi  SID_POT_X    ; $D413  decoder_xy_smc_pair had bit 7 set?
 SID_FC_LO:                 cpy  #$80    ; $D415  ; ← SID_FC_HI
-SID_FILTER_RES:            bne  l_17    ; $D417
+SID_FILTER_RES:            bne  l_17    ; $D417  save_encoder_jp_chain_walker->Y was not $80?
 SID_POT_X:                 inx    ; $D419
 SID_POT_Y:                 cpx  save_chain_counter    ; $D41A
-                           bne  l_16    ; $D41D
+                           bne  l_16    ; $D41D  save_encoder_jp_chain_walker->X was not save_chain_counter?
                            ldx  #$00    ; $D41F
 l_18:                      dex    ; $D421
                            beq  l_19    ; $D422  (($00 − 1) − 1) was zero?
@@ -18551,7 +18551,7 @@ l_5:                       inx    ; $D52C
                            sta  song_position_arrays_hi,x    ; $D542
                            jsr  l_7    ; $D545
 l_6:                       cpx  song_end_pointer_pre    ; $D548
-                           bne  l_5    ; $D54B
+                           bne  l_5    ; $D54B  save_encoder_jp_chain_walker_7->X was not song_end_pointer_pre?
                            lda  selfmod_emitter_target_lo    ; $D54D
                            sec    ; $D550
                            sbc  song_position_arrays_lo    ; $D551
@@ -18712,7 +18712,7 @@ l_8:                       ldy  #$00    ; $D669
                            beq  l_10    ; $D672
                            jsr  decoder_emit_byte_inc    ; $D674
                            cmp  #$FF    ; $D677
-                           bne  l_9    ; $D679
+                           bne  l_9    ; $D679  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D67B
 l_9:                       lda  #$FF    ; $D67E
                            jsr  decoder_emit_byte_inc    ; $D680
@@ -18723,11 +18723,11 @@ l_9:                       lda  #$FF    ; $D67E
                            jmp  l_12    ; $D689
 l_10:                      jsr  decoder_emit_byte_inc    ; $D68C
                            cmp  #$FF    ; $D68F
-                           bne  l_11    ; $D691
+                           bne  l_11    ; $D691  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D693
 l_11:                      jsr  decoder_emit_byte_inc    ; $D696
                            cmp  #$FF    ; $D699
-                           bne  l_12    ; $D69B
+                           bne  l_12    ; $D69B  decoder_emit_byte_inc->A was not $FF?
                            jsr  decoder_emit_byte_inc    ; $D69D
 l_12:                      lda  #$FF    ; $D6A0  ; ← (SMC operand at $D6A1, no name)
                            beq  l_2    ; $D6A2  decoder_pointer_init_$90 was zero?
@@ -19354,7 +19354,7 @@ seqLIST_step_auto_advance .block
 ;     compare seqlist_scroll (compare new cursor to seqLIST column-cursor).
                            cmp  seqlist_scroll    ; $E1D7
 ;     →seqLIST_step_auto_advance when carry (already past, skip).
-                           bcs  l_1    ; $E1DA
+                           bcs  l_1    ; $E1DA  seqED_step_cursor_increment->A was seqlist_scroll or above?
 ;     write seqlist_scroll (commit new cursor).
                            sta  seqlist_scroll    ; $E1DC
 ;     increment editor_col_delta (arranger row counter).
@@ -19441,7 +19441,7 @@ l_1:                       jsr  seqLIST_helper    ; $E244
                            sta  writer_seqlist_supercmd + $5C    ; $E247
                            tay    ; $E24A
                            cpy  #$FF    ; $E24B
-                           bne  l_2    ; $E24D
+                           bne  l_2    ; $E24D  seqLIST_helper->A was not $FF?
                            jmp  l_20    ; $E24F
 l_2:                       sty  writer_seqlist_supercmd + $B9    ; $E252
                            ldy  #$FF    ; $E255
@@ -19519,7 +19519,7 @@ l_19:                      cpy  #$FF    ; $E2F4  ; ← (SMC operand at $E2F5, no
                            jmp  l_3    ; $E2F8
 l_20:                      jsr  seqLIST_screen_dirty_bump.l_1    ; $E2FB
                            dex    ; $E2FE
-                           beq  seqLIST_screen_dirty_bump    ; $E2FF
+                           beq  seqLIST_screen_dirty_bump    ; $E2FF  (seqLIST_screen_dirty_bump_1->X − 1) was zero?
                            jmp  l_1    ; $E301
 .bend
 

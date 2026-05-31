@@ -485,6 +485,16 @@ def _resolve_lhs(setter_pc: int, reg: str, mem: bytes,
                 frontier.append((p, transform, cur))
             continue
 
+        # Reaching a JSR while walking back `cur` means nothing wrote the
+        # register between the call and the setter, so the tested value is
+        # `cur` as the callee left it — name it `<callee>->reg`. Honest
+        # regardless of the callee's return convention (it's the register
+        # state right after the call). Targets without a label render as
+        # bare hex and are dropped by the condition de-bouncer.
+        if mnem == "JSR" and n == 3:
+            tgt = mem[pc + 1] | (mem[pc + 2] << 8)
+            return {"kind": "jsr_return", "target": tgt, "reg": cur}
+
         return {"kind": "unknown", "reason": f"unmodeled_{mnem.lower()}"}
 
     if not sources:
@@ -648,6 +658,7 @@ def collect_facts(mem: bytes,
         "transformed": 0,
         "from_caller": 0,
         "computed_reg": 0,     # ALU-computed register (ADC/SBC/ORA/EOR/AND)
+        "jsr_return": 0,       # register as a callee left it (`<fn>->reg`)
         "multi_source": 0,
         "unknown": 0,
     }
@@ -731,7 +742,7 @@ def collect_facts(mem: bytes,
         # acc-mode ASL), record the post-op on the lhs so the renderer
         # can surface it as (X + 1), shifted-A bit 7, etc.
         if post_op is not None and lhs["kind"] in (
-            "var", "imm", "from_caller", "computed_reg"
+            "var", "imm", "from_caller", "computed_reg", "jsr_return"
         ):
             lhs = dict(lhs)
             lhs["post_op"] = post_op
@@ -750,6 +761,8 @@ def collect_facts(mem: bytes,
             stats["from_caller"] += 1
         elif lhs["kind"] == "computed_reg":
             stats["computed_reg"] += 1
+        elif lhs["kind"] == "jsr_return":
+            stats["jsr_return"] += 1
         elif lhs["kind"] == "multi_source":
             stats["multi_source"] += 1
         else:
@@ -765,6 +778,9 @@ def collect_facts(mem: bytes,
         if lhs["kind"] == "imm" and isinstance(lhs.get("value"), int):
             lhs = dict(lhs)
             lhs["value"] = f"${lhs['value']:02X}"
+        if lhs["kind"] == "jsr_return" and isinstance(lhs.get("target"), int):
+            lhs = dict(lhs)
+            lhs["target"] = f"${lhs['target']:04X}"
 
         facts[f"${pc:04X}"] = {
             "branch": mnem,
@@ -882,7 +898,8 @@ def main(argv: list[str] | None = None) -> int:
     for key in ("branches", "no_flag_setter", "operand_based",
                 "resolved_var", "resolved_var_indirect",
                 "resolved_imm", "transformed",
-                "from_caller", "computed_reg", "multi_source", "unknown"):
+                "from_caller", "computed_reg", "jsr_return",
+                "multi_source", "unknown"):
         print(f"  {key:<22} = {stats[key]}")
     resolved = (stats["operand_based"] + stats["resolved_var"]
                 + stats["resolved_var_indirect"]
@@ -893,7 +910,8 @@ def main(argv: list[str] | None = None) -> int:
         # from_caller + computed_reg are register-level lhs: not a named
         # variable, but the branch condition still surfaces the
         # comparison (`A < #imm?`) so they are genuine information.
-        with_reg = resolved + stats["from_caller"] + stats["computed_reg"]
+        with_reg = (resolved + stats["from_caller"] + stats["computed_reg"]
+                    + stats["jsr_return"])
         pct2 = 100.0 * with_reg / stats["branches"]
         print(f"  + register-level lhs   = {with_reg}  ({pct2:.1f}%)")
     return 0

@@ -237,6 +237,15 @@ def _render_lhs_expr(lhs: dict,
         # the honest lhs — the condition still surfaces the comparison
         # (e.g. `A < #$XX?`) even though the operand isn't a variable.
         expr = lhs.get("reg", "?")
+    elif kind == "jsr_return":
+        # Register as the callee left it: render `<callee>->reg`. If the
+        # target has no label it resolves to bare hex and the condition
+        # de-bouncer drops it, so unnamed callees stay uncommented.
+        addr = _parse_hex_addr(lhs.get("target", ""))
+        if addr is None:
+            return None
+        fn = _name_for_address(addr, labels, block_pcs_sorted, block_name_by_pc)
+        expr = f"{fn}->{lhs.get('reg', 'A')}"
     else:
         return None
 
