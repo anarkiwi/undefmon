@@ -3,7 +3,7 @@ matching entry in tools/re/annotations.toml.
 
 The point of this check is to keep the RE knowledge centralised. If a
 new fact lands in AGENTS prose ("$8080 is the decoder"), the next
-session should be able to find that fact by reading defmon.s around
+session should be able to find that fact by reading defmon.asm around
 $8080 — which only happens if annotations.toml has the entry.
 
 Rules:

@@ -1,5 +1,11 @@
 name: tests
-on: [push, pull_request]
+# Run on pushes to main and on PRs. Avoid double-triggering a PR branch
+# (push + pull_request at once), which makes two concurrent requests to
+# the KickAss download host and trips its rate limit.
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   unittest:
     runs-on: ubuntu-latest
@@ -9,8 +15,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install 64tass (for round-trip)
-        run: sudo apt-get update && sudo apt-get install -y 64tass
+      - name: Set up Java (Kick Assembler runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Kick Assembler (for round-trip)
+        run: |
+          mkdir -p "$HOME/kickass"
+          # theweb.dk 415s the default curl User-Agent (pose as a browser)
+          # and rate-limits bursts, so retry on any error with a delay.
+          curl -fsSL -A "Mozilla/5.0" \
+            --retry 6 --retry-all-errors --retry-delay 10 \
+            http://theweb.dk/KickAssembler/KickAssembler.zip \
+            -o /tmp/kickass.zip
+          unzip -q /tmp/kickass.zip -d "$HOME/kickass"
+          jar="$(find "$HOME/kickass" -name KickAss.jar | head -1)"
+          test -n "$jar" || { echo "KickAss.jar not found in download"; exit 1; }
+          echo "KICKASS_JAR=$jar" >> "$GITHUB_ENV"
 
       - name: Install black (for the lint test)
         run: pip install black
@@ -30,12 +53,12 @@ jobs:
       - name: Run unit tests (lint + dasm6502 + emit + round-trip)
         run: python -m unittest discover tests -v
 
-      - name: Verify make rebuilds defmon.s byte-for-byte
+      - name: Verify make rebuilds defmon.asm byte-for-byte
         run: |
-          cp defmon.s /tmp/defmon.s.committed
+          cp defmon.asm /tmp/defmon.asm.committed
           make clean
           make
-          diff -q defmon.s /tmp/defmon.s.committed
+          diff -q defmon.asm /tmp/defmon.asm.committed
 
       - name: Verify Makefile round-trip target
         run: make roundtrip

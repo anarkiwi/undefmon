@@ -2,7 +2,7 @@
 
 import unittest
 
-from tools.re.dasm6502 import OPS, disassemble, emit_64tass_instruction, fmt_operand
+from tools.re.dasm6502 import OPS, disassemble, emit_instruction, fmt_operand
 
 
 class TestOpsTable(unittest.TestCase):
@@ -46,32 +46,32 @@ class TestOpsTable(unittest.TestCase):
             self.assertIn(mode, valid_modes, f"opcode ${opcode:02X} mode {mode}")
 
 
-class TestEmit64tassInstruction(unittest.TestCase):
+class TestEmitInstruction(unittest.TestCase):
     def test_immediate(self):
-        self.assertEqual(emit_64tass_instruction("imm", 0x42, 0, 0x0800), "#$42")
+        self.assertEqual(emit_instruction("imm", 0x42, 0, 0x0800), "#$42")
 
     def test_absolute_no_label(self):
-        self.assertEqual(emit_64tass_instruction("abs", 0x00, 0x10, 0x0800), "$1000")
+        self.assertEqual(emit_instruction("abs", 0x00, 0x10, 0x0800), "$1000")
 
     def test_absolute_with_label(self):
-        out = emit_64tass_instruction(
+        out = emit_instruction(
             "abs", 0x00, 0x10, 0x0800, labels={0x1000: "player_init"}
         )
         self.assertEqual(out, "player_init")
 
     def test_relative_branch_forward(self):
-        self.assertEqual(emit_64tass_instruction("rel", 0x0E, 0, 0x0800), "$0810")
+        self.assertEqual(emit_instruction("rel", 0x0E, 0, 0x0800), "$0810")
 
     def test_relative_branch_backward(self):
-        self.assertEqual(emit_64tass_instruction("rel", 0xFE, 0, 0x0800), "$0800")
+        self.assertEqual(emit_instruction("rel", 0xFE, 0, 0x0800), "$0800")
 
     def test_zero_page(self):
-        self.assertEqual(emit_64tass_instruction("zp", 0xFB, 0, 0x0800), "$FB")
+        self.assertEqual(emit_instruction("zp", 0xFB, 0, 0x0800), "$FB")
 
     def test_bank_aware_io_referrer_sees_overlay(self):
         """A normal (I/O-mapped) referrer to an address inside a RAM-banked
         routine's code gets the COLOR_RAM overlay label, not the code label."""
-        out = emit_64tass_instruction(
+        out = emit_instruction(
             "abs",
             0x4C,
             0xD9,
@@ -85,7 +85,7 @@ class TestEmit64tassInstruction(unittest.TestCase):
 
     def test_bank_aware_ram_referrer_sees_code(self):
         """A RAM-banked referrer to the same address gets the code label."""
-        out = emit_64tass_instruction(
+        out = emit_instruction(
             "abs",
             0x4C,
             0xD9,
@@ -100,7 +100,7 @@ class TestEmit64tassInstruction(unittest.TestCase):
     def test_bank_aware_named_colorram_row_preserved(self):
         """A named colour-RAM row outside any RAM-banked range keeps its
         label even for a normal referrer (the override is range-scoped)."""
-        out = emit_64tass_instruction(
+        out = emit_instruction(
             "abx",
             0x18,
             0xD9,
@@ -113,7 +113,10 @@ class TestEmit64tassInstruction(unittest.TestCase):
         self.assertEqual(out, "color_ram_row07,x")
 
     def test_implicit(self):
-        self.assertEqual(emit_64tass_instruction("imp", 0, 0, 0x0800), "")
+        self.assertEqual(emit_instruction("imp", 0, 0, 0x0800), "")
+
+    def test_accumulator_is_bare(self):
+        self.assertEqual(emit_instruction("acc", 0, 0, 0x0800), "")
 
 
 class TestFmtOperand(unittest.TestCase):

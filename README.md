@@ -1,10 +1,14 @@
 # undefmon
 
-[`defmon.s`](defmon.s) — a 1.3 MB annotated 64tass-assemblable
-disassembly of [defMON](https://defmon.vandervecken.com), produced
-semi-automatically and round-tripped byte-for-byte against the
-original binary. The rest of this repo is the toolchain that emits
-and verifies it.
+[`defmon.asm`](defmon.asm) — a 1.4 MB annotated [Kick
+Assembler](http://theweb.dk/KickAssembler)-assemblable disassembly of
+[defMON](https://defmon.vandervecken.com), produced semi-automatically
+and round-tripped byte-for-byte against the original binary. defMON
+leans on the NMOS undocumented opcodes (LAX/SAX/AXS/ALR/ARR and the
+duplicate-encoding ANC `$2B` / SBC `$EB`); Kick Assembler reproduces
+all of them as native mnemonics (the `$2B`/`$EB` duplicates via `anc2`
+/`sbc2`), so the disassembly round-trips with zero `.byte` escapes. The
+rest of this repo is the toolchain that emits and verifies it.
 
 ## Build
 
@@ -17,12 +21,12 @@ From a clean checkout, the full reproducibility check is two commands:
 Individual steps:
 
     make fetch-static    # docker-builds artefacts/defmon-static.bin
-    make                 # regenerates defmon.s from the unpacked image
-    make roundtrip       # assembles defmon.s and verifies the bytes match
+    make                 # regenerates defmon.asm from the unpacked image
+    make roundtrip       # assembles defmon.asm and verifies the bytes match
     make lint            # 10-check annotation lint suite over annotations.toml
     make ghidra-export   # reproduces artefacts/ghidra/*.json into build/ghidra-fresh/
 
-`defmon.s` is committed as a reference; `make` reproduces it byte-for-
+`defmon.asm` is committed as a reference; `make` reproduces it byte-for-
 byte from the inputs in `artefacts/`, `trace/entrypoints.json`, and
 `tools/re/annotations.toml`.
 
@@ -47,7 +51,9 @@ External tools required for `make verify`:
 
 - `docker` (with BuildKit, default in modern releases) — for
   `fetch-static` + `ghidra-export`
-- `64tass` (`apt-get install 64tass`) — for `roundtrip`
+- `java` + Kick Assembler — for `roundtrip`. Point `KICKASS_JAR` at
+  your `KickAss.jar` (default `/usr/local/kickass/KickAss.jar`) and
+  `JAVA` at the launcher (default `java`)
 - Python ≥3.11 (`tomllib`) — for the emitter and lint suite
 
 ## Tests
@@ -70,36 +76,35 @@ The static image is `$0800–$E786` (57,223 bytes). Run
 
 | bucket                              | bytes  | share |
 | ----------------------------------- | -----: | ----: |
-| instruction bytes                   | 26,630 | 46.5% |
-| data: zero-fill (buffers / init RAM)| 20,279 | 35.4% |
-| data: non-zero, with `notes`        | 10,228 | 17.9% |
-| data: non-zero, role-only residue   |     86 |  0.2% |
+| instruction bytes                   | 27,664 | 48.3% |
+| data: zero-fill (buffers / init RAM)| 20,236 | 35.4% |
+| data: non-zero, with `notes`        |  9,258 | 16.2% |
+| data: non-zero, role-only residue   |     65 |  0.1% |
 
 The largest data spans (`$2180-$5EFF` pattern RAM ≈75% zero, `$5FFF-$6DFF`
 sidTAB and `$DD01-$DFFE` tail both 100% zero) are initialised working RAM,
 named at their boundaries — not reverse-engineering gaps. The remaining
-role-only residue is **86 non-zero bytes (0.2%)** across 15 small spans —
+role-only residue is **65 non-zero bytes (0.1%)** across 8 small spans —
 SMC operand slots, 1-byte state vars, and one screen template — whose
 `role` already explains them; a `notes` line there would restate.
 
 Annotation catalogue (`tools/re/annotations.toml`):
 
-- 317 `[function.$XXXX]` entries (all have `role`; 283 have `notes`;
+- 355 `[function.$XXXX]` entries (all have `role`; 293 have `notes`;
   89 have explicit `callers`; 72 have explicit `inputs`)
-- 356 `[region.$XXXX]` entries
+- 362 `[region.$XXXX]` entries
 - 89 per-branch condition overrides, 16 text spans, 6 SMC-dispatch
   sites, 11 SMC-opcode-flip sites, 9 SMC-branch sites, 1
   refuted-hypothesis entry
 
-Comparison-site dataflow (`build/cmp_facts.json`, 1,630 branches):
+Comparison-site dataflow (`build/cmp_facts.json`, 1,690 branches):
 
-- 1,566 with a renderable lhs (96.1%) — operand-based, var-load,
+- 1,671 with a renderable lhs (98.9%) — operand-based, var-load,
   indirect-load, immediate, transformed, carried from the JSR caller,
   a register-level lhs (`A < #imm?`) for ALU-computed values, or a
   callee-result lhs (`kbd_scan->A was $FF?`) for values a JSR returned
-- 15 unknown (0.9%) — all stack-pull (PLA)
-- 39 with no flag-setter in range
-- 10 multi-source (flag-setter reachable from multiple lhs values)
+- 1 unknown (0.1%) — stack-pull (PLA)
+- 18 multi-source (flag-setter reachable from multiple lhs values)
 
 ## What is reproducible end-to-end
 
@@ -112,10 +117,10 @@ From a clean checkout + `make fetch-static && make ghidra-export && make roundtr
   running Ghidra 12.1 headlessly inside `Dockerfile.ghidra`. Diff-as-
   JSON against committed copies is asserted by
   `tests/test_ghidra_export.py`.
-- `defmon.s` is regenerated. Byte-for-byte identical to the committed
+- `defmon.asm` is regenerated. Byte-for-byte identical to the committed
   copy (asserted by `tests/test_emit.py`).
-- `defmon.s` round-trips through 64tass: the assembled bytes equal
-  `defmon-static.bin` over `$0800-$E786` (asserted by
+- `defmon.asm` round-trips through Kick Assembler: the assembled bytes
+  equal `defmon-static.bin` over `$0800-$E786` (asserted by
   `tests/test_roundtrip.py` and the `roundtrip` make target).
 
 ## What is *not* yet reproducible
@@ -145,10 +150,11 @@ headlessvice prereqs as the sweep.
 These are not unreproducible *per se*, but a change in any of them
 could surface as a failing test without an obvious cause.
 
-- **64tass version.** Currently `1.59.3120` (Ubuntu apt). A future
-  release could in principle emit different bytes for the same source,
-  breaking the round-trip. Mitigation if it ever bites: pin a known
-  release in CI.
+- **Kick Assembler version.** Developed against `5.25` (Java 21). A
+  future release could in principle emit different bytes for the same
+  source, breaking the round-trip. CI downloads the latest from
+  `theweb.dk`; mitigation if it ever bites: pin a known release (vendor
+  the jar) and set `KICKASS_JAR`.
 - **exomizer version.** The Dockerfile builds `3.1.2` from
   `bitbucket.org/magli143/exomizer`. If the Bitbucket archive moves or
   the upstream changes 3.1.2's behaviour, the unpack hash diverges.
@@ -177,7 +183,7 @@ reproducing the build.)
    floor — those `role`s already explain the bytes, so further `notes`
    would restate rather than inform.
 
-2. **15 branches have `unknown` lhs** in `cmp_facts.json`. All are
+2. **1 branch has `unknown` lhs** in `cmp_facts.json`. It is
    `pla`-from-stack — the tested register was pulled off the stack, so
    resolving it needs PHA/PLA stack-discipline tracking. Add manual
    `[branch."$XXXX"]` overrides, or extend `tools/re/cmp_facts.py`. List
@@ -188,11 +194,11 @@ reproducing the build.)
         if f.get('lhs',{}).get('kind')=='unknown'))"
 
 3. **Ghidra's symbol table has ~3,370 `DAT_`/`BYTE_` placeholders, but
-   `defmon.s` does not use them.** The emitter names addresses from its
+   `defmon.asm` does not use them.** The emitter names addresses from its
    own layers (annotations + `SEED_LANDMARKS` + state/equate labels), so
-   essentially every operand in `defmon.s` already resolves to a label —
+   essentially every operand in `defmon.asm` already resolves to a label —
    a grep for bare `$XXXX` operands finds none. The placeholder count is
-   Ghidra's internal view, not a `defmon.s` readability gap; promoting a
+   Ghidra's internal view, not a `defmon.asm` readability gap; promoting a
    Ghidra `DAT_xxxx` only matters where it would feed the export's
    symbol table, not the disassembly the reader sees.
 
@@ -200,10 +206,10 @@ reproducing the build.)
    future work doesn't re-walk them.
 
 5. **Every code-start is statically reachable** (`make
-   unreachable-triage` → 0). The two duplicate-encoding bytes (`$2B`
-   ANC, `$EB` SBC) that 64tass can't reproduce from a mnemonic are
-   classified as instructions but rendered as `.byte` with the decoded
-   op in the comment.
+   unreachable-triage` → 0). The duplicate-encoding bytes (`$2B` ANC,
+   `$EB` SBC) are emitted as Kick Assembler's `anc2`/`sbc2` mnemonics,
+   which assemble to those exact encodings — so they round-trip as real
+   instructions with no `.byte` escape.
 
 6. **SMC catalogue is curated** (dispatch + opcode + branch). 11
    genuine `smc_opcode` flips and the 9 `smc_branch` gate sites at

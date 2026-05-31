@@ -6,7 +6,7 @@ implicit extent of some [function] or [region] entry in
 `tools/re/annotations.toml`.
 
 The complementary code-side gate ("every JSR/JMP-abs target in
-defmon.s resolves to a [function] or [region]") landed in pass-8
+defmon.asm resolves to a [function] or [region]") landed in pass-8
 (commit 8bcd672). Pass-9 adds the data-side gate so the "every byte
 documented" goal is enforced by CI, not just AGENTS narrative.
 

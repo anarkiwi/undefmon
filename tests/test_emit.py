@@ -1,4 +1,4 @@
-"""End-to-end: regenerate defmon.s and verify it matches the committed copy."""
+"""End-to-end: regenerate defmon.asm and verify it matches the committed copy."""
 
 import hashlib
 import subprocess
@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-COMMITTED_DEFMON_S = REPO_ROOT / "defmon.s"
+COMMITTED_DEFMON_ASM = REPO_ROOT / "defmon.asm"
 BUILD_DIR = REPO_ROOT / "build"
 CMP_FACTS = BUILD_DIR / "cmp_facts.json"
 
@@ -31,10 +31,10 @@ def _run(*args: str) -> subprocess.CompletedProcess:
 
 
 class TestEmitRoundtrip(unittest.TestCase):
-    def test_committed_defmon_s_exists(self):
+    def test_committed_defmon_asm_exists(self):
         self.assertTrue(
-            COMMITTED_DEFMON_S.is_file(),
-            f"{COMMITTED_DEFMON_S} must be committed as the reference",
+            COMMITTED_DEFMON_ASM.is_file(),
+            f"{COMMITTED_DEFMON_ASM} must be committed as the reference",
         )
 
     def test_cmp_facts_builds(self):
@@ -48,13 +48,13 @@ class TestEmitRoundtrip(unittest.TestCase):
         self.assertTrue(CMP_FACTS.is_file())
         self.assertGreater(CMP_FACTS.stat().st_size, 1000)
 
-    def test_emit_matches_committed_defmon_s(self):
+    def test_emit_matches_committed_defmon_asm(self):
         BUILD_DIR.mkdir(exist_ok=True)
         if not CMP_FACTS.is_file():
             result = _run("tools.re.cmp_facts", "--out", str(CMP_FACTS))
             self.assertEqual(result.returncode, 0, f"cmp_facts failed: {result.stderr}")
 
-        out_path = BUILD_DIR / "defmon.regen.s"
+        out_path = BUILD_DIR / "defmon.regen.asm"
         result = _run("tools.re.emit_defmon_source", "--out", str(out_path))
         if result.returncode != 0:
             self.fail(
@@ -63,12 +63,12 @@ class TestEmitRoundtrip(unittest.TestCase):
             )
         self.assertTrue(out_path.is_file())
 
-        committed = _sha256(COMMITTED_DEFMON_S)
+        committed = _sha256(COMMITTED_DEFMON_ASM)
         regenerated = _sha256(out_path)
         self.assertEqual(
             committed,
             regenerated,
-            "Regenerated defmon.s does not match the committed copy. "
+            "Regenerated defmon.asm does not match the committed copy. "
             "Re-run `make` and commit the result if the change is intended.",
         )
 

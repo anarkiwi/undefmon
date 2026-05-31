@@ -215,8 +215,8 @@ OPS: dict[int, tuple[str, str, int]] = {
     0xC8: ("INY", "imp", 1),
     0xCA: ("DEX", "imp", 1),
     0x88: ("DEY", "imp", 1),
-    # Undocumented NMOS opcodes defMON uses (64tass needs `-i` to
-    # assemble these). Without them the host renders as `.byte` and its
+    # Undocumented NMOS opcodes defMON uses (Kick Assembler assembles
+    # these natively). Without them the host renders as `.byte` and its
     # whole fall-through run is mis-classified as unreachable.
     #   LAX — load A and X together (count bytes, super-command args,
     #     pitch-LUT reads). Modes: (zp),Y / abs / #imm / zp / zp,Y /
@@ -239,21 +239,19 @@ OPS: dict[int, tuple[str, str, int]] = {
     0x4B: ("ALR", "imm", 2),
     0x6B: ("ARR", "imm", 2),
     0xCB: ("AXS", "imm", 2),
-    # ANC ($2B) and SBC ($EB) are DUPLICATE encodings: 64tass canonicalises
-    # `anc`->$0B and `sbc`->$E9, so these specific bytes can't round-trip
-    # through the mnemonic. They are kept in the table so classify follows
-    # their fall-through (fixing reachability), but the emitter renders
-    # them as `.byte` (see ROUND_TRIP_UNSAFE_OPCODES in emit) with the
-    # decoded instruction in the comment.
+    # ANC ($2B) and SBC ($EB) are DUPLICATE encodings of $0B/$E9. Kick
+    # Assembler distinguishes them with the dedicated `anc2`/`sbc2`
+    # mnemonics, so they round-trip byte-exact (see KICKASS_DUP_MNEMONICS).
     0x2B: ("ANC", "imm", 2),
     0xEB: ("SBC", "imm", 2),
 }
 
-# Opcodes whose byte 64tass will not reproduce from the mnemonic (it emits
-# the canonical duplicate instead). The emitter renders these as `.byte`
-# to preserve the byte-exact round-trip; they stay in OPS so classify
-# still treats them as instructions for reachability.
-ROUND_TRIP_UNSAFE_OPCODES = frozenset({0x2B, 0xEB})
+# Duplicate-encoding undocumented opcodes whose canonical mnemonic
+# (`anc`/`sbc`) assembles to the OTHER encoding ($0B/$E9). Kick Assembler
+# provides `anc2`/`sbc2` to reproduce these exact bytes; the emitter uses
+# this map to pick the right mnemonic for them.
+KICKASS_DUP_MNEMONICS = {0x2B: "anc2", 0xEB: "sbc2"}
+
 
 
 # Operand suffix per addressing mode.
@@ -303,15 +301,15 @@ def fmt_operand(
 
 
 def render_struct_offset(seg: dict, addr: int) -> str | None:
-    """Render an address inside a struct-typed data segment as a 64tass
-    expression. Two modes:
+    """Render an address inside a struct-typed data segment as an
+    assembler expression. Two modes:
 
     1. **Dotted-instance form** (preferred). When the segment carries
        an ``instances`` list of ``(name, addr)`` tuples — one entry per
        array element — the result is ``<instance>.<field>`` or
        ``<instance> + $<offset>`` when the field is unnamed. Backed by
        a ``.struct`` + per-instance ``.virtual`` / ``.dstruct`` emission
-       in defmon.s, so the dotted suffixes resolve at assemble time.
+       in defmon.asm, so the dotted suffixes resolve at assemble time.
 
     2. **Flat-equate form** (legacy). For segments without
        ``instances`` the result is the prior
@@ -377,7 +375,7 @@ def render_struct_offset(seg: dict, addr: int) -> str | None:
     return f"{seg['name']} + " + " + ".join(parts)
 
 
-def emit_64tass_instruction(
+def emit_instruction(
     mode: str,
     p1: int,
     p2: int,
@@ -391,14 +389,14 @@ def emit_64tass_instruction(
     bank_ram: bool = False,
     ram_banked_ranges: list[tuple[int, int]] | None = None,
 ) -> str:
-    """Format an instruction operand in 64tass syntax.
+    """Format a 6502 instruction operand.
 
-    64tass auto-picks ZP-mode encoding for operands that fit in a byte
-    and ABS encoding for everything else. So the `@b` / `@w` addressing-
-    mode forces are only needed in one specific case: an ABS-encoded
-    instruction whose operand happens to fall in the ZP range — without
-    `@w` 64tass would shrink it to a 2-byte ZP encoding and the
-    round-trip would break.
+    The operand syntax (``#$NN``, ``$NNNN``, ``($NN),y`` …) is identical
+    across assemblers; this returns just the operand text and the caller
+    supplies the mnemonic. defMON's image never encodes an ABS-mode
+    instruction whose operand falls in the zero page, so no explicit
+    addressing-mode width force is emitted — the round-trip check is the
+    authoritative guard if that ever changes.
 
     ``struct_segments`` — list of segment dicts (start/end_excl/name/
     struct) for data regions with a defined struct layout. When an
@@ -446,6 +444,14 @@ def emit_64tass_instruction(
         start, end_excl, name = spans[idx]
         if not (start <= addr < end_excl):
             return None
+        # Kick Assembler is case-sensitive, so an anchor reference must use
+        # the exact spelling of the equate emitted at its base. When a
+        # label is defined there that differs only in case (e.g. the
+        # `screen_ram` equate vs the `SCREEN_RAM` anchor span), defer to
+        # the defined label so the reference resolves.
+        base = labels.get(start)
+        if base is not None and base.lower() == name.lower():
+            name = base
         offset = addr - start
         return name if offset == 0 else f"{name} + ${offset:02X}"
 
@@ -503,16 +509,13 @@ def emit_64tass_instruction(
         return f"({lbl_zp(p1)}),y"
     if mode == "abs":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)}"
+        return f"{lbl(addr)}"
     if mode == "abx":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)},x"
+        return f"{lbl(addr)},x"
     if mode == "aby":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)},y"
+        return f"{lbl(addr)},y"
     if mode == "ind":
         addr = p1 | (p2 << 8)
         return f"({lbl(addr)})"
@@ -523,7 +526,9 @@ def emit_64tass_instruction(
         target = (pc + 2 + off) & 0xFFFF
         return lbl(target)
     if mode == "acc":
-        return "a"
+        # Kick Assembler uses the bare mnemonic for accumulator mode
+        # (`lsr`, not `lsr a` — the latter parses `a` as a symbol).
+        return ""
     return "?"
 
 
