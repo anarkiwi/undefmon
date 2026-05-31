@@ -14,7 +14,10 @@ For every ``[function]`` entry, computes three interface fields over A/X/Y:
 
 All three compose across JSR/tail-call edges via fixed-points. A register
 is clobbered if any path writes it; an input if any path reads it before a
-definite write. Computed/self-modified/out-of-image calls are treated
+definite write. Calls to the standard C64 KERNAL jump-table vectors are
+modelled from their documented register effects (the ``_KERNAL`` table), so
+a function whose only opaque call is a KERNAL routine is analysed precisely.
+Remaining computed/self-modified/out-of-image calls are treated
 conservatively (clobber A/X/Y; read A/X/Y) so neither clobbers nor inputs
 UNDER-reports; outputs is the conservative-against-false-claim direction
 and is only rendered for soundly-analysed (certain) functions.
@@ -96,6 +99,38 @@ _WRITES: dict[str, frozenset[str]] = {
     "LAX": frozenset("AX"),
 }
 _SHIFTS = {"ASL", "LSR", "ROL", "ROR"}
+
+# Documented A/X/Y register effects of the standard C64 KERNAL jump-table
+# vectors, as (reads, writes). `reads` = the registers the routine consumes
+# as inputs (so they are live-in at the call); `writes` = the registers it
+# changes ("registers affected" per the Commodore 64 Programmer's Reference
+# Guide) — the sound clobber set. A direct `JSR $FFxx` runs with the KERNAL
+# ROM banked in (defMON only banks it out behind the jsr_with_ram_helper
+# trampoline, never around these straight calls), so the standard contract
+# holds. Modelling these lets a function whose only opaque call was a KERNAL
+# vector be analysed precisely instead of falling back to the conservative
+# A/X/Y; the effect cascades to its callers.
+_KERNAL: dict[int, tuple[frozenset[str], frozenset[str]]] = {
+    0xFF9F: (frozenset(), frozenset("AXY")),  # SCNKEY  scan keyboard
+    0xFFB7: (frozenset(), frozenset("A")),  # READST  read I/O status
+    0xFFBA: (frozenset("AXY"), frozenset()),  # SETLFS  set file/dev/secondary
+    0xFFBD: (frozenset("AXY"), frozenset()),  # SETNAM  set filename
+    0xFFC0: (frozenset(), frozenset("AXY")),  # OPEN
+    0xFFC3: (frozenset("A"), frozenset("AXY")),  # CLOSE   A = logical file no.
+    0xFFC6: (frozenset("X"), frozenset("AX")),  # CHKIN   X = logical file no.
+    0xFFC9: (frozenset("X"), frozenset("AX")),  # CHKOUT  X = logical file no.
+    0xFFCC: (frozenset(), frozenset("AX")),  # CLRCHN  restore default I/O
+    0xFFCF: (frozenset(), frozenset("AX")),  # CHRIN   -> A = byte
+    0xFFD2: (frozenset("A"), frozenset("A")),  # CHROUT  A = byte to output
+    0xFFD5: (frozenset("AXY"), frozenset("AXY")),  # LOAD    A=verify X/Y=addr
+    0xFFD8: (frozenset("AXY"), frozenset("AXY")),  # SAVE    A=zp ptr X/Y=end
+    0xFFDB: (frozenset("AXY"), frozenset()),  # SETTIM  set jiffy clock
+    0xFFDE: (frozenset(), frozenset("AXY")),  # RDTIM   -> A/X/Y = jiffies
+    0xFFE1: (frozenset(), frozenset("AX")),  # STOP    test STOP key
+    0xFFE4: (frozenset(), frozenset("AXY")),  # GETIN   -> A = byte
+    0xFFE7: (frozenset(), frozenset("AX")),  # CLALL   close all channels
+    0xFFF0: (frozenset("XY"), frozenset("AXY")),  # PLOT    C=0 set / C=1 read cursor
+}
 
 _RETURNS = {0x60, 0x40, 0x00}  # RTS, RTI, BRK
 _JSR = 0x20
@@ -220,6 +255,10 @@ def _walk_subroutine(
             if reachable(tgt):
                 calls.add(tgt)
                 callees.add(tgt)
+            elif tgt in _KERNAL:
+                kr, kw = _KERNAL[tgt]
+                reads |= kr  # KERNAL routine's documented effects, inline
+                writes |= kw
             else:
                 uncertain = True
                 reads |= _ALL  # computed callee — may read anything
@@ -228,6 +267,10 @@ def _walk_subroutine(
             tgt = mem[pc + 1] | (mem[pc + 2] << 8)
             if tgt in entries or reachable(tgt):
                 go(tgt)
+            elif tgt in _KERNAL:
+                kr, kw = _KERNAL[tgt]  # tail-call into KERNAL, then returns
+                reads |= kr
+                writes |= kw
             else:
                 uncertain = True
         elif op in _BRANCHES and n == 2:

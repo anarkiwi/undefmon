@@ -181,6 +181,51 @@ class TestAnalyze(unittest.TestCase):
         self.assertEqual(out["$2000"]["outputs"], "A")
         self.assertEqual(out["$3000"]["outputs"], "A")
 
+    def test_kernal_call_is_certain_with_modelled_effects(self):
+        """A function whose only opaque call is a KERNAL vector is analysed
+        precisely (not uncertain): JSR LOAD ($FFD5) clobbers A/X/Y and reads
+        A/X/Y (verify flag + load address) as inputs."""
+        mem = _img({0x1000: bytes([0x20, 0xD5, 0xFF, 0x60])})
+        instr = _instr([(0x1000, ("JSR", "abs", 3)), (0x1003, ("RTS", "imp", 1))])
+        out = R.analyze(mem, instr, frozenset({0x1000}))
+        self.assertFalse(out["$1000"]["uncertain"])
+        self.assertEqual(out["$1000"]["clobbers"], "AXY")
+        self.assertEqual(out["$1000"]["inputs"], "AXY")
+
+    def test_kernal_input_defined_first_is_not_an_input(self):
+        """CHROUT ($FFD2) reads A, but a preceding LDA defines it, so A is
+        not a live-in input; CHROUT still clobbers A."""
+        mem = _img({0x1000: bytes([0xA9, 0x01, 0x20, 0xD2, 0xFF, 0x60])})
+        instr = _instr(
+            [
+                (0x1000, ("LDA", "imm", 2)),
+                (0x1002, ("JSR", "abs", 3)),
+                (0x1005, ("RTS", "imp", 1)),
+            ]
+        )
+        out = R.analyze(mem, instr, frozenset({0x1000}))
+        self.assertEqual(out["$1000"]["inputs"], "")
+        self.assertEqual(out["$1000"]["clobbers"], "A")
+        self.assertFalse(out["$1000"]["uncertain"])
+
+    def test_kernal_input_read_before_write_is_an_input(self):
+        """CLOSE ($FFC3) reads A (the logical file number) before the
+        function defines it, so A is an input; CLOSE clobbers A/X/Y."""
+        mem = _img({0x1000: bytes([0x20, 0xC3, 0xFF, 0x60])})
+        instr = _instr([(0x1000, ("JSR", "abs", 3)), (0x1003, ("RTS", "imp", 1))])
+        out = R.analyze(mem, instr, frozenset({0x1000}))
+        self.assertEqual(out["$1000"]["inputs"], "A")
+        self.assertEqual(out["$1000"]["clobbers"], "AXY")
+
+    def test_unmodelled_opaque_call_stays_uncertain(self):
+        """A call to an address that is neither program code nor a known
+        KERNAL vector ($FFFF) remains conservatively uncertain -> A/X/Y."""
+        mem = _img({0x1000: bytes([0x20, 0xFF, 0xFF, 0x60])})
+        instr = _instr([(0x1000, ("JSR", "abs", 3)), (0x1003, ("RTS", "imp", 1))])
+        out = R.analyze(mem, instr, frozenset({0x1000}))
+        self.assertTrue(out["$1000"]["uncertain"])
+        self.assertEqual(out["$1000"]["clobbers"], "AXY")
+
     def test_memory_only_clobbers_nothing(self):
         """sta (zp),y; rts writes memory, not a register."""
         mem = _img({0x1000: bytes([0x91, 0xFB, 0x60])})
