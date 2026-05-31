@@ -391,14 +391,18 @@ def _find_flag_setter(
     branch_mnem: str,
     graph,
     instr_at: dict[int, tuple[str, str, int]],
-    max_skip: int = 6,
+    max_skip: int = 40,
 ) -> int | None:
-    """Walk back via fall-through edges through flag-neutral ops,
-    returning the PC of the most recent instruction that sets the
-    flag the branch consumes. Returns None if no recognised setter
-    is found within ``max_skip`` skipped instructions, or if the
-    chain leaves fall-through territory (e.g. the branch lands at
-    a multi-inbound site)."""
+    """Walk back via fall-through edges to the instruction that set the
+    flag the branch consumes. Skips any instruction that does NOT set
+    that specific flag (the per-flag setter table is complete, so an op
+    absent from it leaves the flag untouched and is transparent) — e.g.
+    an ``LDA`` between a ``CMP`` and a ``BCC`` doesn't touch carry. A
+    ``JSR`` is returned as the setter: nothing after it touched the flag,
+    so the value tested is the flag as the callee left it. Returns None at
+    a control-flow barrier (``JMP``/``RTS``/``RTI``/``BRK``), when the
+    chain leaves fall-through territory (a multi-inbound site), or after
+    ``max_skip`` transparent instructions."""
     flag = _BRANCH_FLAG.get(branch_mnem)
     if flag is None:
         return None
@@ -410,15 +414,14 @@ def _find_flag_setter(
         if info is None:
             return None
         mnem = info[0]
-        if mnem in setters:
+        if mnem in setters or mnem == "JSR":
             return pc
-        if mnem in _FLAG_NEUTRAL:
-            skipped += 1
-            if skipped > max_skip:
-                return None
-            pc = graph.fall_through_in.get(pc)
-            continue
-        return None
+        if mnem in ("JMP", "RTS", "RTI", "BRK"):
+            return None
+        skipped += 1
+        if skipped > max_skip:
+            return None
+        pc = graph.fall_through_in.get(pc)
     return None
 
 
@@ -1018,6 +1021,23 @@ def collect_facts(
                 "containing_block": _block_of(pc, sorted_pcs, name_by_pc),
             }
             stats["computed_reg"] += 1
+            continue
+
+        # JSR as the setter: nothing after the call touched the flag, so
+        # the branch tests the flag as the callee left it on return.
+        if s_mnem == "JSR" and s_n == 3:
+            tgt = mem[setter_pc + 1] | (mem[setter_pc + 2] << 8)
+            flag = _BRANCH_FLAG[mnem]
+            facts[f"${pc:04X}"] = {
+                "branch": mnem,
+                "taken_target": f"${taken:04X}" if taken is not None else None,
+                "fall_through": f"${fall_through:04X}",
+                "flag_setter": flag_setter_rec,
+                "lhs": {"kind": "jsr_flag", "target": f"${tgt:04X}", "flag": flag},
+                "rhs": None,
+                "containing_block": _block_of(pc, sorted_pcs, name_by_pc),
+            }
+            stats["jsr_flag"] = stats.get("jsr_flag", 0) + 1
             continue
 
         # PLA as the direct setter: the branch tests the byte pulled off
