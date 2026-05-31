@@ -5349,28 +5349,6 @@ def load_refuted_addresses(annotations_path: Path) -> set[int]:
     return out
 
 
-def load_reg_effects(path: Path) -> dict[int, dict]:
-    """Load per-function register-clobber facts (from
-    `tools/re/reg_effects.py`) keyed by integer function address.
-
-    Each record carries the derived `clobbers` string and an `uncertain`
-    flag. The emitter renders a derived `registers clobbered:` line only
-    for certain functions without a hand annotation. Returns {} if the
-    file doesn't exist (optional — without it, no derived clobbers).
-    """
-    if not path.is_file():
-        return {}
-    data = json.loads(path.read_text())
-    out: dict[int, dict] = {}
-    for k, v in data.items():
-        if isinstance(k, str) and k.startswith("$") and isinstance(v, dict):
-            try:
-                out[int(k.lstrip("$"), 16)] = v
-            except ValueError:
-                pass
-    return out
-
-
 def load_cmp_facts(facts_path: Path) -> dict[int, dict]:
     """Load comparison-site facts (from `tools/re/cmp_facts.py`) keyed
     by integer branch PC.
@@ -5669,11 +5647,21 @@ def main() -> None:
     cmp_facts_path = Path(__file__).resolve().parents[2] / "build" / "cmp_facts.json"
     cmp_facts = load_cmp_facts(cmp_facts_path)
 
-    # Per-function register-clobber facts (tools/re/reg_effects.py).
-    # Drives the derived `registers clobbered:` line for certain
-    # functions without a hand annotation. Optional.
-    reg_effects_path = Path(__file__).resolve().parents[2] / "build" / "reg_effects.json"
-    reg_effects = load_reg_effects(reg_effects_path)
+    # Per-function register-clobber facts — computed inline (like the
+    # callgraph) rather than read from build/reg_effects.json, so the
+    # emitter is self-contained and the committed defmon.s reproduces
+    # without a separate build step. Drives the derived `registers
+    # clobbered:` line for certain functions with no hand annotation.
+    reg_effects: dict[int, dict] = {}
+    if not args.bytes_only and args.annotations:
+        from tools.re.reg_effects import analyze as _analyze_reg_effects
+        from tools.re.reg_effects import _function_entries
+        fn_entries = _function_entries(Path(args.annotations))
+        reg_effects = {
+            int(k.lstrip("$"), 16): v
+            for k, v in _analyze_reg_effects(
+                mem, instr_at, fn_entries, args.start, args.end).items()
+        }
 
     # Per-PC IMM operand overrides (manual `[imm."$XXXX"]` entries).
     # Loaded here so the resolver can be passed into emit_source.
