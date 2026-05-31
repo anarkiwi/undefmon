@@ -7904,6 +7904,9 @@ l_5:                       rts    ; $844B
 ; Field-writer dispatcher (self-modifying).
 ;
 ;   callers:             65 code sites: $AEC0, $AECE, $AEDC, $AEE7, $AEF2, $AEFD, $AF27, $AF3F, +57 more
+;   inputs:              A, X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Caller passes (A=data, X=lo, Y=hi); field_writer_jsr_smc self-mods to jsr $YX, dispatching to the appropriate per-field writer.
 ;
@@ -7954,6 +7957,7 @@ l_3:                       adc  #$0F    ; $847B
 ;   callers:             Reached from 4 sites in field_writer_dispatcher's preamble after arg-mode dispatch: field_writer_dispatcher (Y!=1, A pre-ASL'd), field_writer_dispatcher (Y==2 direct), field_writer_dispatcher (Y==4 fall-through), field_writer_dispatcher (Y==4 with X>=$12 cap).
 ;   inputs:              A = arg-normalized step-byte increment (caller-supplied per arg mode); Y = mode (ui_mode value, latched by caller at field_writer_dispatcher); writer_loop_count = repeat count; super_arg_count/super_arg = src/dst pat-num for clone modes; step_cursor/page_offset = cursor step + page offset.
 ;   outputs:             super_cmd_write_dispatch (step increment), super_cmd_write_dispatch (count), super_cmd_write_dispatch (pat staging) all self-modified for the write loop.
+;   registers clobbered: A, X, Y
 ;
 ;   Self-mod the writer loop's operand slots:
 ;     - write super_cmd_write_dispatch (step-byte increment, operand of lda #$xx at super_cmd_write_dispatch).
@@ -8022,6 +8026,7 @@ l_2:                       cpy  #UI_MODE_SIDTAB    ; $84B5
 ;   callers:             field_writer_high_bit_shim (Y==1 seqED arm), field_writer_high_bit_shim (Y==2 seqLIST arm), field_writer_high_bit_shim (Y==4 sidTAB), field_writer_high_bit_shim (Y==4 with seqLIST add-mode).
 ;   inputs:              A = step byte (from super_cmd_write_setup); writer_range_fill_mode = mode flag ($01 = range-fill, else single-cell); super_cmd_status_mirror = pattern-number working slot.
 ;   outputs:             super_cmd_writer_step_smc (counter), field_writer_offset_smc (writer ADC operand), cursor_state_cluster (current step) self-modified; either super_cmd_resolve_target dispatches once or loops $7F times in range-fill mode.
+;   registers clobbered: A, X, Y
 ;
 ;   Setup:
 ;     - write cursor_state_cluster (current step).
@@ -8095,6 +8100,7 @@ super_cmd_writer_bare_return .block
 ;   callers:             2 code sites: $84DF super_cmd_write_iter_1, $84EA super_cmd_writer_abort_trampoline_2
 ;   inputs:              ui_mode = mode; super_cmd_status_mirror = pattern-num slot (seqED); field_writer_offset_smc = step-byte (self-mod from super_cmd_write_iter); X = step index for sidTAB indirect.
 ;   outputs:             $02/$03 zp pointer = target cell address; JMP super_cmd_write_dispatch dispatches the actual writer.
+;   registers clobbered: A, X, Y
 ;
 ;   Shared seqED / seqLIST / sidTAB cursor-cell address resolver. Reads ui_mode and dispatches:
 ;     - seqED ($01):
@@ -8180,6 +8186,7 @@ l_1:                       cmp  #UI_MODE_SIDTAB    ; $8550
 ;   callers:             super_cmd_resolve_target_adc_smc, super_cmd_resolve_target_tail, super_cmd_resolve_target_tail (per-mode fan-in from super_cmd_resolve_target).
 ;   inputs:              $02/$03 = resolved writer target (from super_cmd_resolve_target); writer_loop_stride = per-iter stride (signed); super_cmd_write_dispatch = step-increment byte (from super_cmd_write_setup); Y = mode.
 ;   outputs:             Calls the writer 1..writer_loop_count times, walking through $02/$03 + stride per iteration, with mode-specific overflow / ceiling checks.
+;   registers clobbered: A, X, Y
 ;
 ;   Setup:
 ;     - A←$FF → write super_arg_count / write super_arg (mark super-write 'fresh').
@@ -13092,6 +13099,10 @@ l_1:                       cpy  #KEY_INSTDEL    ; $AED4
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED clear-no-advance arm (INSTDEL, $84).
 ;
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
+;
 ;   code edges:          fall-through from $AED6 in seqED_clear_advance_arm_1 (2 bytes earlier)
 ;
 ;   Dispatches writer_clear_note via field_writer_dispatcher, then falls through to the next arm (no auto-advance). Companion of seqED_clear_advance_arm — same writer, no cursor step.
@@ -13132,6 +13143,10 @@ l_7:                       cpy  #KEY_A    ; $AF14
 ; $AF1C  seqED_sidcall_arm
 ; ──────────────────────────────────────────────────────────────────────
 ; seqED sidCALL arm.
+;
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $AF1A in seqED_clear_arm_7 (2 bytes earlier)
 ;
@@ -13882,6 +13897,7 @@ l_5:                       sta  step_cursor    ; $B390
 ; writes a sidCALL nibble.
 ;
 ;   inputs:              ($02) = pattern step row base; A from caller = nibble value; kbd_modifiers selects slot 1 vs slot 2
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Reads kbd_modifiers; CBM-only → X=$01 (sidCALL1 slot, +1 byte offset); CBM+SHIFT → X=$02 (sidCALL2 slot, +2 byte offset). read ($02),y / ora octave_offset,X to merge new nibble with the cell's existing high nibble. Caller (seqED_sidcall_arm) increments digit_phase after the call to flip to the second nibble next time.
@@ -14838,6 +14854,9 @@ l_13:                      rts    ; $BBB4
 ; sidTAB handler (mode ui_mode=UI_MODE_SIDTAB).
 ;
 ;   callers:             1 code sites: $095E
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   X←kbd_modifiers / Y←kbd_decoded_key, cascade dispatch on (mod, key) → call field_writer_dispatcher with writer (X,Y).
 sidTAB_handler .block
@@ -14854,6 +14873,9 @@ sidTAB_handler .block
 ; sidTAB cascade entry.
 ;
 ;   callers:             1 code sites: $BBBE
+;   inputs:              A, X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Branches on modifier byte X: no-mod (X=$00) takes the hex-letter arm; otherwise (any modifier) falls into the CBM/LSHIFT cascade. Reached from sidTAB_handler via jsr.
 sidtab_cascade .block
@@ -14868,6 +14890,9 @@ sidtab_cascade .block
 ; sidTAB cascade no-mod arm — A..F hex-letter range.
 ;
 ;   callers:             1 code sites: $BBC4
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Decoded keys Y=$01..$06 are letters A-F (per kbd_scancode_lut LUT); fall outside that range and the digit-arm at sidtab_cascade_nomod_hex_digit_arm handles 0-9 instead. On a hex-letter hit, biases Y by +9 to reach nibble values $0A..$0F, then dispatches via field_writer_dispatcher and advances the cursor right.
 sidtab_cascade_nomod_hex_letter_arm .block
@@ -14890,6 +14915,9 @@ l_1:                       ldx  #$5F    ; $BBD5
 ; sidTAB cascade no-mod arm — hex digit 0..9.
 ;
 ;   callers:             2 code sites: $BBCB, $BBCF
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Decoded keys Y=$30..$39 are the hex digits '0'..'9'. Strips the top nibble (A &= $0F) to extract the digit value and shares the writer entry with the hex-letter arm at sidtab_cascade_nomod_hex_letter_arm.
 sidtab_cascade_nomod_hex_digit_arm .block
@@ -14908,6 +14936,9 @@ sidtab_cascade_nomod_hex_digit_arm .block
 ; sidTAB cascade no-mod arm — bare INSTDEL key ($6F → jump chipview_step_down chip-view DOWN).
 ;
 ;   callers:             2 code sites: $BBE1, $BBE5
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Decoded $6F per kbd_scancode_lut LUT row-0 bit-0.
 sidtab_cascade_nomod_instdel_arm .block
@@ -14922,6 +14953,9 @@ sidtab_cascade_nomod_instdel_arm .block
 ; sidTAB cascade no-mod arm — bare F3 key ($6A → jump chipview_step_right chip-view RIGHT).
 ;
 ;   callers:             1 code sites: $BBEF
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Decoded $6A per kbd_scancode_lut row-0 bit-5.
 sidtab_cascade_nomod_f3_arm .block
@@ -14936,6 +14970,9 @@ sidtab_cascade_nomod_f3_arm .block
 ; sidTAB cascade no-mod arm — bare LEFTARROW ($1F → read ui_mode_prev / call mode_transition_wrapper / jump vic_sprite_init: exit sidTAB to prior mode).
 ;
 ;   callers:             1 code sites: $BBF6
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_leftarrow_arm .block
                            cpy  #KEY_LEFTARROW    ; $BBFB
                            bne  sidtab_cascade_nomod_space_arm    ; $BBFD  kbd_decoded_key was not KEY_LEFTARROW?
@@ -14961,6 +14998,9 @@ sidtab_cascade_nomod_entry .block
 ; sidTAB cascade no-mod arm — bare SPACE ($20 → writer C199 with X=$99 Y=$C1, then chip-view RIGHT).
 ;
 ;   callers:             1 code sites: $BBFD
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_space_arm .block
                            cpy  #KEY_SPACE    ; $BC08
                            bne  sidtab_cascade_nomod_period_arm    ; $BC0A  kbd_decoded_key was not KEY_SPACE?
@@ -14976,6 +15016,9 @@ sidtab_cascade_nomod_space_arm .block
 ; sidTAB cascade no-mod arm — bare PERIOD ($2E → writer C1AB with X=$AB Y=$C1).
 ;
 ;   callers:             1 code sites: $BC0A
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_period_arm .block
                            cpy  #KEY_PERIOD    ; $BC16
                            bne  sidtab_cascade_nomod_comma_arm    ; $BC18  kbd_decoded_key was not KEY_PERIOD?
@@ -14990,6 +15033,9 @@ sidtab_cascade_nomod_period_arm .block
 ; sidTAB cascade no-mod arm — bare COMMA ($2C → writer C1CE with X=$CE Y=$C1).
 ;
 ;   callers:             1 code sites: $BC18
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_comma_arm .block
                            cpy  #KEY_COMMA    ; $BC21
                            bne  sidtab_cascade_nomod_f5_arm    ; $BC23  kbd_decoded_key was not KEY_COMMA?
@@ -15004,6 +15050,9 @@ sidtab_cascade_nomod_comma_arm .block
 ; sidTAB cascade no-mod arm — bare F5 key ($92 → set writer_sidtab_supercmd=$F0, writer C211 with X=$11 Y=$C2).
 ;
 ;   callers:             1 code sites: $BC23
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Decoded $92 = F5 via kbd_scancode_lut.
 sidtab_cascade_nomod_f5_arm .block
@@ -15022,6 +15071,9 @@ sidtab_cascade_nomod_f5_arm .block
 ; sidTAB cascade no-mod arm — bare CLR/HOME ($93 → A←$02 / call mode_transition_wrapper / jump vic_sprite_init: exit to seqLIST).
 ;
 ;   callers:             1 code sites: $BC2E
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_clrhome_arm .block
                            cpy  #KEY_STOP    ; $BC3C
                            bne  sidtab_cascade_nomod_slash_arm    ; $BC3E  kbd_decoded_key was not KEY_STOP?
@@ -15036,6 +15088,8 @@ sidtab_cascade_nomod_clrhome_arm .block
 ; sidTAB cascade no-mod arm — bare SLASH ($2F → writer C146 with X=$46 Y=$C1 = sidTAB toggle).
 ;
 ;   callers:             1 code sites: $BC3E
+;   inputs:              A, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_nomod_slash_arm .block
                            cpy  #KEY_SLASH    ; $BC48
                            bne  l_1    ; $BC4A  kbd_decoded_key was not KEY_SLASH?
@@ -15051,6 +15105,9 @@ l_1:                       jmp  sidtab_dispatch_bare_return    ; $BC53
 ; sidTAB cascade CBM entry (compare X=$20).
 ;
 ;   callers:             1 code sites: $BBC6
+;   inputs:              X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   kbd_modifiers modifier KBD_MOD_CBM = CBM (per modifier_extract). Mirrors sidtab_cascade_nomod_hex_letter_arm's no-mod shape but selects CBM-modified writer targets.
 sidtab_cascade_cbm_entry .block
@@ -15075,6 +15132,9 @@ l_1:                       ldx  #$5F    ; $BC66
 ; sidTAB cascade CBM arm — hex digit range ($30-$39).
 ;
 ;   callers:             2 code sites: $BC5C, $BC60
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   A&=$0F → jump sidtab_cascade_cbm_entry (writer X=$5F Y=$C1, post-jump chipview_step_down chip-view DOWN).
 sidtab_cascade_cbm_hex_digit_arm .block
@@ -15093,6 +15153,9 @@ sidtab_cascade_cbm_hex_digit_arm .block
 ; sidTAB cascade CBM arm — CBM+INSTDEL ($6F → jump cursor_redraw_request sidtab_scroll +1 + cursor redraw).
 ;
 ;   callers:             2 code sites: $BC72, $BC76
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbm_instdel_arm .block
                            cpy  #KEY_CRSRUD    ; $BC7E
                            bne  sidtab_cascade_cbm_space_arm    ; $BC80  kbd_decoded_key was not KEY_CRSRUD?
@@ -15105,6 +15168,9 @@ sidtab_cascade_cbm_instdel_arm .block
 ; sidTAB cascade CBM arm — CBM+SPACE ($20 → writer C199 with X=$99 Y=$C1, post-write chip-view DOWN).
 ;
 ;   callers:             1 code sites: $BC80
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbm_space_arm .block
                            cpy  #KEY_SPACE    ; $BC85
                            bne  sidtab_cascade_cbm_leftarrow_arm    ; $BC87  kbd_decoded_key was not KEY_SPACE?
@@ -15120,6 +15186,9 @@ sidtab_cascade_cbm_space_arm .block
 ; sidTAB cascade CBM arm — CBM+LEFTARROW ($1F → A←$01 / call mode_transition_wrapper / jump vic_sprite_init: exit to seqED).
 ;
 ;   callers:             1 code sites: $BC87
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbm_leftarrow_arm .block
                            cpy  #KEY_LEFTARROW    ; $BC93
                            bne  sidtab_cascade_cbm_f5_arm    ; $BC95  kbd_decoded_key was not KEY_LEFTARROW?
@@ -15134,6 +15203,9 @@ l_1:                       lda  #$01    ; $BC97
 ; sidTAB cascade CBM arm — CBM+F5 ($92 → writer C36A with X=$6A Y=$C3 = JP/DL field writer).
 ;
 ;   callers:             1 code sites: $BC95
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbm_f5_arm .block
                            cpy  #KEY_RETURN    ; $BC9F
                            bne  sidtab_cascade_cbm_slash_arm    ; $BCA1  kbd_decoded_key was not KEY_RETURN?
@@ -15163,6 +15235,9 @@ l_1:                       jmp  sidtab_dispatch_bare_return    ; $BCB1
 ; sidTAB cascade LSHIFT entry (compare X=$10).
 ;
 ;   callers:             1 code sites: $BC58
+;   inputs:              X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   kbd_modifiers modifier KBD_MOD_SHIFT = LSHIFT per modifier_extract. Selects LSHIFT-modified writer targets; same range-then-key-cascade shape.
 sidtab_cascade_lshift_entry .block
@@ -15177,6 +15252,9 @@ sidtab_cascade_lshift_entry .block
 ; sidTAB cascade LSHIFT arm — A..F hex letter ($01-$06): tya+9 → writer X=$5F Y=$C1, then call sidTAB_shifted_helper (shifted-helper) + →test when negative to chain into chipview_step_left chip-view LEFT or fall to chipview_step_right RIGHT.
 ;
 ;   callers:             1 code sites: $BCB6
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_hex_letter_arm .block
                            cpy  #KEY_A    ; $BCBB
                            bcc  sidtab_cascade_lshift_hex_digit_arm    ; $BCBD  kbd_decoded_key was below KEY_A?
@@ -15201,6 +15279,9 @@ l_2:                       jsr  chipview_step_left    ; $BCD6
 ; sidTAB cascade LSHIFT arm — hex digit ($30-$39): A&=$0F → jump sidtab_cascade_lshift_hex_letter_arm (writer X=$5F Y=$C1).
 ;
 ;   callers:             2 code sites: $BCBD, $BCC1
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_hex_digit_arm .block
                            cpy  #KEY_0    ; $BCDC
                            bcc  sidtab_cascade_lshift_instdel_arm    ; $BCDE  kbd_decoded_key was below KEY_0?
@@ -15217,6 +15298,9 @@ sidtab_cascade_lshift_hex_digit_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+INSTDEL ($6F → jump chipview_step_up chip-view UP).
 ;
 ;   callers:             2 code sites: $BCDE, $BCE2
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_instdel_arm .block
                            cpy  #KEY_CRSRUD    ; $BCEA
                            bne  sidtab_cascade_lshift_f3_arm    ; $BCEC  kbd_decoded_key was not KEY_CRSRUD?
@@ -15229,6 +15313,9 @@ sidtab_cascade_lshift_instdel_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+F3 ($6A → jump chipview_step_left chip-view LEFT).
 ;
 ;   callers:             1 code sites: $BCEC
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_f3_arm .block
                            cpy  #KEY_CRSRLR    ; $BCF1
                            bne  sidtab_cascade_lshift_space_arm    ; $BCF3  kbd_decoded_key was not KEY_CRSRLR?
@@ -15241,6 +15328,9 @@ sidtab_cascade_lshift_f3_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+SPACE ($20 → writer C199 with X=$99 Y=$C1, post-write chipview_step_down chip-view DOWN).
 ;
 ;   callers:             1 code sites: $BCF3
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_space_arm .block
                            cpy  #KEY_SPACE    ; $BCF8
                            bne  sidtab_cascade_lshift_leftarrow_arm    ; $BCFA  kbd_decoded_key was not KEY_SPACE?
@@ -15256,6 +15346,9 @@ sidtab_cascade_lshift_space_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+LEFTARROW ($1F → jump sidtab_cascade_cbm_leftarrow_arm = CBM+LEFTARROW body, exits to seqED).
 ;
 ;   callers:             1 code sites: $BCFA
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_leftarrow_arm .block
                            cpy  #KEY_LEFTARROW    ; $BD06
                            bne  sidtab_cascade_lshift_f5_arm    ; $BD08  kbd_decoded_key was not KEY_LEFTARROW?
@@ -15268,6 +15361,9 @@ sidtab_cascade_lshift_leftarrow_arm .block
 ; sidTAB cascade LSHIFT arm — LSHIFT+F5 ($92 → writer C2D8 with X=$D8 Y=$C2).
 ;
 ;   callers:             1 code sites: $BD08
+;   inputs:              Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_lshift_f5_arm .block
                            cpy  #KEY_RETURN    ; $BD0D
                            bne  sidtab_cascade_lshift_slash_arm    ; $BD0F  kbd_decoded_key was not KEY_RETURN?
@@ -15297,6 +15393,9 @@ l_1:                       jmp  sidtab_dispatch_bare_return    ; $BD1F
 ; sidTAB cascade CBM+LSHIFT entry (compare X=$30 = $20|$10).
 ;
 ;   callers:             1 code sites: $BCB8
+;   inputs:              A, X, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   3-key arm: $6F → cursor_redraw_request (sidtab_scroll wrap-to-0), $20 → writer C352, $92 → writer C406.
 sidtab_cascade_cbmlshift_entry .block
@@ -15308,6 +15407,10 @@ sidtab_cascade_cbmlshift_entry .block
 ; $BD26  sidtab_cascade_cbmlshift_instdel_arm
 ; ──────────────────────────────────────────────────────────────────────
 ; sidTAB cascade CBM+LSHIFT arm — CBM+LSHIFT+INSTDEL ($6F → jump cursor_redraw_request: clear sidtab_scroll to 0).
+;
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $BD24 in sidtab_cascade_cbmlshift_entry (2 bytes earlier)
 sidtab_cascade_cbmlshift_instdel_arm .block
@@ -15322,6 +15425,9 @@ sidtab_cascade_cbmlshift_instdel_arm .block
 ; sidTAB cascade CBM+LSHIFT arm — CBM+LSHIFT+SPACE ($20 → writer C352 with X=$52 Y=$C3).
 ;
 ;   callers:             1 code sites: $BD28
+;   inputs:              A, Y
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbmlshift_space_arm .block
                            cpy  #KEY_SPACE    ; $BD2D
                            bne  sidtab_cascade_cbmlshift_f5_arm    ; $BD2F  kbd_decoded_key was not KEY_SPACE?
@@ -15336,6 +15442,8 @@ sidtab_cascade_cbmlshift_space_arm .block
 ; sidTAB cascade CBM+LSHIFT arm — CBM+LSHIFT+F5 ($92 → writer C406 with X=$06 Y=$C4).
 ;
 ;   callers:             1 code sites: $BD2F
+;   inputs:              A, Y
+;   registers clobbered: A, X, Y
 sidtab_cascade_cbmlshift_f5_arm .block
                            cpy  #KEY_RETURN    ; $BD38
                            bne  l_1    ; $BD3A  kbd_decoded_key was not KEY_RETURN?
@@ -16150,6 +16258,7 @@ l_1:                       rts    ; $C15E
 ; ──────────────────────────────────────────────────────────────────────
 ; write a hex digit to a sidTAB cell.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Fan-in: sidTAB_helper + pitch_lut_generator_inner_loop + sidTAB_shifted_helper (descriptor + mask). Looks up sidtab_cell_descriptor_lut,X to select first vs second nibble; merges A into sidTAB_staging,Y; calls advance / mask-paint helpers. Workhorse writer for the 30 hex-digit cells in a sidTAB row.
@@ -16185,6 +16294,7 @@ l_3:                       rts    ; $C198
 ; ──────────────────────────────────────────────────────────────────────
 ; SPACE in sidTAB.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Resets the staging cell to its default value and advances the cursor (via pitch_lut_generator_inner_loop). Default values per column (e.g. $2D '-' for value cells) come from the descriptor table at sidtab_cell_descriptor_lut.
@@ -16203,6 +16313,7 @@ l_1:                       rts    ; $C1AA
 ; ──────────────────────────────────────────────────────────────────────
 ; `>` (LSHIFT+PERIOD) in sidTAB.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Checks writer_loop_count: when ==1, advances cursor first; then increments the cell value (note:.
@@ -16228,6 +16339,7 @@ l_2:                       rts    ; $C1CD
 ; ──────────────────────────────────────────────────────────────────────
 ; `<` (LSHIFT+COMMA) in sidTAB.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Decrement-counterpart of writer_sidtab_inc. Same fan-in shape; A-=instead of adc.
@@ -16443,6 +16555,7 @@ sidTAB_dispatch_body_5:    rts    ; $C350
 ; CBM+SHIFT 'A' branch.
 ;
 ;   inputs:              X
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Bulk-clears the sidTAB staging at sidTAB_staging_prefix/sidTAB_staging_buffer_ext then runs pitch_lut_generator_inner_loop paint.
@@ -16603,6 +16716,8 @@ l_5:                       ldx  seqlist_cursor_aux2    ; $C474
 ; Secondary disk-mode handler.
 ;
 ;   callers:             1 code sites: $0940
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   NOT the visible menu.
 ;
@@ -20147,6 +20262,7 @@ l_5:                       lda  #$04    ; $E20E
 ; ──────────────────────────────────────────────────────────────────────
 ; seqLIST digit writer.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Bare hex-digit dispatch from seqLIST_handler routes here via the field_writer_dispatcher self-modifying jsr. Writes high nibble at col stop 2N then ORs in the low nibble at stop 2N+1 for voice N, walking $1B/$1C/$1D (SID#1) or $6E/$6F/$70 (SID#2 when chip-view=SID#2).
@@ -20191,6 +20307,7 @@ writer_seqlist_clear .block
 ; ──────────────────────────────────────────────────────────────────────
 ; CTRL super-command in seqLIST.
 ;
+;   outputs:             X
 ;   registers clobbered: A, X, Y
 ;
 ;   Reads super_arg super arg; on $00 jump seqLIST_screen_dirty_bump (fallback); else self-mods writer_seqlist_supercmd with the arg and runs a CTRL-N (clone-to-next-empty) or CTRL-U style action.
@@ -20480,6 +20597,9 @@ l_1:                       sta  (zp_ptr1_lo),y    ; $E54A
 ; seqLIST handler (mode ui_mode=UI_MODE_SEQLIST).
 ;
 ;   callers:             1 code sites: $0954
+;   inputs:              A
+;   outputs:             X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   Mode-switch chords: LEFTARROW→sidTAB, RUNSTOP→seqED.
 seqLIST_handler .block

@@ -200,6 +200,7 @@ def _walk_subroutine(
     entries: frozenset[int],
     start: int,
     end_excl: int,
+    smc: dict[int, frozenset[int]] | None = None,
 ):
     """Build one subroutine's intra-procedural CFG.
 
@@ -208,7 +209,15 @@ def _walk_subroutine(
     pc (a JSR target, or a tail JMP/fall-through into another entry) whose
     inputs/clobbers compose at fixpoint; ``succs`` are the intra-procedural
     continuation PCs. ``uncertain`` is set for a computed/self-modified/
-    out-of-image transfer whose effect can't be followed."""
+    out-of-image transfer whose effect can't be followed.
+
+    ``smc`` maps a self-modified dispatch site (a JSR/JMP whose operand the
+    program patches at runtime) to its enumerated set of target entries
+    (from the ``smc_dispatch`` annotations). At such a site the static
+    operand is a placeholder, so the walk composes the union of the listed
+    targets instead of giving up — turning a known multi-way dispatch into
+    a precise multi-callee edge."""
+    smc = smc or {}
     nodes: dict[int, dict] = {}
     callees: set[int] = set()
     uncertain = False
@@ -252,7 +261,11 @@ def _walk_subroutine(
             reads |= _ALL  # tail to an unknown target — may read anything
         elif op == _JSR and n == 3:
             tgt = mem[pc + 1] | (mem[pc + 2] << 8)
-            if reachable(tgt):
+            if pc in smc:
+                for t in smc[pc]:  # self-modified dispatch: all known targets
+                    calls.add(t)
+                    callees.add(t)
+            elif reachable(tgt):
                 calls.add(tgt)
                 callees.add(tgt)
             elif tgt in _KERNAL:
@@ -265,7 +278,11 @@ def _walk_subroutine(
             go(pc + 3)
         elif op == _JMP_ABS and n == 3:
             tgt = mem[pc + 1] | (mem[pc + 2] << 8)
-            if tgt in entries or reachable(tgt):
+            if pc in smc:
+                for t in smc[pc]:  # self-modified tail dispatch
+                    calls.add(t)
+                    callees.add(t)
+            elif tgt in entries or reachable(tgt):
                 go(tgt)
             elif tgt in _KERNAL:
                 kr, kw = _KERNAL[tgt]  # tail-call into KERNAL, then returns
@@ -464,13 +481,22 @@ def analyze(
     fn_entries: frozenset[int],
     start: int = LOAD_ADDR,
     end_excl: int = END_ADDR_EXCL,
+    smc: dict[int, frozenset[int]] | None = None,
 ) -> dict:
-    # Analyse every subroutine entry (named functions + all JSR targets) so
-    # the transitive closure is complete, not just the [function]-annotated
-    # subset.
+    # Self-modified dispatch sites resolve to their enumerated targets; keep
+    # only classified ones (so they compose as real callees).
+    smc = {
+        site: frozenset(t for t in tgts if start <= t < end_excl and t in instr_at)
+        for site, tgts in (smc or {}).items()
+    }
+    smc = {site: tgts for site, tgts in smc.items() if tgts}
+    smc_targets = frozenset().union(*smc.values()) if smc else frozenset()
+    # Analyse every subroutine entry (named functions + all JSR targets, plus
+    # the targets of self-modified dispatch sites) so the transitive closure
+    # is complete, not just the [function]-annotated subset.
     entries = frozenset(
         e
-        for e in (fn_entries | _jsr_targets(mem, instr_at))
+        for e in (fn_entries | _jsr_targets(mem, instr_at) | smc_targets)
         if start <= e < end_excl and e in instr_at
     )
     nodes_of: dict[int, dict] = {}
@@ -479,7 +505,7 @@ def analyze(
     uncertain: dict[int, bool] = {}
     for e in entries:
         nodes_of[e], callees[e], uncertain[e] = _walk_subroutine(
-            e, mem, instr_at, entries, start, end_excl
+            e, mem, instr_at, entries, start, end_excl, smc
         )
         direct[e] = (
             set().union(*(nd["writes"] for nd in nodes_of[e].values()))
@@ -582,6 +608,23 @@ def _function_entries(ann_path: Path) -> frozenset[int]:
     return frozenset(out)
 
 
+def _smc_dispatch_targets(ann_path: Path) -> dict[int, frozenset[int]]:
+    """Map each ``[smc_dispatch]`` site address to its enumerated target
+    entries. Sites with no recorded targets (e.g. the jsr_with_ram_helper
+    trampoline, whose target the caller passes in at runtime) are omitted —
+    they stay opaque and the function remains conservatively uncertain."""
+    import tomllib  # noqa: PLC0415
+
+    raw = tomllib.loads(ann_path.read_text())
+    out: dict[int, frozenset[int]] = {}
+    for site, body in raw.get("smc_dispatch", {}).items():
+        tgts = body.get("targets") or []
+        addrs = frozenset(int(t["addr"].lstrip("$"), 16) for t in tgts if "addr" in t)
+        if addrs:
+            out[int(str(site).lstrip("$"), 16)] = addrs
+    return out
+
+
 def _load(bin_path: Path, entry_path: Path, ann_path: Path):
     mem = bin_path.read_bytes()
     seeds = load_code_starts(entry_path)
@@ -609,7 +652,8 @@ def main(argv: list[str] | None = None) -> int:
     mem, instr_at, fn_entries, ann = _load(
         Path(args.bin), Path(args.entrypoints), Path(args.annotations)
     )
-    facts = analyze(mem, instr_at, fn_entries)
+    smc = _smc_dispatch_targets(Path(args.annotations))
+    facts = analyze(mem, instr_at, fn_entries, smc=smc)
 
     if args.report:
         from collections import Counter  # noqa: PLC0415
