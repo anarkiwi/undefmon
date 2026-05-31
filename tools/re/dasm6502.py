@@ -1,7 +1,8 @@
 """Minimal 6502 disassembler for defMON RE work.
 
-No undocumented opcodes (defMON is hand-assembled but uses standard NMOS
-instructions). Output is one line per instruction. Branch + jump targets
+defMON is hand-assembled and mostly standard NMOS, but uses three
+undocumented opcodes — LAX (zp),Y / LAX abs / SAX abs (see the OPS
+table). Output is one line per instruction. Branch + jump targets
 are computed and shown in operand. Address labels are emitted from a
 caller-supplied label dict.
 
@@ -126,11 +127,19 @@ OPS: dict[int, tuple[str, str, int]] = {
     # INX/INY/DEX/DEY
     0xE8: ("INX", "imp", 1), 0xC8: ("INY", "imp", 1),
     0xCA: ("DEX", "imp", 1), 0x88: ("DEY", "imp", 1),
-    # Undocumented NMOS opcodes. defMON uses exactly one — LAX (zp),Y at
-    # $D717 inside the LOAD-time decoder's RLE-fill path — to load the
-    # count byte into A and X simultaneously. 64tass must be invoked
-    # with `-i` (m6502 NMOS) for this to assemble.
+    # Undocumented NMOS opcodes defMON uses (64tass needs `-i` to
+    # assemble these):
+    #   LAX (zp),Y ($B3) — LOAD-time RLE-fill path; loads the count byte
+    #     into A and X at once.
+    #   LAX abs ($AF) — super_arg_extract entry (`lax super_arg_slot..`),
+    #     loads the staged super-command arg into A and X simultaneously.
+    #   SAX abs ($8F) — row_read_body gate sites: stores A&X over the
+    #     `lda #$FF` gate-mask immediate to self-modify the gate selector.
+    # Without these, the host instruction renders as `.byte` and its
+    # whole fall-through run is mis-classified as unreachable data.
     0xB3: ("LAX", "izy", 2),
+    0xAF: ("LAX", "abs", 3),
+    0x8F: ("SAX", "abs", 3),
 }
 
 # Operand suffix per addressing mode.

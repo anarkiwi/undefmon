@@ -775,18 +775,13 @@ v0_row_timer             = $114A
 ;   notes: V1 row timer = v1_row_timer, V2 row timer = v2_row_timer; same shape, same cadence.
 v0_freq_lookup_smc       = $1186
 v0_freq_lookup_smc_hi    = $1187
-SAX_v0_dur_nibble        = $11CC
-;   notes: SAX v0_row_timer (undocumented NMOS opcode $8F, 3 bytes). Stores A & X to absolute address v0_row_timer. V1 analog at row_read_body_v2_ldy_smc ($8F D2 11 → SAX v1_row_timer); V2 analog at row_advance_band_v2_ldy_smc ($8F 5A 12 → SAX v2_row_timer). Each lands the row's dur nibble into that voice's timer reload slot.
 v1_row_timer             = $11D2
 ;   notes: Same dur_nibble+2 cadence.
 player_state_120e        = $120E
 v0_player_state_120f     = $120F
-row_read_body_v2_ldy_smc = $1254
 v2_row_timer             = $125A
 v0_player_state_1296     = $1296
 v0_player_state_1297     = $1297
-row_advance_band_v2_ldy_smc = $12DC
-;   notes: Adjacent to row_advance_band_end = V0_sc1_row_idx counter.
 row_advance_band_end     = $12DE
 v0_sc1_counter           = $12E0
 ;   notes:
@@ -1172,8 +1167,6 @@ iec_encoder_band_end     = $80FF
 ;   notes: Heavily exercised on save.
 super_cmd_arg_prompt_template = $8355
 statusline_print_state_83b7 = $83B7
-super_arg_extract        = $8412
-;   notes: Then A←X / A&=$80 /... extracts the active super-command's arg value into super_arg for the writer to read. Called before writer-arm dispatch when a super command is staged. 3 callers.
 super_cmd_writer_loop_count_smc = $84F3
 super_cmd_writer_step_smc = $84F4
 field_writer_offset_smc  = $8504
@@ -1191,12 +1184,7 @@ player_helper_band_end   = $87FF
 
 ; ── UNROLLED PAINT PAGES ($8800-$AAFF) ─────────────────────────────────
 seqED_paint_unroll       = $8800
-;   notes: Per-row write target addresses are the only inter-page differences. Pages are unrolled copies of the same template (~110 instructions each), and the first page (seqED_paint_unroll-paint_page_smc_af_aa_c8) is the canonical one. The block is unrolled (not loop-driven) presumably so the player IRQ can paint the visible window in a fixed number of cycles. Period across the unroll is $100 (page-aligned).
-paint_page_smc_af_af_10  = $8832
-;   notes: Encodes a glyph + color pair used by one of the per-page paint arms.
-paint_page_smc_af_af_c8  = $8838
-paint_page_smc_af_aa_10  = $885D
-paint_page_smc_af_aa_c8  = $8863
+;   notes: Per-row write target addresses are the only inter-page differences. The block is unrolled (not loop-driven) presumably so the player IRQ can paint the visible window in a fixed number of cycles. Period across the unroll is $100 (page-aligned).
 save_ui_saved_state      = $9EC5
 seqED_paint_end_byte_a   = $AACE
 seqED_paint_end_byte_b   = $AACF
@@ -1207,13 +1195,13 @@ seqED_paint_unroll_end   = $AAFF
 seqED_paint_band_padding = $AB8F
 ;   notes: Pads the tail of the screen-paint block out to the page-aligned data tables at seqED_color_lut. Not executed in normal flow; functions as a soft landing if any malformed jump overshoots into the seqED paint band tail.
 seqED_color_lut          = $AC00
-;   notes: Small ints $01-$08 (C64 color palette indices). Read at paint_page_smc_af_aa_c8 via read seqED_color_lut,X from the unrolled paint pages, written to COLOR_RAM,Y color RAM. Pattern: $01 ×20, $03 ×20, $04 ×20, $06 ×20, $07 ×20 = 5 sustained color bands across 100 of the 128 entries, with $02/$05/$08 used as transition cells. The full 128-byte cycle ($01,$01,$02,$03,$03,$04,$04,$05,$06,$06,$07,$07,$08-? — repeated) implements the seqED row-stripe coloring: alternating low/high intensity per beat, plus a highlight color every fourth row.
+;   notes: Small ints $01-$08 (C64 color palette indices). Pattern: $01 ×20, $03 ×20, $04 ×20, $06 ×20, $07 ×20 = 5 sustained color bands across 100 of the 128 entries, with $02/$05/$08 used as transition cells. The full 128-byte cycle ($01,$01,$02,$03,$03,$04,$04,$05,$06,$06,$07,$07,$08-? — repeated) implements the seqED row-stripe coloring: alternating low/high intensity per beat, plus a highlight color every fourth row.
 seqED_digit_screencode_lut = $AC80
-;   notes: C64 screen codes $30-$39 (digits '0'-'9') with $14 ($20 = space) padding bytes. Read at paint_page_smc_af_aa_c8 via read seqED_digit_screencode_lut,X; written to screen RAM as the visible row-number digit. Each digit byte repeats 12 times before stepping; pattern is `'0'×12, '1'×12, '2'×12,... '9'×12, space×8` — a 128-entry table mapping song-position 0..127 onto its visible high-nibble digit.
+;   notes: C64 screen codes $30-$39 (digits '0'-'9') with $14 ($20 = space) padding bytes. Each digit byte repeats 12 times before stepping; pattern is `'0'×12, '1'×12, '2'×12,... '9'×12, space×8` — a 128-entry table mapping song-position 0..127 onto its visible high-nibble digit.
 seqED_checkerboard_lut   = $AD00
-;   notes: Only two values: $20 (' ', space) and $23 ('#', screen-code for filled block). Read at paint_page_smc_af_aa_c8 via read seqED_checkerboard_lut,X; produces the alternating ' '/'#' divider columns between voice columns in the seqED display.
+;   notes: Only two values: $20 (' ', space) and $23 ('#', screen-code for filled block).
 seqED_status_ruler_template = $AD80
-;   notes: Screen-code blob mixing ' ', '-', '0'..'9', '[', ']', 'o', reverse-space — visually decodes as the bottom-row status template `--] N0[ --] N1[ --] N2[` with embedded position markers. Read at paint_page_smc_af_aa_c8 (read seqED_status_ruler_template,Y) and paint_page_smc_af_aa_c8 (read seqED_status_ruler_template,Y — two readers indicate the template has a 2-byte stride for paired status indicators).
+;   notes: Screen-code blob mixing ' ', '-', '0'..'9', '[', ']', 'o', reverse-space — visually decodes as the bottom-row status template `--] N0[ --] N1[ --] N2[` with embedded position markers.
 seqED_status_template_base = $AD82
 seqED_header_color_template = $AE00
 ;   notes: Small-int color codes ($02/$03/$06/$07/$0B/$0C/$0D) interleaved with screen-code bytes; mirrors the structure of seqED_color_lut/seqED_digit_screencode_lut but is read by a different paint-page slice (the static seqED frame, not the per-row content). Not a 'helper band' in the function sense — the entire seqED_paint_band_padding-seqED_header_template_end range is data tables read by the unrolled paint pages.
@@ -1290,15 +1278,12 @@ sid2_frame_state_slot    = $C8EB
 sid2_v1_sc1_step_counter = $C94A
 sid2_filter_slot_c986    = $C986
 sid2_filter_slot_c987    = $C987
-sid2_v0_row_read_ldy_smc = $C9CC
 sid2_v2_sc1_step_counter = $C9D2
 sid2_filter_slot_ca0e    = $CA0E
 sid2_filter_slot_ca0f    = $CA0F
-sid2_row_advance_ldy_smc = $CA54
 sid2_v0_sc2_step_counter = $CA5A
 sid2_filter_slot_ca96    = $CA96
 sid2_filter_slot_ca97    = $CA97
-sid2_row_advance_step_smc = $CADC
 sid2_filter_slot_cae0    = $CAE0
 sid2_v0_cascade_step_bytes = $CAEB
 ;   notes: Self-mod target of SID#2 V0's step-byte writer.
@@ -3655,7 +3640,18 @@ V0_row_read_tail .block
                            bcc  l_1    ; $11C5  v0_freq_lookup_smc no carry
                            inc  v0_freq_lookup_smc_hi    ; $11C7
 l_1:                       lda  #$0F    ; $11CA
-        .byte $8F, $4A, $11    ; $11CC
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $11CC  SAX_v0_dur_nibble
+; ──────────────────────────────────────────────────────────────────────
+; undocumented opcode $8F ($write A&X→abs) at SAX_v0_dur_nibble.
+;
+;   code edges:          fall-through from $11CA V0_row_read_tail_1 (2 bytes earlier)
+;
+;   SAX v0_row_timer (undocumented NMOS opcode $8F, 3 bytes). Stores A & X to absolute address v0_row_timer. With A=$0F (from V0_row_read_tail) and X=row.flag_byte (set from the row's flag at v0_row_dur_sax_smc-v0_gate_n_tail), the result is flag & $0F = duration nibble — which becomes the next V0 row timer reload. V1 analog at row_read_body_v2_ldy_smc ($8F D2 11 → SAX v1_row_timer); V2 analog at row_advance_band_v2_ldy_smc ($8F 5A 12 → SAX v2_row_timer). Each lands the row's dur nibble into that voice's timer reload slot.
+SAX_v0_dur_nibble .block
+                           sax  v0_row_timer    ; $11CC
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -3745,7 +3741,18 @@ l_4:                       tya    ; $1245
                            bcc  l_5    ; $124D  player_state_120e no carry
                            inc  v0_player_state_120f    ; $124F
 l_5:                       lda  #$0F    ; $1252
-        .byte $8F, $D2, $11    ; $1254
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $1254  row_read_body_v2_ldy_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $8F (abs): stores A & X into voice 1's row-timer reload — the V1 analog of SAX_v0_dur_nibble (A=$0F, X=row flag, result = duration nibble).
+;
+;   code edges:          fall-through from $1252 row_read_body_v1_5 (2 bytes earlier)
+;
+;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone SAX instruction, not a patched operand slot.
+row_read_body_v2_ldy_smc .block
+                           sax  v1_row_timer    ; $1254
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -3835,7 +3842,18 @@ l_4:                       tya    ; $12CD
                            bcc  l_5    ; $12D5  v0_player_state_1296 no carry
                            inc  v0_player_state_1297    ; $12D7
 l_5:                       lda  #$0F    ; $12DA
-        .byte $8F, $5A, $12    ; $12DC
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $12DC  row_advance_band_v2_ldy_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $8F (abs): stores A & X into voice 2's row-timer reload — the V2 analog of SAX_v0_dur_nibble.
+;
+;   code edges:          fall-through from $12DA row_read_body_v2_5 (2 bytes earlier)
+;
+;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone SAX instruction.
+row_advance_band_v2_ldy_smc .block
+                           sax  v2_row_timer    ; $12DC
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -7714,32 +7732,43 @@ l_1:                       lda  sid_chip_view + $33,x    ; $83FE
                            tax    ; $840F
                            pla    ; $8410
                            rts    ; $8411
-        .byte $AF, $C1, $71    ; $8412
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $8412  super_arg_extract
+; ──────────────────────────────────────────────────────────────────────
+; `read A=X=supercmd_flag_mask` (undoc, reads super flags into A+X); A&=$20 / →skip when zero; read super_arg_slot_r (super_arg_a) / write super_arg (super_arg = a).
+;
+;   callers:             3 code sites: $8455, $AF0E, $B13C
+;
+;   Then A←X / A&=$80 /... extracts the active super-command's arg value into super_arg for the writer to read. Called before writer-arm dispatch when a super command is staged. 3 callers.
+super_arg_extract .block
+                           lax  super_cmd_extra    ; $8412
                            and  #$20    ; $8415
-                           beq  l_2    ; $8417  (A & $20) was zero?
+                           beq  l_1    ; $8417  (super_cmd_extra & $20) was zero?
                            lda  super_arg_slot_r    ; $8419
                            sta  super_arg    ; $841C
-l_2:                       txa    ; $841F
+l_1:                       txa    ; $841F
                            and  #$80    ; $8420
-                           beq  l_3    ; $8422  (X & $80) was zero?
+                           beq  l_2    ; $8422  (super_cmd_extra & $80) was zero?
                            lda  super_arg_slot_q    ; $8424
                            sta  super_cmd_state_71c9    ; $8427
-l_3:                       txa    ; $842A
+l_2:                       txa    ; $842A
                            and  #$02    ; $842B
-                           beq  l_4    ; $842D  (X & $02) was zero?
+                           beq  l_3    ; $842D  (super_cmd_extra & $02) was zero?
                            lda  super_arg_slot_swr_hi    ; $842F
                            sta  writer_loop_count    ; $8432
-l_4:                       txa    ; $8435
+l_3:                       txa    ; $8435
                            and  #$04    ; $8436
-                           beq  l_5    ; $8438  (X & $04) was zero?
+                           beq  l_4    ; $8438  (super_cmd_extra & $04) was zero?
                            lda  super_arg_slot_w    ; $843A
                            sta  writer_stride    ; $843D
-l_5:                       txa    ; $8440
+l_4:                       txa    ; $8440
                            and  #$08    ; $8441
-                           beq  l_6    ; $8443  (X & $08) was zero?
+                           beq  l_5    ; $8443  (super_cmd_extra & $08) was zero?
                            lda  super_arg_slot_z    ; $8445
                            sta  writer_range_fill    ; $8448
-l_6:                       rts    ; $844B
+l_5:                       rts    ; $844B
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────
@@ -8719,40 +8748,84 @@ l_4:                       tax    ; $8820
                            sta  SCREEN_RAM + $25    ; $882A
                            lda  sid_chip_view    ; $882D
                            bne  paint_page_smc_af_af_c8    ; $8830  sid_chip_view was not SID_VIEW_1?
-        .byte $AF, $AF, $10    ; $8832
-                           jmp  l_5    ; $8835
-        .byte $AF, $AF, $C8    ; $8838
-l_5:                       and  #$40    ; $883B
-                           beq  l_6    ; $883D  (A & $40) was zero?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $8832  paint_page_smc_af_af_10
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $AF (abs): a chip-view-dependent status load in the seqED unrolled-paint code, the SID#1 arm of the sid_chip_view branch (falls through here when the view is SID#1).
+;
+;   code edges:          fall-through from $8830 in filter_cutoff_status_paint_4 (2 bytes earlier)
+;
+;   Not paint-operand data; name retained from when the $AF opcode byte was read as a byte triple.
+paint_page_smc_af_af_10 .block
+                           lax  filter_volume_or_mode    ; $8832
+                           jmp  paint_page_smc_af_af_c8.l_1    ; $8835
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $8838  paint_page_smc_af_af_c8
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $AF (abs): the SID#2 arm of the sid_chip_view branch that pairs with paint_page_smc_af_af_10 (taken when the view is not SID#1).
+;
+;   callers:             1 code sites: $8830
+;
+;   Not paint-operand data; name retained from the byte triple.
+paint_page_smc_af_af_c8 .block
+                           lax  sid2_voice_record_v2 + $34    ; $8838
+l_1:                       and  #$40    ; $883B
+                           beq  l_2    ; $883D
                            lda  #$02    ; $883F
-l_6:                       sta  COLOR_RAM + $22    ; $8841
+l_2:                       sta  COLOR_RAM + $22    ; $8841
                            txa    ; $8844
                            and  #$20    ; $8845
-                           beq  l_7    ; $8847  (X & $20) was zero?
+                           beq  l_3    ; $8847
                            lda  #$02    ; $8849
-l_7:                       sta  COLOR_RAM + $21    ; $884B
+l_3:                       sta  COLOR_RAM + $21    ; $884B
                            txa    ; $884E
                            and  #$10    ; $884F
-                           beq  l_8    ; $8851  (X & $10) was zero?
+                           beq  l_4    ; $8851
                            lda  #$02    ; $8853
-l_8:                       sta  COLOR_RAM + $20    ; $8855
+l_4:                       sta  COLOR_RAM + $20    ; $8855
                            lda  sid_chip_view    ; $8858
                            bne  paint_page_smc_af_aa_c8    ; $885B  sid_chip_view was not SID_VIEW_1?
-        .byte $AF, $AA, $10    ; $885D
-                           jmp  l_9    ; $8860
-        .byte $AF, $AA, $C8    ; $8863
-l_9:                       and  #$01    ; $8866
-                           beq  l_10    ; $8868  (A & $01) was zero?
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $885D  paint_page_smc_af_aa_10
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $AF (abs): a chip-view-dependent status load in the seqED unrolled-paint code (the $AA operand low byte distinguishes it from paint_page_smc_af_af_10).
+;
+;   code edges:          fall-through from $885B in paint_page_smc_af_af_c8_4 (2 bytes earlier)
+;
+;   Not paint-operand data; name retained from the byte triple.
+paint_page_smc_af_aa_10 .block
+                           lax  filter_resonance_routing    ; $885D
+                           jmp  paint_page_smc_af_aa_c8.l_1    ; $8860
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $8863  paint_page_smc_af_aa_c8
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $AF (abs): companion chip-view status load to paint_page_smc_af_aa_10 in the seqED unrolled-paint code.
+;
+;   callers:             1 code sites: $885B
+;
+;   Not paint-operand data; name retained from the byte triple.
+paint_page_smc_af_aa_c8 .block
+                           lax  sid2_silence_latch_acc    ; $8863
+l_1:                       and  #$01    ; $8866
+                           beq  l_2    ; $8868
                            lda  #$02    ; $886A
-l_10:                      sta  COLOR_RAM + $09    ; $886C
+l_2:                       sta  COLOR_RAM + $09    ; $886C
                            txa    ; $886F
                            and  #$02    ; $8870
                            sta  COLOR_RAM + $12    ; $8872
                            txa    ; $8875
                            and  #$04    ; $8876
-                           beq  l_11    ; $8878  (X & $04) was zero?
+                           beq  l_3    ; $8878
                            lda  #$02    ; $887A
-l_11:                      sta  COLOR_RAM + $1B    ; $887C
+l_3:                       sta  COLOR_RAM + $1B    ; $887C
                            ldy  page_pair_counter    ; $887F
                            jsr  pat_base_resolve_v012    ; $8882
                            jsr  seqED_step_cursor_increment    ; $8885
@@ -8774,50 +8847,50 @@ l_11:                      sta  COLOR_RAM + $1B    ; $887C
                            sta  SCREEN_RAM + $56    ; $88AC
                            dex    ; $88AF
                            txa    ; $88B0
-                           bpl  l_12    ; $88B1  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_4    ; $88B1  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $88B3
-                           bne  l_13    ; $88B5  filter_cutoff_status_paint_$C9 was non-zero?
-l_12:                      ldx  #$03    ; $88B7
-l_13:                      stx  COLOR_RAM + $52    ; $88B9
+                           bne  l_5    ; $88B5  paint_page_smc_af_aa_c8_$51 was non-zero?
+l_4:                       ldx  #$03    ; $88B7
+l_5:                       stx  COLOR_RAM + $52    ; $88B9
                            stx  COLOR_RAM + $53    ; $88BC
                            iny    ; $88BF
                            asl  a    ; $88C0
                            sta  zp_paint_scratch    ; $88C1
-                           bmi  l_14    ; $88C3  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_6    ; $88C3  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $88C5
                            sta  SCREEN_RAM + $52    ; $88C7
-                           bne  l_15    ; $88CA  filter_cutoff_status_paint_$DB was non-zero?
-l_14:                      lax  (zp_ptr1_lo),y    ; $88CC
+                           bne  l_7    ; $88CA  paint_page_smc_af_aa_c8_$63 was non-zero?
+l_6:                       lax  (zp_ptr1_lo),y    ; $88CC
                            lda  hex_digit_hi_lut,x    ; $88CE
                            sta  SCREEN_RAM + $52    ; $88D1
                            lda  hex_digit_lo_lut,x    ; $88D4
-l_15:                      sta  SCREEN_RAM + $53    ; $88D7
+l_7:                       sta  SCREEN_RAM + $53    ; $88D7
                            iny    ; $88DA
                            asl  zp_paint_scratch    ; $88DB
-                           bmi  l_16    ; $88DD  zp_paint_scratch had bit 7 set?
+                           bmi  l_8    ; $88DD  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $88DF
                            sta  SCREEN_RAM + $54    ; $88E1
-                           bne  l_17    ; $88E4  filter_cutoff_status_paint_$F5 was non-zero?
-l_16:                      lax  (zp_ptr1_lo),y    ; $88E6
+                           bne  l_9    ; $88E4  paint_page_smc_af_aa_c8_$7D was non-zero?
+l_8:                       lax  (zp_ptr1_lo),y    ; $88E6
                            lda  hex_digit_hi_lut,x    ; $88E8
                            sta  SCREEN_RAM + $54    ; $88EB
                            lda  hex_digit_lo_lut,x    ; $88EE
-l_17:                      sta  SCREEN_RAM + $55    ; $88F1
+l_9:                       sta  SCREEN_RAM + $55    ; $88F1
                            iny    ; $88F4
                            asl  zp_paint_scratch    ; $88F5
-                           bmi  l_18    ; $88F7  zp_paint_scratch had bit 7 set?
+                           bmi  l_10    ; $88F7  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $88F9
                            sta  SCREEN_RAM + $57    ; $88FB
                            sta  SCREEN_RAM + $58    ; $88FE
                            lda  #$20    ; $8901
-                           bne  l_19    ; $8903  filter_cutoff_status_paint_$117 was non-zero?
-l_18:                      lax  (zp_ptr1_lo),y    ; $8905
+                           bne  l_11    ; $8903  paint_page_smc_af_aa_c8_$9F was non-zero?
+l_10:                      lax  (zp_ptr1_lo),y    ; $8905
                            lda  seqED_color_lut,x    ; $8907
                            sta  SCREEN_RAM + $57    ; $890A
                            lda  seqED_digit_screencode_lut,x    ; $890D
                            sta  SCREEN_RAM + $58    ; $8910
                            lda  seqED_checkerboard_lut,x    ; $8913
-l_19:                      sta  SCREEN_RAM + $59    ; $8916
+l_11:                      sta  SCREEN_RAM + $59    ; $8916
                            ldy  #$FF    ; $8919  ; ← (SMC operand at $891A, no name)
                            lax  (zp_decoder_dest_lo),y    ; $891B
                            inx    ; $891D
@@ -8825,50 +8898,50 @@ l_19:                      sta  SCREEN_RAM + $59    ; $8916
                            sta  SCREEN_RAM + $5F    ; $8921
                            dex    ; $8924
                            txa    ; $8925
-                           bpl  l_20    ; $8926  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_12    ; $8926  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8928
-                           bne  l_21    ; $892A  filter_cutoff_status_paint_$13E was non-zero?
-l_20:                      ldx  #$03    ; $892C
-l_21:                      stx  COLOR_RAM + $5B    ; $892E
+                           bne  l_13    ; $892A  paint_page_smc_af_aa_c8_$C6 was non-zero?
+l_12:                      ldx  #$03    ; $892C
+l_13:                      stx  COLOR_RAM + $5B    ; $892E
                            stx  COLOR_RAM + $5C    ; $8931
                            iny    ; $8934
                            asl  a    ; $8935
                            sta  zp_paint_scratch    ; $8936
-                           bmi  l_22    ; $8938  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_14    ; $8938  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $893A
                            sta  SCREEN_RAM_ROW2_COL27    ; $893C
-                           bne  l_23    ; $893F  filter_cutoff_status_paint_$150 was non-zero?
-l_22:                      lax  (zp_decoder_dest_lo),y    ; $8941
+                           bne  l_15    ; $893F  paint_page_smc_af_aa_c8_$D8 was non-zero?
+l_14:                      lax  (zp_decoder_dest_lo),y    ; $8941
                            lda  hex_digit_hi_lut,x    ; $8943
                            sta  SCREEN_RAM_ROW2_COL27    ; $8946
                            lda  hex_digit_lo_lut,x    ; $8949
-l_23:                      sta  SCREEN_RAM + $5C    ; $894C
+l_15:                      sta  SCREEN_RAM + $5C    ; $894C
                            iny    ; $894F
                            asl  zp_paint_scratch    ; $8950
-                           bmi  l_24    ; $8952  zp_paint_scratch had bit 7 set?
+                           bmi  l_16    ; $8952  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8954
                            sta  SCREEN_RAM + $5D    ; $8956
-                           bne  l_25    ; $8959  filter_cutoff_status_paint_$16A was non-zero?
-l_24:                      lax  (zp_decoder_dest_lo),y    ; $895B
+                           bne  l_17    ; $8959  paint_page_smc_af_aa_c8_$F2 was non-zero?
+l_16:                      lax  (zp_decoder_dest_lo),y    ; $895B
                            lda  hex_digit_hi_lut,x    ; $895D
                            sta  SCREEN_RAM + $5D    ; $8960
                            lda  hex_digit_lo_lut,x    ; $8963
-l_25:                      sta  SCREEN_RAM + $5E    ; $8966
+l_17:                      sta  SCREEN_RAM + $5E    ; $8966
                            iny    ; $8969
                            asl  zp_paint_scratch    ; $896A
-                           bmi  l_26    ; $896C  zp_paint_scratch had bit 7 set?
+                           bmi  l_18    ; $896C  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $896E
                            sta  SCREEN_RAM + $60    ; $8970
                            sta  SCREEN_RAM + $61    ; $8973
                            lda  #$20    ; $8976
-                           bne  l_27    ; $8978  filter_cutoff_status_paint_$18C was non-zero?
-l_26:                      lax  (zp_decoder_dest_lo),y    ; $897A
+                           bne  l_19    ; $8978  paint_page_smc_af_aa_c8_$114 was non-zero?
+l_18:                      lax  (zp_decoder_dest_lo),y    ; $897A
                            lda  seqED_color_lut,x    ; $897C
                            sta  SCREEN_RAM + $60    ; $897F
                            lda  seqED_digit_screencode_lut,x    ; $8982
                            sta  SCREEN_RAM + $61    ; $8985
                            lda  seqED_checkerboard_lut,x    ; $8988
-l_27:                      sta  SCREEN_RAM + $62    ; $898B
+l_19:                      sta  SCREEN_RAM + $62    ; $898B
                            ldy  paint_page_smc_af_aa_c8 + $B7    ; $898E
                            lax  (zp_scratch_9e),y    ; $8991
                            inx    ; $8993
@@ -8876,60 +8949,60 @@ l_27:                      sta  SCREEN_RAM + $62    ; $898B
                            sta  SCREEN_RAM + $68    ; $8997
                            dex    ; $899A
                            txa    ; $899B
-                           bpl  l_28    ; $899C  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_20    ; $899C  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $899E
-                           bne  l_29    ; $89A0  filter_cutoff_status_paint_$1B4 was non-zero?
-l_28:                      ldx  #$03    ; $89A2
-l_29:                      stx  COLOR_RAM + $64    ; $89A4
+                           bne  l_21    ; $89A0  paint_page_smc_af_aa_c8_$13C was non-zero?
+l_20:                      ldx  #$03    ; $89A2
+l_21:                      stx  COLOR_RAM + $64    ; $89A4
                            stx  COLOR_RAM + $65    ; $89A7
                            iny    ; $89AA
                            asl  a    ; $89AB
                            sta  zp_paint_scratch    ; $89AC
-                           bmi  l_30    ; $89AE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_22    ; $89AE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $89B0
                            sta  SCREEN_RAM + $64    ; $89B2
-                           bne  l_31    ; $89B5  filter_cutoff_status_paint_$1C6 was non-zero?
-l_30:                      lax  (zp_scratch_9e),y    ; $89B7
+                           bne  l_23    ; $89B5  paint_page_smc_af_aa_c8_$14E was non-zero?
+l_22:                      lax  (zp_scratch_9e),y    ; $89B7
                            lda  hex_digit_hi_lut,x    ; $89B9
                            sta  SCREEN_RAM + $64    ; $89BC
                            lda  hex_digit_lo_lut,x    ; $89BF
-l_31:                      sta  SCREEN_RAM + $65    ; $89C2
+l_23:                      sta  SCREEN_RAM + $65    ; $89C2
                            iny    ; $89C5
                            asl  zp_paint_scratch    ; $89C6
-                           bmi  l_32    ; $89C8  zp_paint_scratch had bit 7 set?
+                           bmi  l_24    ; $89C8  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $89CA
                            sta  SCREEN_RAM + $66    ; $89CC
-                           bne  l_33    ; $89CF  filter_cutoff_status_paint_$1E0 was non-zero?
-l_32:                      lax  (zp_scratch_9e),y    ; $89D1
+                           bne  l_25    ; $89CF  paint_page_smc_af_aa_c8_$168 was non-zero?
+l_24:                      lax  (zp_scratch_9e),y    ; $89D1
                            lda  hex_digit_hi_lut,x    ; $89D3
                            sta  SCREEN_RAM + $66    ; $89D6
                            lda  hex_digit_lo_lut,x    ; $89D9
-l_33:                      sta  SCREEN_RAM + $67    ; $89DC
+l_25:                      sta  SCREEN_RAM + $67    ; $89DC
                            iny    ; $89DF
                            asl  zp_paint_scratch    ; $89E0
-                           bmi  l_34    ; $89E2  zp_paint_scratch had bit 7 set?
+                           bmi  l_26    ; $89E2  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $89E4
                            sta  SCREEN_RAM + $69    ; $89E6
                            sta  SCREEN_RAM + $6A    ; $89E9
                            lda  #$20    ; $89EC
-                           bne  l_35    ; $89EE  filter_cutoff_status_paint_$202 was non-zero?
-l_34:                      lax  (zp_scratch_9e),y    ; $89F0
+                           bne  l_27    ; $89EE  paint_page_smc_af_aa_c8_$18A was non-zero?
+l_26:                      lax  (zp_scratch_9e),y    ; $89F0
                            lda  seqED_color_lut,x    ; $89F2
                            sta  SCREEN_RAM + $69    ; $89F5
                            lda  seqED_digit_screencode_lut,x    ; $89F8
                            sta  SCREEN_RAM + $6A    ; $89FB
                            lda  seqED_checkerboard_lut,x    ; $89FE
-l_35:                      sta  SCREEN_RAM + $6B    ; $8A01
+l_27:                      sta  SCREEN_RAM + $6B    ; $8A01
                            iny    ; $8A04
-;   step-idiom: source = filter_cutoff_status_paint_$12F  (= $891A)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$B7  (= $891A)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $8A04
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_36    ; $8A05  filter_cutoff_status_paint_$12F stepped 4 and had bit 7 clear?
+                           bpl  l_28    ; $8A05  paint_page_smc_af_aa_c8_$B7 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $8A07
                            iny    ; $8A0A
                            jsr  pat_base_resolve_v012    ; $8A0B
                            ldy  #$00    ; $8A0E
-l_36:                      lda  seqED_status_ruler_template,y    ; $8A10
+l_28:                      lda  seqED_status_ruler_template,y    ; $8A10
                            sta  screen_ram_row03    ; $8A13
                            lda  seqED_status_template_base,y    ; $8A16
                            sta  SCREEN_RAM + $79    ; $8A19
@@ -8943,50 +9016,50 @@ l_36:                      lda  seqED_status_ruler_template,y    ; $8A10
                            sta  SCREEN_RAM + $7E    ; $8A2E
                            dex    ; $8A31
                            txa    ; $8A32
-                           bpl  l_37    ; $8A33  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_29    ; $8A33  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $8A35
-                           bne  l_38    ; $8A37  filter_cutoff_status_paint_$24B was non-zero?
-l_37:                      ldx  #$03    ; $8A39
-l_38:                      stx  COLOR_RAM + $7A    ; $8A3B
+                           bne  l_30    ; $8A37  paint_page_smc_af_aa_c8_$1D3 was non-zero?
+l_29:                      ldx  #$03    ; $8A39
+l_30:                      stx  COLOR_RAM + $7A    ; $8A3B
                            stx  COLOR_RAM + $7B    ; $8A3E
                            iny    ; $8A41
                            asl  a    ; $8A42
                            sta  zp_paint_scratch    ; $8A43
-                           bmi  l_39    ; $8A45  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_31    ; $8A45  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $8A47
                            sta  SCREEN_RAM + $7A    ; $8A49
-                           bne  l_40    ; $8A4C  filter_cutoff_status_paint_$25D was non-zero?
-l_39:                      lax  (zp_ptr1_lo),y    ; $8A4E
+                           bne  l_32    ; $8A4C  paint_page_smc_af_aa_c8_$1E5 was non-zero?
+l_31:                      lax  (zp_ptr1_lo),y    ; $8A4E
                            lda  hex_digit_hi_lut,x    ; $8A50
                            sta  SCREEN_RAM + $7A    ; $8A53
                            lda  hex_digit_lo_lut,x    ; $8A56
-l_40:                      sta  SCREEN_RAM + $7B    ; $8A59
+l_32:                      sta  SCREEN_RAM + $7B    ; $8A59
                            iny    ; $8A5C
                            asl  zp_paint_scratch    ; $8A5D
-                           bmi  l_41    ; $8A5F  zp_paint_scratch had bit 7 set?
+                           bmi  l_33    ; $8A5F  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8A61
                            sta  SCREEN_RAM + $7C    ; $8A63
-                           bne  l_42    ; $8A66  filter_cutoff_status_paint_$277 was non-zero?
-l_41:                      lax  (zp_ptr1_lo),y    ; $8A68
+                           bne  l_34    ; $8A66  paint_page_smc_af_aa_c8_$1FF was non-zero?
+l_33:                      lax  (zp_ptr1_lo),y    ; $8A68
                            lda  hex_digit_hi_lut,x    ; $8A6A
                            sta  SCREEN_RAM + $7C    ; $8A6D
                            lda  hex_digit_lo_lut,x    ; $8A70
-l_42:                      sta  SCREEN_RAM + $7D    ; $8A73
+l_34:                      sta  SCREEN_RAM + $7D    ; $8A73
                            iny    ; $8A76
                            asl  zp_paint_scratch    ; $8A77
-                           bmi  l_43    ; $8A79  zp_paint_scratch had bit 7 set?
+                           bmi  l_35    ; $8A79  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8A7B
                            sta  SCREEN_RAM + $7F    ; $8A7D
                            sta  SCREEN_RAM + $80    ; $8A80
                            lda  #$20    ; $8A83
-                           bne  l_44    ; $8A85  filter_cutoff_status_paint_$299 was non-zero?
-l_43:                      lax  (zp_ptr1_lo),y    ; $8A87
+                           bne  l_36    ; $8A85  paint_page_smc_af_aa_c8_$221 was non-zero?
+l_35:                      lax  (zp_ptr1_lo),y    ; $8A87
                            lda  seqED_color_lut,x    ; $8A89
                            sta  SCREEN_RAM + $7F    ; $8A8C
                            lda  seqED_digit_screencode_lut,x    ; $8A8F
                            sta  SCREEN_RAM + $80    ; $8A92
                            lda  seqED_checkerboard_lut,x    ; $8A95
-l_44:                      sta  SCREEN_RAM + $81    ; $8A98
+l_36:                      sta  SCREEN_RAM + $81    ; $8A98
                            ldy  #$FF    ; $8A9B  ; ← (SMC operand at $8A9C, no name)
                            lax  (zp_decoder_dest_lo),y    ; $8A9D
                            inx    ; $8A9F
@@ -8994,50 +9067,50 @@ l_44:                      sta  SCREEN_RAM + $81    ; $8A98
                            sta  SCREEN_RAM + $87    ; $8AA3
                            dex    ; $8AA6
                            txa    ; $8AA7
-                           bpl  l_45    ; $8AA8  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_37    ; $8AA8  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8AAA
-                           bne  l_46    ; $8AAC  filter_cutoff_status_paint_$2C0 was non-zero?
-l_45:                      ldx  #$03    ; $8AAE
-l_46:                      stx  COLOR_RAM + $83    ; $8AB0
+                           bne  l_38    ; $8AAC  paint_page_smc_af_aa_c8_$248 was non-zero?
+l_37:                      ldx  #$03    ; $8AAE
+l_38:                      stx  COLOR_RAM + $83    ; $8AB0
                            stx  COLOR_RAM + $84    ; $8AB3
                            iny    ; $8AB6
                            asl  a    ; $8AB7
                            sta  zp_paint_scratch    ; $8AB8
-                           bmi  l_47    ; $8ABA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_39    ; $8ABA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8ABC
                            sta  SCREEN_RAM + $83    ; $8ABE
-                           bne  l_48    ; $8AC1  filter_cutoff_status_paint_$2D2 was non-zero?
-l_47:                      lax  (zp_decoder_dest_lo),y    ; $8AC3
+                           bne  l_40    ; $8AC1  paint_page_smc_af_aa_c8_$25A was non-zero?
+l_39:                      lax  (zp_decoder_dest_lo),y    ; $8AC3
                            lda  hex_digit_hi_lut,x    ; $8AC5
                            sta  SCREEN_RAM + $83    ; $8AC8
                            lda  hex_digit_lo_lut,x    ; $8ACB
-l_48:                      sta  SCREEN_RAM + $84    ; $8ACE
+l_40:                      sta  SCREEN_RAM + $84    ; $8ACE
                            iny    ; $8AD1
                            asl  zp_paint_scratch    ; $8AD2
-                           bmi  l_49    ; $8AD4  zp_paint_scratch had bit 7 set?
+                           bmi  l_41    ; $8AD4  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8AD6
                            sta  SCREEN_RAM + $85    ; $8AD8
-                           bne  l_50    ; $8ADB  filter_cutoff_status_paint_$2EC was non-zero?
-l_49:                      lax  (zp_decoder_dest_lo),y    ; $8ADD
+                           bne  l_42    ; $8ADB  paint_page_smc_af_aa_c8_$274 was non-zero?
+l_41:                      lax  (zp_decoder_dest_lo),y    ; $8ADD
                            lda  hex_digit_hi_lut,x    ; $8ADF
                            sta  SCREEN_RAM + $85    ; $8AE2
                            lda  hex_digit_lo_lut,x    ; $8AE5
-l_50:                      sta  SCREEN_RAM + $86    ; $8AE8
+l_42:                      sta  SCREEN_RAM + $86    ; $8AE8
                            iny    ; $8AEB
                            asl  zp_paint_scratch    ; $8AEC
-                           bmi  l_51    ; $8AEE  zp_paint_scratch had bit 7 set?
+                           bmi  l_43    ; $8AEE  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8AF0
                            sta  SCREEN_RAM + $88    ; $8AF2
                            sta  SCREEN_RAM + $89    ; $8AF5
                            lda  #$20    ; $8AF8
-                           bne  l_52    ; $8AFA  filter_cutoff_status_paint_$30E was non-zero?
-l_51:                      lax  (zp_decoder_dest_lo),y    ; $8AFC
+                           bne  l_44    ; $8AFA  paint_page_smc_af_aa_c8_$296 was non-zero?
+l_43:                      lax  (zp_decoder_dest_lo),y    ; $8AFC
                            lda  seqED_color_lut,x    ; $8AFE
                            sta  SCREEN_RAM + $88    ; $8B01
                            lda  seqED_digit_screencode_lut,x    ; $8B04
                            sta  SCREEN_RAM + $89    ; $8B07
                            lda  seqED_checkerboard_lut,x    ; $8B0A
-l_52:                      sta  SCREEN_RAM + $8A    ; $8B0D
+l_44:                      sta  SCREEN_RAM + $8A    ; $8B0D
                            ldy  paint_page_smc_af_aa_c8 + $239    ; $8B10
                            lax  (zp_scratch_9e),y    ; $8B13
                            inx    ; $8B15
@@ -9045,60 +9118,60 @@ l_52:                      sta  SCREEN_RAM + $8A    ; $8B0D
                            sta  SCREEN_RAM + $90    ; $8B19
                            dex    ; $8B1C
                            txa    ; $8B1D
-                           bpl  l_53    ; $8B1E  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_45    ; $8B1E  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8B20
-                           bne  l_54    ; $8B22  filter_cutoff_status_paint_$336 was non-zero?
-l_53:                      ldx  #$03    ; $8B24
-l_54:                      stx  COLOR_RAM + $8C    ; $8B26
+                           bne  l_46    ; $8B22  paint_page_smc_af_aa_c8_$2BE was non-zero?
+l_45:                      ldx  #$03    ; $8B24
+l_46:                      stx  COLOR_RAM + $8C    ; $8B26
                            stx  COLOR_RAM + $8D    ; $8B29
                            iny    ; $8B2C
                            asl  a    ; $8B2D
                            sta  zp_paint_scratch    ; $8B2E
-                           bmi  l_55    ; $8B30  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_47    ; $8B30  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8B32
                            sta  SCREEN_RAM + $8C    ; $8B34
-                           bne  l_56    ; $8B37  filter_cutoff_status_paint_$348 was non-zero?
-l_55:                      lax  (zp_scratch_9e),y    ; $8B39
+                           bne  l_48    ; $8B37  paint_page_smc_af_aa_c8_$2D0 was non-zero?
+l_47:                      lax  (zp_scratch_9e),y    ; $8B39
                            lda  hex_digit_hi_lut,x    ; $8B3B
                            sta  SCREEN_RAM + $8C    ; $8B3E
                            lda  hex_digit_lo_lut,x    ; $8B41
-l_56:                      sta  SCREEN_RAM + $8D    ; $8B44
+l_48:                      sta  SCREEN_RAM + $8D    ; $8B44
                            iny    ; $8B47
                            asl  zp_paint_scratch    ; $8B48
-                           bmi  l_57    ; $8B4A  zp_paint_scratch had bit 7 set?
+                           bmi  l_49    ; $8B4A  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8B4C
                            sta  SCREEN_RAM + $8E    ; $8B4E
-                           bne  l_58    ; $8B51  filter_cutoff_status_paint_$362 was non-zero?
-l_57:                      lax  (zp_scratch_9e),y    ; $8B53
+                           bne  l_50    ; $8B51  paint_page_smc_af_aa_c8_$2EA was non-zero?
+l_49:                      lax  (zp_scratch_9e),y    ; $8B53
                            lda  hex_digit_hi_lut,x    ; $8B55
                            sta  SCREEN_RAM + $8E    ; $8B58
                            lda  hex_digit_lo_lut,x    ; $8B5B
-l_58:                      sta  SCREEN_RAM + $8F    ; $8B5E
+l_50:                      sta  SCREEN_RAM + $8F    ; $8B5E
                            iny    ; $8B61
                            asl  zp_paint_scratch    ; $8B62
-                           bmi  l_59    ; $8B64  zp_paint_scratch had bit 7 set?
+                           bmi  l_51    ; $8B64  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8B66
                            sta  SCREEN_RAM + $91    ; $8B68
                            sta  SCREEN_RAM + $92    ; $8B6B
                            lda  #$20    ; $8B6E
-                           bne  l_60    ; $8B70  filter_cutoff_status_paint_$384 was non-zero?
-l_59:                      lax  (zp_scratch_9e),y    ; $8B72
+                           bne  l_52    ; $8B70  paint_page_smc_af_aa_c8_$30C was non-zero?
+l_51:                      lax  (zp_scratch_9e),y    ; $8B72
                            lda  seqED_color_lut,x    ; $8B74
                            sta  SCREEN_RAM + $91    ; $8B77
                            lda  seqED_digit_screencode_lut,x    ; $8B7A
                            sta  SCREEN_RAM + $92    ; $8B7D
                            lda  seqED_checkerboard_lut,x    ; $8B80
-l_60:                      sta  SCREEN_RAM + $93    ; $8B83
+l_52:                      sta  SCREEN_RAM + $93    ; $8B83
                            iny    ; $8B86
-;   step-idiom: source = filter_cutoff_status_paint_$2B1  (= $8A9C)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$239  (= $8A9C)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $8B86
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_61    ; $8B87  filter_cutoff_status_paint_$2B1 stepped 4 and had bit 7 clear?
+                           bpl  l_53    ; $8B87  paint_page_smc_af_aa_c8_$239 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $8B89
                            iny    ; $8B8C
                            jsr  pat_base_resolve_v012    ; $8B8D
                            ldy  #$00    ; $8B90
-l_61:                      lda  seqED_status_ruler_template,y    ; $8B92
+l_53:                      lda  seqED_status_ruler_template,y    ; $8B92
                            sta  screen_ram_row04    ; $8B95
                            lda  seqED_status_template_base,y    ; $8B98
                            sta  SCREEN_RAM + $A1    ; $8B9B
@@ -9112,50 +9185,50 @@ l_61:                      lda  seqED_status_ruler_template,y    ; $8B92
                            sta  SCREEN_RAM + $A6    ; $8BB0
                            dex    ; $8BB3
                            txa    ; $8BB4
-                           bpl  l_62    ; $8BB5  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_54    ; $8BB5  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $8BB7
-                           bne  l_63    ; $8BB9  filter_cutoff_status_paint_$3CD was non-zero?
-l_62:                      ldx  #$03    ; $8BBB
-l_63:                      stx  COLOR_RAM + $A2    ; $8BBD
+                           bne  l_55    ; $8BB9  paint_page_smc_af_aa_c8_$355 was non-zero?
+l_54:                      ldx  #$03    ; $8BBB
+l_55:                      stx  COLOR_RAM + $A2    ; $8BBD
                            stx  COLOR_RAM + $A3    ; $8BC0
                            iny    ; $8BC3
                            asl  a    ; $8BC4
                            sta  zp_paint_scratch    ; $8BC5
-                           bmi  l_64    ; $8BC7  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_56    ; $8BC7  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $8BC9
                            sta  SCREEN_RAM + $A2    ; $8BCB
-                           bne  l_65    ; $8BCE  filter_cutoff_status_paint_$3DF was non-zero?
-l_64:                      lax  (zp_ptr1_lo),y    ; $8BD0
+                           bne  l_57    ; $8BCE  paint_page_smc_af_aa_c8_$367 was non-zero?
+l_56:                      lax  (zp_ptr1_lo),y    ; $8BD0
                            lda  hex_digit_hi_lut,x    ; $8BD2
                            sta  SCREEN_RAM + $A2    ; $8BD5
                            lda  hex_digit_lo_lut,x    ; $8BD8
-l_65:                      sta  SCREEN_RAM + $A3    ; $8BDB
+l_57:                      sta  SCREEN_RAM + $A3    ; $8BDB
                            iny    ; $8BDE
                            asl  zp_paint_scratch    ; $8BDF
-                           bmi  l_66    ; $8BE1  zp_paint_scratch had bit 7 set?
+                           bmi  l_58    ; $8BE1  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8BE3
                            sta  SCREEN_RAM + $A4    ; $8BE5
-                           bne  l_67    ; $8BE8  filter_cutoff_status_paint_$3F9 was non-zero?
-l_66:                      lax  (zp_ptr1_lo),y    ; $8BEA
+                           bne  l_59    ; $8BE8  paint_page_smc_af_aa_c8_$381 was non-zero?
+l_58:                      lax  (zp_ptr1_lo),y    ; $8BEA
                            lda  hex_digit_hi_lut,x    ; $8BEC
                            sta  SCREEN_RAM + $A4    ; $8BEF
                            lda  hex_digit_lo_lut,x    ; $8BF2
-l_67:                      sta  SCREEN_RAM + $A5    ; $8BF5
+l_59:                      sta  SCREEN_RAM + $A5    ; $8BF5
                            iny    ; $8BF8
                            asl  zp_paint_scratch    ; $8BF9
-                           bmi  l_68    ; $8BFB  zp_paint_scratch had bit 7 set?
+                           bmi  l_60    ; $8BFB  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8BFD
                            sta  SCREEN_RAM + $A7    ; $8BFF
                            sta  SCREEN_RAM + $A8    ; $8C02
                            lda  #$20    ; $8C05
-                           bne  l_69    ; $8C07  filter_cutoff_status_paint_$41B was non-zero?
-l_68:                      lax  (zp_ptr1_lo),y    ; $8C09
+                           bne  l_61    ; $8C07  paint_page_smc_af_aa_c8_$3A3 was non-zero?
+l_60:                      lax  (zp_ptr1_lo),y    ; $8C09
                            lda  seqED_color_lut,x    ; $8C0B
                            sta  SCREEN_RAM + $A7    ; $8C0E
                            lda  seqED_digit_screencode_lut,x    ; $8C11
                            sta  SCREEN_RAM + $A8    ; $8C14
                            lda  seqED_checkerboard_lut,x    ; $8C17
-l_69:                      sta  SCREEN_RAM + $A9    ; $8C1A
+l_61:                      sta  SCREEN_RAM + $A9    ; $8C1A
                            ldy  #$FF    ; $8C1D  ; ← (SMC operand at $8C1E, no name)
                            lax  (zp_decoder_dest_lo),y    ; $8C1F
                            inx    ; $8C21
@@ -9163,50 +9236,50 @@ l_69:                      sta  SCREEN_RAM + $A9    ; $8C1A
                            sta  SCREEN_RAM + $AF    ; $8C25
                            dex    ; $8C28
                            txa    ; $8C29
-                           bpl  l_70    ; $8C2A  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_62    ; $8C2A  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8C2C
-                           bne  l_71    ; $8C2E  filter_cutoff_status_paint_$442 was non-zero?
-l_70:                      ldx  #$03    ; $8C30
-l_71:                      stx  COLOR_RAM + $AB    ; $8C32
+                           bne  l_63    ; $8C2E  paint_page_smc_af_aa_c8_$3CA was non-zero?
+l_62:                      ldx  #$03    ; $8C30
+l_63:                      stx  COLOR_RAM + $AB    ; $8C32
                            stx  COLOR_RAM + $AC    ; $8C35
                            iny    ; $8C38
                            asl  a    ; $8C39
                            sta  zp_paint_scratch    ; $8C3A
-                           bmi  l_72    ; $8C3C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_64    ; $8C3C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8C3E
                            sta  SCREEN_RAM + $AB    ; $8C40
-                           bne  l_73    ; $8C43  filter_cutoff_status_paint_$454 was non-zero?
-l_72:                      lax  (zp_decoder_dest_lo),y    ; $8C45
+                           bne  l_65    ; $8C43  paint_page_smc_af_aa_c8_$3DC was non-zero?
+l_64:                      lax  (zp_decoder_dest_lo),y    ; $8C45
                            lda  hex_digit_hi_lut,x    ; $8C47
                            sta  SCREEN_RAM + $AB    ; $8C4A
                            lda  hex_digit_lo_lut,x    ; $8C4D
-l_73:                      sta  SCREEN_RAM + $AC    ; $8C50
+l_65:                      sta  SCREEN_RAM + $AC    ; $8C50
                            iny    ; $8C53
                            asl  zp_paint_scratch    ; $8C54
-                           bmi  l_74    ; $8C56  zp_paint_scratch had bit 7 set?
+                           bmi  l_66    ; $8C56  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8C58
                            sta  SCREEN_RAM + $AD    ; $8C5A
-                           bne  l_75    ; $8C5D  filter_cutoff_status_paint_$46E was non-zero?
-l_74:                      lax  (zp_decoder_dest_lo),y    ; $8C5F
+                           bne  l_67    ; $8C5D  paint_page_smc_af_aa_c8_$3F6 was non-zero?
+l_66:                      lax  (zp_decoder_dest_lo),y    ; $8C5F
                            lda  hex_digit_hi_lut,x    ; $8C61
                            sta  SCREEN_RAM + $AD    ; $8C64
                            lda  hex_digit_lo_lut,x    ; $8C67
-l_75:                      sta  SCREEN_RAM + $AE    ; $8C6A
+l_67:                      sta  SCREEN_RAM + $AE    ; $8C6A
                            iny    ; $8C6D
                            asl  zp_paint_scratch    ; $8C6E
-                           bmi  l_76    ; $8C70  zp_paint_scratch had bit 7 set?
+                           bmi  l_68    ; $8C70  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8C72
                            sta  SCREEN_RAM + $B0    ; $8C74
                            sta  SCREEN_RAM + $B1    ; $8C77
                            lda  #$20    ; $8C7A
-                           bne  l_77    ; $8C7C  filter_cutoff_status_paint_$490 was non-zero?
-l_76:                      lax  (zp_decoder_dest_lo),y    ; $8C7E
+                           bne  l_69    ; $8C7C  paint_page_smc_af_aa_c8_$418 was non-zero?
+l_68:                      lax  (zp_decoder_dest_lo),y    ; $8C7E
                            lda  seqED_color_lut,x    ; $8C80
                            sta  SCREEN_RAM + $B0    ; $8C83
                            lda  seqED_digit_screencode_lut,x    ; $8C86
                            sta  SCREEN_RAM + $B1    ; $8C89
                            lda  seqED_checkerboard_lut,x    ; $8C8C
-l_77:                      sta  SCREEN_RAM + $B2    ; $8C8F
+l_69:                      sta  SCREEN_RAM + $B2    ; $8C8F
                            ldy  paint_page_smc_af_aa_c8 + $3BB    ; $8C92
                            lax  (zp_scratch_9e),y    ; $8C95
                            inx    ; $8C97
@@ -9214,60 +9287,60 @@ l_77:                      sta  SCREEN_RAM + $B2    ; $8C8F
                            sta  SCREEN_RAM + $B8    ; $8C9B
                            dex    ; $8C9E
                            txa    ; $8C9F
-                           bpl  l_78    ; $8CA0  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_70    ; $8CA0  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8CA2
-                           bne  l_79    ; $8CA4  filter_cutoff_status_paint_$4B8 was non-zero?
-l_78:                      ldx  #$03    ; $8CA6
-l_79:                      stx  COLOR_RAM + $B4    ; $8CA8
+                           bne  l_71    ; $8CA4  paint_page_smc_af_aa_c8_$440 was non-zero?
+l_70:                      ldx  #$03    ; $8CA6
+l_71:                      stx  COLOR_RAM + $B4    ; $8CA8
                            stx  COLOR_RAM + $B5    ; $8CAB
                            iny    ; $8CAE
                            asl  a    ; $8CAF
                            sta  zp_paint_scratch    ; $8CB0
-                           bmi  l_80    ; $8CB2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_72    ; $8CB2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8CB4
                            sta  SCREEN_RAM + $B4    ; $8CB6
-                           bne  l_81    ; $8CB9  filter_cutoff_status_paint_$4CA was non-zero?
-l_80:                      lax  (zp_scratch_9e),y    ; $8CBB
+                           bne  l_73    ; $8CB9  paint_page_smc_af_aa_c8_$452 was non-zero?
+l_72:                      lax  (zp_scratch_9e),y    ; $8CBB
                            lda  hex_digit_hi_lut,x    ; $8CBD
                            sta  SCREEN_RAM + $B4    ; $8CC0
                            lda  hex_digit_lo_lut,x    ; $8CC3
-l_81:                      sta  SCREEN_RAM + $B5    ; $8CC6
+l_73:                      sta  SCREEN_RAM + $B5    ; $8CC6
                            iny    ; $8CC9
                            asl  zp_paint_scratch    ; $8CCA
-                           bmi  l_82    ; $8CCC  zp_paint_scratch had bit 7 set?
+                           bmi  l_74    ; $8CCC  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8CCE
                            sta  SCREEN_RAM + $B6    ; $8CD0
-                           bne  l_83    ; $8CD3  filter_cutoff_status_paint_$4E4 was non-zero?
-l_82:                      lax  (zp_scratch_9e),y    ; $8CD5
+                           bne  l_75    ; $8CD3  paint_page_smc_af_aa_c8_$46C was non-zero?
+l_74:                      lax  (zp_scratch_9e),y    ; $8CD5
                            lda  hex_digit_hi_lut,x    ; $8CD7
                            sta  SCREEN_RAM + $B6    ; $8CDA
                            lda  hex_digit_lo_lut,x    ; $8CDD
-l_83:                      sta  SCREEN_RAM + $B7    ; $8CE0
+l_75:                      sta  SCREEN_RAM + $B7    ; $8CE0
                            iny    ; $8CE3
                            asl  zp_paint_scratch    ; $8CE4
-                           bmi  l_84    ; $8CE6  zp_paint_scratch had bit 7 set?
+                           bmi  l_76    ; $8CE6  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8CE8
                            sta  SCREEN_RAM + $B9    ; $8CEA
                            sta  SCREEN_RAM + $BA    ; $8CED
                            lda  #$20    ; $8CF0
-                           bne  l_85    ; $8CF2  filter_cutoff_status_paint_$506 was non-zero?
-l_84:                      lax  (zp_scratch_9e),y    ; $8CF4
+                           bne  l_77    ; $8CF2  paint_page_smc_af_aa_c8_$48E was non-zero?
+l_76:                      lax  (zp_scratch_9e),y    ; $8CF4
                            lda  seqED_color_lut,x    ; $8CF6
                            sta  SCREEN_RAM + $B9    ; $8CF9
                            lda  seqED_digit_screencode_lut,x    ; $8CFC
                            sta  SCREEN_RAM + $BA    ; $8CFF
                            lda  seqED_checkerboard_lut,x    ; $8D02
-l_85:                      sta  SCREEN_RAM + $BB    ; $8D05
+l_77:                      sta  SCREEN_RAM + $BB    ; $8D05
                            iny    ; $8D08
-;   step-idiom: source = filter_cutoff_status_paint_$433  (= $8C1E)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$3BB  (= $8C1E)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $8D08
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_86    ; $8D09  filter_cutoff_status_paint_$433 stepped 4 and had bit 7 clear?
+                           bpl  l_78    ; $8D09  paint_page_smc_af_aa_c8_$3BB stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $8D0B
                            iny    ; $8D0E
                            jsr  pat_base_resolve_v012    ; $8D0F
                            ldy  #$00    ; $8D12
-l_86:                      lda  seqED_status_ruler_template,y    ; $8D14
+l_78:                      lda  seqED_status_ruler_template,y    ; $8D14
                            sta  screen_ram_row05    ; $8D17
                            lda  seqED_status_template_base,y    ; $8D1A
                            sta  SCREEN_RAM + $C9    ; $8D1D
@@ -9284,50 +9357,50 @@ l_86:                      lda  seqED_status_ruler_template,y    ; $8D14
                            sta  SCREEN_RAM + $CE    ; $8D32
                            dex    ; $8D35
                            txa    ; $8D36
-                           bpl  l_87    ; $8D37  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_79    ; $8D37  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $8D39
-                           bne  l_88    ; $8D3B  filter_cutoff_status_paint_$54F was non-zero?
-l_87:                      ldx  #$03    ; $8D3D
-l_88:                      stx  COLOR_RAM + $CA    ; $8D3F
+                           bne  l_80    ; $8D3B  paint_page_smc_af_aa_c8_$4D7 was non-zero?
+l_79:                      ldx  #$03    ; $8D3D
+l_80:                      stx  COLOR_RAM + $CA    ; $8D3F
                            stx  COLOR_RAM + $CB    ; $8D42
                            iny    ; $8D45
                            asl  a    ; $8D46
                            sta  zp_paint_scratch    ; $8D47
-                           bmi  l_89    ; $8D49  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_81    ; $8D49  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $8D4B
                            sta  SCREEN_RAM + $CA    ; $8D4D
-                           bne  l_90    ; $8D50  filter_cutoff_status_paint_$561 was non-zero?
-l_89:                      lax  (zp_ptr1_lo),y    ; $8D52
+                           bne  l_82    ; $8D50  paint_page_smc_af_aa_c8_$4E9 was non-zero?
+l_81:                      lax  (zp_ptr1_lo),y    ; $8D52
                            lda  hex_digit_hi_lut,x    ; $8D54
                            sta  SCREEN_RAM + $CA    ; $8D57
                            lda  hex_digit_lo_lut,x    ; $8D5A
-l_90:                      sta  SCREEN_RAM + $CB    ; $8D5D
+l_82:                      sta  SCREEN_RAM + $CB    ; $8D5D
                            iny    ; $8D60
                            asl  zp_paint_scratch    ; $8D61
-                           bmi  l_91    ; $8D63  zp_paint_scratch had bit 7 set?
+                           bmi  l_83    ; $8D63  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8D65
                            sta  SCREEN_RAM + $CC    ; $8D67
-                           bne  l_92    ; $8D6A  filter_cutoff_status_paint_$57B was non-zero?
-l_91:                      lax  (zp_ptr1_lo),y    ; $8D6C
+                           bne  l_84    ; $8D6A  paint_page_smc_af_aa_c8_$503 was non-zero?
+l_83:                      lax  (zp_ptr1_lo),y    ; $8D6C
                            lda  hex_digit_hi_lut,x    ; $8D6E
                            sta  SCREEN_RAM + $CC    ; $8D71
                            lda  hex_digit_lo_lut,x    ; $8D74
-l_92:                      sta  SCREEN_RAM + $CD    ; $8D77
+l_84:                      sta  SCREEN_RAM + $CD    ; $8D77
                            iny    ; $8D7A
                            asl  zp_paint_scratch    ; $8D7B
-                           bmi  l_93    ; $8D7D  zp_paint_scratch had bit 7 set?
+                           bmi  l_85    ; $8D7D  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8D7F
                            sta  SCREEN_RAM + $CF    ; $8D81
                            sta  SCREEN_RAM + $D0    ; $8D84
                            lda  #$20    ; $8D87
-                           bne  l_94    ; $8D89  filter_cutoff_status_paint_$59D was non-zero?
-l_93:                      lax  (zp_ptr1_lo),y    ; $8D8B
+                           bne  l_86    ; $8D89  paint_page_smc_af_aa_c8_$525 was non-zero?
+l_85:                      lax  (zp_ptr1_lo),y    ; $8D8B
                            lda  seqED_color_lut,x    ; $8D8D
                            sta  SCREEN_RAM + $CF    ; $8D90
                            lda  seqED_digit_screencode_lut,x    ; $8D93
                            sta  SCREEN_RAM + $D0    ; $8D96
                            lda  seqED_checkerboard_lut,x    ; $8D99
-l_94:                      sta  SCREEN_RAM + $D1    ; $8D9C
+l_86:                      sta  SCREEN_RAM + $D1    ; $8D9C
                            ldy  #$FF    ; $8D9F  ; ← (SMC operand at $8DA0, no name)
                            lax  (zp_decoder_dest_lo),y    ; $8DA1
                            inx    ; $8DA3
@@ -9335,50 +9408,50 @@ l_94:                      sta  SCREEN_RAM + $D1    ; $8D9C
                            sta  SCREEN_RAM + $D7    ; $8DA7
                            dex    ; $8DAA
                            txa    ; $8DAB
-                           bpl  l_95    ; $8DAC  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_87    ; $8DAC  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8DAE
-                           bne  l_96    ; $8DB0  filter_cutoff_status_paint_$5C4 was non-zero?
-l_95:                      ldx  #$03    ; $8DB2
-l_96:                      stx  COLOR_RAM + $D3    ; $8DB4
+                           bne  l_88    ; $8DB0  paint_page_smc_af_aa_c8_$54C was non-zero?
+l_87:                      ldx  #$03    ; $8DB2
+l_88:                      stx  COLOR_RAM + $D3    ; $8DB4
                            stx  COLOR_RAM + $D4    ; $8DB7
                            iny    ; $8DBA
                            asl  a    ; $8DBB
                            sta  zp_paint_scratch    ; $8DBC
-                           bmi  l_97    ; $8DBE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_89    ; $8DBE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8DC0
                            sta  SCREEN_RAM + $D3    ; $8DC2
-                           bne  l_98    ; $8DC5  filter_cutoff_status_paint_$5D6 was non-zero?
-l_97:                      lax  (zp_decoder_dest_lo),y    ; $8DC7
+                           bne  l_90    ; $8DC5  paint_page_smc_af_aa_c8_$55E was non-zero?
+l_89:                      lax  (zp_decoder_dest_lo),y    ; $8DC7
                            lda  hex_digit_hi_lut,x    ; $8DC9
                            sta  SCREEN_RAM + $D3    ; $8DCC
                            lda  hex_digit_lo_lut,x    ; $8DCF
-l_98:                      sta  SCREEN_RAM + $D4    ; $8DD2
+l_90:                      sta  SCREEN_RAM + $D4    ; $8DD2
                            iny    ; $8DD5
                            asl  zp_paint_scratch    ; $8DD6
-                           bmi  l_99    ; $8DD8  zp_paint_scratch had bit 7 set?
+                           bmi  l_91    ; $8DD8  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8DDA
                            sta  SCREEN_RAM + $D5    ; $8DDC
-                           bne  l_100    ; $8DDF  filter_cutoff_status_paint_$5F0 was non-zero?
-l_99:                      lax  (zp_decoder_dest_lo),y    ; $8DE1
+                           bne  l_92    ; $8DDF  paint_page_smc_af_aa_c8_$578 was non-zero?
+l_91:                      lax  (zp_decoder_dest_lo),y    ; $8DE1
                            lda  hex_digit_hi_lut,x    ; $8DE3
                            sta  SCREEN_RAM + $D5    ; $8DE6
                            lda  hex_digit_lo_lut,x    ; $8DE9
-l_100:                     sta  SCREEN_RAM + $D6    ; $8DEC
+l_92:                      sta  SCREEN_RAM + $D6    ; $8DEC
                            iny    ; $8DEF
                            asl  zp_paint_scratch    ; $8DF0
-                           bmi  l_101    ; $8DF2  zp_paint_scratch had bit 7 set?
+                           bmi  l_93    ; $8DF2  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8DF4
                            sta  SCREEN_RAM + $D8    ; $8DF6
                            sta  SCREEN_RAM + $D9    ; $8DF9
                            lda  #$20    ; $8DFC
-                           bne  l_102    ; $8DFE  filter_cutoff_status_paint_$612 was non-zero?
-l_101:                     lax  (zp_decoder_dest_lo),y    ; $8E00
+                           bne  l_94    ; $8DFE  paint_page_smc_af_aa_c8_$59A was non-zero?
+l_93:                      lax  (zp_decoder_dest_lo),y    ; $8E00
                            lda  seqED_color_lut,x    ; $8E02
                            sta  SCREEN_RAM + $D8    ; $8E05
                            lda  seqED_digit_screencode_lut,x    ; $8E08
                            sta  SCREEN_RAM + $D9    ; $8E0B
                            lda  seqED_checkerboard_lut,x    ; $8E0E
-l_102:                     sta  SCREEN_RAM + $DA    ; $8E11
+l_94:                      sta  SCREEN_RAM + $DA    ; $8E11
                            ldy  paint_page_smc_af_aa_c8 + $53D    ; $8E14
                            lax  (zp_scratch_9e),y    ; $8E17
                            inx    ; $8E19
@@ -9386,60 +9459,60 @@ l_102:                     sta  SCREEN_RAM + $DA    ; $8E11
                            sta  SCREEN_RAM + $E0    ; $8E1D
                            dex    ; $8E20
                            txa    ; $8E21
-                           bpl  l_103    ; $8E22  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_95    ; $8E22  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8E24
-                           bne  l_104    ; $8E26  filter_cutoff_status_paint_$63A was non-zero?
-l_103:                     ldx  #$03    ; $8E28
-l_104:                     stx  COLOR_RAM + $DC    ; $8E2A
+                           bne  l_96    ; $8E26  paint_page_smc_af_aa_c8_$5C2 was non-zero?
+l_95:                      ldx  #$03    ; $8E28
+l_96:                      stx  COLOR_RAM + $DC    ; $8E2A
                            stx  COLOR_RAM + $DD    ; $8E2D
                            iny    ; $8E30
                            asl  a    ; $8E31
                            sta  zp_paint_scratch    ; $8E32
-                           bmi  l_105    ; $8E34  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_97    ; $8E34  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8E36
                            sta  SCREEN_RAM + $DC    ; $8E38
-                           bne  l_106    ; $8E3B  filter_cutoff_status_paint_$64C was non-zero?
-l_105:                     lax  (zp_scratch_9e),y    ; $8E3D
+                           bne  l_98    ; $8E3B  paint_page_smc_af_aa_c8_$5D4 was non-zero?
+l_97:                      lax  (zp_scratch_9e),y    ; $8E3D
                            lda  hex_digit_hi_lut,x    ; $8E3F
                            sta  SCREEN_RAM + $DC    ; $8E42
                            lda  hex_digit_lo_lut,x    ; $8E45
-l_106:                     sta  SCREEN_RAM + $DD    ; $8E48
+l_98:                      sta  SCREEN_RAM + $DD    ; $8E48
                            iny    ; $8E4B
                            asl  zp_paint_scratch    ; $8E4C
-                           bmi  l_107    ; $8E4E  zp_paint_scratch had bit 7 set?
+                           bmi  l_99    ; $8E4E  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8E50
                            sta  SCREEN_RAM + $DE    ; $8E52
-                           bne  l_108    ; $8E55  filter_cutoff_status_paint_$666 was non-zero?
-l_107:                     lax  (zp_scratch_9e),y    ; $8E57
+                           bne  l_100    ; $8E55  paint_page_smc_af_aa_c8_$5EE was non-zero?
+l_99:                      lax  (zp_scratch_9e),y    ; $8E57
                            lda  hex_digit_hi_lut,x    ; $8E59
                            sta  SCREEN_RAM + $DE    ; $8E5C
                            lda  hex_digit_lo_lut,x    ; $8E5F
-l_108:                     sta  SCREEN_RAM + $DF    ; $8E62
+l_100:                     sta  SCREEN_RAM + $DF    ; $8E62
                            iny    ; $8E65
                            asl  zp_paint_scratch    ; $8E66
-                           bmi  l_109    ; $8E68  zp_paint_scratch had bit 7 set?
+                           bmi  l_101    ; $8E68  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8E6A
                            sta  SCREEN_RAM + $E1    ; $8E6C
                            sta  SCREEN_RAM + $E2    ; $8E6F
                            lda  #$20    ; $8E72
-                           bne  l_110    ; $8E74  filter_cutoff_status_paint_$688 was non-zero?
-l_109:                     lax  (zp_scratch_9e),y    ; $8E76
+                           bne  l_102    ; $8E74  paint_page_smc_af_aa_c8_$610 was non-zero?
+l_101:                     lax  (zp_scratch_9e),y    ; $8E76
                            lda  seqED_color_lut,x    ; $8E78
                            sta  SCREEN_RAM + $E1    ; $8E7B
                            lda  seqED_digit_screencode_lut,x    ; $8E7E
                            sta  SCREEN_RAM + $E2    ; $8E81
                            lda  seqED_checkerboard_lut,x    ; $8E84
-l_110:                     sta  SCREEN_RAM + $E3    ; $8E87
+l_102:                     sta  SCREEN_RAM + $E3    ; $8E87
                            iny    ; $8E8A
-;   step-idiom: source = filter_cutoff_status_paint_$5B5  (= $8DA0)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$53D  (= $8DA0)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $8E8A
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_111    ; $8E8B  filter_cutoff_status_paint_$5B5 stepped 4 and had bit 7 clear?
+                           bpl  l_103    ; $8E8B  paint_page_smc_af_aa_c8_$53D stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $8E8D
                            iny    ; $8E90
                            jsr  pat_base_resolve_v012    ; $8E91
                            ldy  #$00    ; $8E94
-l_111:                     lda  seqED_status_ruler_template,y    ; $8E96
+l_103:                     lda  seqED_status_ruler_template,y    ; $8E96
                            sta  KERNAL_KEYBUF_SCRATCH    ; $8E99
                            lda  seqED_status_template_base,y    ; $8E9C
                            sta  SCREEN_RAM + $F1    ; $8E9F
@@ -9453,50 +9526,50 @@ l_111:                     lda  seqED_status_ruler_template,y    ; $8E96
                            sta  SCREEN_RAM + $F6    ; $8EB4
                            dex    ; $8EB7
                            txa    ; $8EB8
-                           bpl  l_112    ; $8EB9  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_104    ; $8EB9  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $8EBB
-                           bne  l_113    ; $8EBD  filter_cutoff_status_paint_$6D1 was non-zero?
-l_112:                     ldx  #$03    ; $8EBF
-l_113:                     stx  COLOR_RAM + $F2    ; $8EC1
+                           bne  l_105    ; $8EBD  paint_page_smc_af_aa_c8_$659 was non-zero?
+l_104:                     ldx  #$03    ; $8EBF
+l_105:                     stx  COLOR_RAM + $F2    ; $8EC1
                            stx  COLOR_RAM + $F3    ; $8EC4
                            iny    ; $8EC7
                            asl  a    ; $8EC8
                            sta  zp_paint_scratch    ; $8EC9
-                           bmi  l_114    ; $8ECB  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_106    ; $8ECB  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $8ECD
                            sta  SCREEN_RAM + $F2    ; $8ECF
-                           bne  l_115    ; $8ED2  filter_cutoff_status_paint_$6E3 was non-zero?
-l_114:                     lax  (zp_ptr1_lo),y    ; $8ED4
+                           bne  l_107    ; $8ED2  paint_page_smc_af_aa_c8_$66B was non-zero?
+l_106:                     lax  (zp_ptr1_lo),y    ; $8ED4
                            lda  hex_digit_hi_lut,x    ; $8ED6
                            sta  SCREEN_RAM + $F2    ; $8ED9
                            lda  hex_digit_lo_lut,x    ; $8EDC
-l_115:                     sta  SCREEN_RAM + $F3    ; $8EDF
+l_107:                     sta  SCREEN_RAM + $F3    ; $8EDF
                            iny    ; $8EE2
                            asl  zp_paint_scratch    ; $8EE3
-                           bmi  l_116    ; $8EE5  zp_paint_scratch had bit 7 set?
+                           bmi  l_108    ; $8EE5  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8EE7
                            sta  SCREEN_RAM + $F4    ; $8EE9
-                           bne  l_117    ; $8EEC  filter_cutoff_status_paint_$6FD was non-zero?
-l_116:                     lax  (zp_ptr1_lo),y    ; $8EEE
+                           bne  l_109    ; $8EEC  paint_page_smc_af_aa_c8_$685 was non-zero?
+l_108:                     lax  (zp_ptr1_lo),y    ; $8EEE
                            lda  hex_digit_hi_lut,x    ; $8EF0
                            sta  SCREEN_RAM + $F4    ; $8EF3
                            lda  hex_digit_lo_lut,x    ; $8EF6
-l_117:                     sta  SCREEN_RAM + $F5    ; $8EF9
+l_109:                     sta  SCREEN_RAM + $F5    ; $8EF9
                            iny    ; $8EFC
                            asl  zp_paint_scratch    ; $8EFD
-                           bmi  l_118    ; $8EFF  zp_paint_scratch had bit 7 set?
+                           bmi  l_110    ; $8EFF  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8F01
                            sta  SCREEN_RAM + $F7    ; $8F03
                            sta  SCREEN_RAM + $F8    ; $8F06
                            lda  #$20    ; $8F09
-                           bne  l_119    ; $8F0B  filter_cutoff_status_paint_$71F was non-zero?
-l_118:                     lax  (zp_ptr1_lo),y    ; $8F0D
+                           bne  l_111    ; $8F0B  paint_page_smc_af_aa_c8_$6A7 was non-zero?
+l_110:                     lax  (zp_ptr1_lo),y    ; $8F0D
                            lda  seqED_color_lut,x    ; $8F0F
                            sta  SCREEN_RAM + $F7    ; $8F12
                            lda  seqED_digit_screencode_lut,x    ; $8F15
                            sta  SCREEN_RAM + $F8    ; $8F18
                            lda  seqED_checkerboard_lut,x    ; $8F1B
-l_119:                     sta  SCREEN_RAM + $F9    ; $8F1E
+l_111:                     sta  SCREEN_RAM + $F9    ; $8F1E
                            ldy  #$FF    ; $8F21  ; ← (SMC operand at $8F22, no name)
                            lax  (zp_decoder_dest_lo),y    ; $8F23
                            inx    ; $8F25
@@ -9504,50 +9577,50 @@ l_119:                     sta  SCREEN_RAM + $F9    ; $8F1E
                            sta  SCREEN_RAM + $FF    ; $8F29
                            dex    ; $8F2C
                            txa    ; $8F2D
-                           bpl  l_120    ; $8F2E  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_112    ; $8F2E  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8F30
-                           bne  l_121    ; $8F32  filter_cutoff_status_paint_$746 was non-zero?
-l_120:                     ldx  #$03    ; $8F34
-l_121:                     stx  COLOR_RAM + $FB    ; $8F36
+                           bne  l_113    ; $8F32  paint_page_smc_af_aa_c8_$6CE was non-zero?
+l_112:                     ldx  #$03    ; $8F34
+l_113:                     stx  COLOR_RAM + $FB    ; $8F36
                            stx  load_decoder_tail_jump    ; $8F39
                            iny    ; $8F3C
                            asl  a    ; $8F3D
                            sta  zp_paint_scratch    ; $8F3E
-                           bmi  l_122    ; $8F40  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_114    ; $8F40  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8F42
                            sta  SCREEN_RAM + $FB    ; $8F44
-                           bne  l_123    ; $8F47  filter_cutoff_status_paint_$758 was non-zero?
-l_122:                     lax  (zp_decoder_dest_lo),y    ; $8F49
+                           bne  l_115    ; $8F47  paint_page_smc_af_aa_c8_$6E0 was non-zero?
+l_114:                     lax  (zp_decoder_dest_lo),y    ; $8F49
                            lda  hex_digit_hi_lut,x    ; $8F4B
                            sta  SCREEN_RAM + $FB    ; $8F4E
                            lda  hex_digit_lo_lut,x    ; $8F51
-l_123:                     sta  SCREEN_RAM + $FC    ; $8F54
+l_115:                     sta  SCREEN_RAM + $FC    ; $8F54
                            iny    ; $8F57
                            asl  zp_paint_scratch    ; $8F58
-                           bmi  l_124    ; $8F5A  zp_paint_scratch had bit 7 set?
+                           bmi  l_116    ; $8F5A  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8F5C
                            sta  SCREEN_RAM + $FD    ; $8F5E
-                           bne  l_125    ; $8F61  filter_cutoff_status_paint_$772 was non-zero?
-l_124:                     lax  (zp_decoder_dest_lo),y    ; $8F63
+                           bne  l_117    ; $8F61  paint_page_smc_af_aa_c8_$6FA was non-zero?
+l_116:                     lax  (zp_decoder_dest_lo),y    ; $8F63
                            lda  hex_digit_hi_lut,x    ; $8F65
                            sta  SCREEN_RAM + $FD    ; $8F68
                            lda  hex_digit_lo_lut,x    ; $8F6B
-l_125:                     sta  SCREEN_RAM + $FE    ; $8F6E
+l_117:                     sta  SCREEN_RAM + $FE    ; $8F6E
                            iny    ; $8F71
                            asl  zp_paint_scratch    ; $8F72
-                           bmi  l_126    ; $8F74  zp_paint_scratch had bit 7 set?
+                           bmi  l_118    ; $8F74  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8F76
                            sta  SCREEN_RAM_P2    ; $8F78
                            sta  SCREEN_RAM + $101    ; $8F7B
                            lda  #$20    ; $8F7E
-                           bne  l_127    ; $8F80  filter_cutoff_status_paint_$794 was non-zero?
-l_126:                     lax  (zp_decoder_dest_lo),y    ; $8F82
+                           bne  l_119    ; $8F80  paint_page_smc_af_aa_c8_$71C was non-zero?
+l_118:                     lax  (zp_decoder_dest_lo),y    ; $8F82
                            lda  seqED_color_lut,x    ; $8F84
                            sta  SCREEN_RAM_P2    ; $8F87
                            lda  seqED_digit_screencode_lut,x    ; $8F8A
                            sta  SCREEN_RAM + $101    ; $8F8D
                            lda  seqED_checkerboard_lut,x    ; $8F90
-l_127:                     sta  SCREEN_RAM + $102    ; $8F93
+l_119:                     sta  SCREEN_RAM + $102    ; $8F93
                            ldy  paint_page_smc_af_aa_c8 + $6BF    ; $8F96
                            lax  (zp_scratch_9e),y    ; $8F99
                            inx    ; $8F9B
@@ -9555,60 +9628,60 @@ l_127:                     sta  SCREEN_RAM + $102    ; $8F93
                            sta  SCREEN_RAM + $108    ; $8F9F
                            dex    ; $8FA2
                            txa    ; $8FA3
-                           bpl  l_128    ; $8FA4  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_120    ; $8FA4  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $8FA6
-                           bne  l_129    ; $8FA8  filter_cutoff_status_paint_$7BC was non-zero?
-l_128:                     ldx  #$03    ; $8FAA
-l_129:                     stx  COLOR_RAM + $104    ; $8FAC
+                           bne  l_121    ; $8FA8  paint_page_smc_af_aa_c8_$744 was non-zero?
+l_120:                     ldx  #$03    ; $8FAA
+l_121:                     stx  COLOR_RAM + $104    ; $8FAC
                            stx  COLOR_RAM + $105    ; $8FAF
                            iny    ; $8FB2
                            asl  a    ; $8FB3
                            sta  zp_paint_scratch    ; $8FB4
-                           bmi  l_130    ; $8FB6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_122    ; $8FB6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $8FB8
                            sta  SCREEN_RAM + $104    ; $8FBA
-                           bne  l_131    ; $8FBD  filter_cutoff_status_paint_$7CE was non-zero?
-l_130:                     lax  (zp_scratch_9e),y    ; $8FBF
+                           bne  l_123    ; $8FBD  paint_page_smc_af_aa_c8_$756 was non-zero?
+l_122:                     lax  (zp_scratch_9e),y    ; $8FBF
                            lda  hex_digit_hi_lut,x    ; $8FC1
                            sta  SCREEN_RAM + $104    ; $8FC4
                            lda  hex_digit_lo_lut,x    ; $8FC7
-l_131:                     sta  SCREEN_RAM + $105    ; $8FCA
+l_123:                     sta  SCREEN_RAM + $105    ; $8FCA
                            iny    ; $8FCD
                            asl  zp_paint_scratch    ; $8FCE
-                           bmi  l_132    ; $8FD0  zp_paint_scratch had bit 7 set?
+                           bmi  l_124    ; $8FD0  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $8FD2
                            sta  SCREEN_RAM + $106    ; $8FD4
-                           bne  l_133    ; $8FD7  filter_cutoff_status_paint_$7E8 was non-zero?
-l_132:                     lax  (zp_scratch_9e),y    ; $8FD9
+                           bne  l_125    ; $8FD7  paint_page_smc_af_aa_c8_$770 was non-zero?
+l_124:                     lax  (zp_scratch_9e),y    ; $8FD9
                            lda  hex_digit_hi_lut,x    ; $8FDB
                            sta  SCREEN_RAM + $106    ; $8FDE
                            lda  hex_digit_lo_lut,x    ; $8FE1
-l_133:                     sta  SCREEN_RAM + $107    ; $8FE4
+l_125:                     sta  SCREEN_RAM + $107    ; $8FE4
                            iny    ; $8FE7
                            asl  zp_paint_scratch    ; $8FE8
-                           bmi  l_134    ; $8FEA  zp_paint_scratch had bit 7 set?
+                           bmi  l_126    ; $8FEA  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $8FEC
                            sta  SCREEN_RAM + $109    ; $8FEE
                            sta  SCREEN_RAM + $10A    ; $8FF1
                            lda  #$20    ; $8FF4
-                           bne  l_135    ; $8FF6  filter_cutoff_status_paint_$80A was non-zero?
-l_134:                     lax  (zp_scratch_9e),y    ; $8FF8
+                           bne  l_127    ; $8FF6  paint_page_smc_af_aa_c8_$792 was non-zero?
+l_126:                     lax  (zp_scratch_9e),y    ; $8FF8
                            lda  seqED_color_lut,x    ; $8FFA
                            sta  SCREEN_RAM + $109    ; $8FFD
                            lda  seqED_digit_screencode_lut,x    ; $9000
                            sta  SCREEN_RAM + $10A    ; $9003
                            lda  seqED_checkerboard_lut,x    ; $9006
-l_135:                     sta  SCREEN_RAM + $10B    ; $9009
+l_127:                     sta  SCREEN_RAM + $10B    ; $9009
                            iny    ; $900C
-;   step-idiom: source = filter_cutoff_status_paint_$737  (= $8F22)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$6BF  (= $8F22)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $900C
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_136    ; $900D  filter_cutoff_status_paint_$737 stepped 4 and had bit 7 clear?
+                           bpl  l_128    ; $900D  paint_page_smc_af_aa_c8_$6BF stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $900F
                            iny    ; $9012
                            jsr  pat_base_resolve_v012    ; $9013
                            ldy  #$00    ; $9016
-l_136:                     lda  seqED_status_ruler_template,y    ; $9018
+l_128:                     lda  seqED_status_ruler_template,y    ; $9018
                            sta  screen_ram_row07    ; $901B
                            lda  seqED_status_template_base,y    ; $901E
                            sta  SCREEN_RAM + $119    ; $9021
@@ -9622,50 +9695,50 @@ l_136:                     lda  seqED_status_ruler_template,y    ; $9018
                            sta  SCREEN_RAM + $11E    ; $9036
                            dex    ; $9039
                            txa    ; $903A
-                           bpl  l_137    ; $903B  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_129    ; $903B  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $903D
-                           bne  l_138    ; $903F  filter_cutoff_status_paint_$853 was non-zero?
-l_137:                     ldx  #$03    ; $9041
-l_138:                     stx  COLOR_RAM + $11A    ; $9043
+                           bne  l_130    ; $903F  paint_page_smc_af_aa_c8_$7DB was non-zero?
+l_129:                     ldx  #$03    ; $9041
+l_130:                     stx  COLOR_RAM + $11A    ; $9043
                            stx  COLOR_RAM + $11B    ; $9046
                            iny    ; $9049
                            asl  a    ; $904A
                            sta  zp_paint_scratch    ; $904B
-                           bmi  l_139    ; $904D  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_131    ; $904D  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $904F
                            sta  SCREEN_RAM + $11A    ; $9051
-                           bne  l_140    ; $9054  filter_cutoff_status_paint_$865 was non-zero?
-l_139:                     lax  (zp_ptr1_lo),y    ; $9056
+                           bne  l_132    ; $9054  paint_page_smc_af_aa_c8_$7ED was non-zero?
+l_131:                     lax  (zp_ptr1_lo),y    ; $9056
                            lda  hex_digit_hi_lut,x    ; $9058
                            sta  SCREEN_RAM + $11A    ; $905B
                            lda  hex_digit_lo_lut,x    ; $905E
-l_140:                     sta  SCREEN_RAM + $11B    ; $9061
+l_132:                     sta  SCREEN_RAM + $11B    ; $9061
                            iny    ; $9064
                            asl  zp_paint_scratch    ; $9065
-                           bmi  l_141    ; $9067  zp_paint_scratch had bit 7 set?
+                           bmi  l_133    ; $9067  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9069
                            sta  SCREEN_RAM + $11C    ; $906B
-                           bne  l_142    ; $906E  filter_cutoff_status_paint_$87F was non-zero?
-l_141:                     lax  (zp_ptr1_lo),y    ; $9070
+                           bne  l_134    ; $906E  paint_page_smc_af_aa_c8_$807 was non-zero?
+l_133:                     lax  (zp_ptr1_lo),y    ; $9070
                            lda  hex_digit_hi_lut,x    ; $9072
                            sta  SCREEN_RAM + $11C    ; $9075
                            lda  hex_digit_lo_lut,x    ; $9078
-l_142:                     sta  SCREEN_RAM + $11D    ; $907B
+l_134:                     sta  SCREEN_RAM + $11D    ; $907B
                            iny    ; $907E
                            asl  zp_paint_scratch    ; $907F
-                           bmi  l_143    ; $9081  zp_paint_scratch had bit 7 set?
+                           bmi  l_135    ; $9081  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9083
                            sta  SCREEN_RAM + $11F    ; $9085
                            sta  SCREEN_RAM + $120    ; $9088
                            lda  #$20    ; $908B
-                           bne  l_144    ; $908D  filter_cutoff_status_paint_$8A1 was non-zero?
-l_143:                     lax  (zp_ptr1_lo),y    ; $908F
+                           bne  l_136    ; $908D  paint_page_smc_af_aa_c8_$829 was non-zero?
+l_135:                     lax  (zp_ptr1_lo),y    ; $908F
                            lda  seqED_color_lut,x    ; $9091
                            sta  SCREEN_RAM + $11F    ; $9094
                            lda  seqED_digit_screencode_lut,x    ; $9097
                            sta  SCREEN_RAM + $120    ; $909A
                            lda  seqED_checkerboard_lut,x    ; $909D
-l_144:                     sta  SCREEN_RAM + $121    ; $90A0
+l_136:                     sta  SCREEN_RAM + $121    ; $90A0
                            ldy  #$FF    ; $90A3  ; ← (SMC operand at $90A4, no name)
                            lax  (zp_decoder_dest_lo),y    ; $90A5
                            inx    ; $90A7
@@ -9673,50 +9746,50 @@ l_144:                     sta  SCREEN_RAM + $121    ; $90A0
                            sta  SCREEN_RAM + $127    ; $90AB
                            dex    ; $90AE
                            txa    ; $90AF
-                           bpl  l_145    ; $90B0  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_137    ; $90B0  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $90B2
-                           bne  l_146    ; $90B4  filter_cutoff_status_paint_$8C8 was non-zero?
-l_145:                     ldx  #$03    ; $90B6
-l_146:                     stx  COLOR_RAM + $123    ; $90B8
+                           bne  l_138    ; $90B4  paint_page_smc_af_aa_c8_$850 was non-zero?
+l_137:                     ldx  #$03    ; $90B6
+l_138:                     stx  COLOR_RAM + $123    ; $90B8
                            stx  COLOR_RAM + $124    ; $90BB
                            iny    ; $90BE
                            asl  a    ; $90BF
                            sta  zp_paint_scratch    ; $90C0
-                           bmi  l_147    ; $90C2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_139    ; $90C2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $90C4
                            sta  SCREEN_RAM + $123    ; $90C6
-                           bne  l_148    ; $90C9  filter_cutoff_status_paint_$8DA was non-zero?
-l_147:                     lax  (zp_decoder_dest_lo),y    ; $90CB
+                           bne  l_140    ; $90C9  paint_page_smc_af_aa_c8_$862 was non-zero?
+l_139:                     lax  (zp_decoder_dest_lo),y    ; $90CB
                            lda  hex_digit_hi_lut,x    ; $90CD
                            sta  SCREEN_RAM + $123    ; $90D0
                            lda  hex_digit_lo_lut,x    ; $90D3
-l_148:                     sta  SCREEN_RAM + $124    ; $90D6
+l_140:                     sta  SCREEN_RAM + $124    ; $90D6
                            iny    ; $90D9
                            asl  zp_paint_scratch    ; $90DA
-                           bmi  l_149    ; $90DC  zp_paint_scratch had bit 7 set?
+                           bmi  l_141    ; $90DC  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $90DE
                            sta  SCREEN_RAM + $125    ; $90E0
-                           bne  l_150    ; $90E3  filter_cutoff_status_paint_$8F4 was non-zero?
-l_149:                     lax  (zp_decoder_dest_lo),y    ; $90E5
+                           bne  l_142    ; $90E3  paint_page_smc_af_aa_c8_$87C was non-zero?
+l_141:                     lax  (zp_decoder_dest_lo),y    ; $90E5
                            lda  hex_digit_hi_lut,x    ; $90E7
                            sta  SCREEN_RAM + $125    ; $90EA
                            lda  hex_digit_lo_lut,x    ; $90ED
-l_150:                     sta  SCREEN_RAM + $126    ; $90F0
+l_142:                     sta  SCREEN_RAM + $126    ; $90F0
                            iny    ; $90F3
                            asl  zp_paint_scratch    ; $90F4
-                           bmi  l_151    ; $90F6  zp_paint_scratch had bit 7 set?
+                           bmi  l_143    ; $90F6  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $90F8
                            sta  SCREEN_RAM + $128    ; $90FA
                            sta  SCREEN_RAM + $129    ; $90FD
                            lda  #$20    ; $9100
-                           bne  l_152    ; $9102  filter_cutoff_status_paint_$916 was non-zero?
-l_151:                     lax  (zp_decoder_dest_lo),y    ; $9104
+                           bne  l_144    ; $9102  paint_page_smc_af_aa_c8_$89E was non-zero?
+l_143:                     lax  (zp_decoder_dest_lo),y    ; $9104
                            lda  seqED_color_lut,x    ; $9106
                            sta  SCREEN_RAM + $128    ; $9109
                            lda  seqED_digit_screencode_lut,x    ; $910C
                            sta  SCREEN_RAM + $129    ; $910F
                            lda  seqED_checkerboard_lut,x    ; $9112
-l_152:                     sta  SCREEN_RAM + $12A    ; $9115
+l_144:                     sta  SCREEN_RAM + $12A    ; $9115
                            ldy  paint_page_smc_af_aa_c8 + $841    ; $9118
                            lax  (zp_scratch_9e),y    ; $911B
                            inx    ; $911D
@@ -9724,60 +9797,60 @@ l_152:                     sta  SCREEN_RAM + $12A    ; $9115
                            sta  SCREEN_RAM + $130    ; $9121
                            dex    ; $9124
                            txa    ; $9125
-                           bpl  l_153    ; $9126  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_145    ; $9126  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9128
-                           bne  l_154    ; $912A  filter_cutoff_status_paint_$93E was non-zero?
-l_153:                     ldx  #$03    ; $912C
-l_154:                     stx  COLOR_RAM + $12C    ; $912E
+                           bne  l_146    ; $912A  paint_page_smc_af_aa_c8_$8C6 was non-zero?
+l_145:                     ldx  #$03    ; $912C
+l_146:                     stx  COLOR_RAM + $12C    ; $912E
                            stx  COLOR_RAM + $12D    ; $9131
                            iny    ; $9134
                            asl  a    ; $9135
                            sta  zp_paint_scratch    ; $9136
-                           bmi  l_155    ; $9138  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_147    ; $9138  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $913A
                            sta  SCREEN_RAM + $12C    ; $913C
-                           bne  l_156    ; $913F  filter_cutoff_status_paint_$950 was non-zero?
-l_155:                     lax  (zp_scratch_9e),y    ; $9141
+                           bne  l_148    ; $913F  paint_page_smc_af_aa_c8_$8D8 was non-zero?
+l_147:                     lax  (zp_scratch_9e),y    ; $9141
                            lda  hex_digit_hi_lut,x    ; $9143
                            sta  SCREEN_RAM + $12C    ; $9146
                            lda  hex_digit_lo_lut,x    ; $9149
-l_156:                     sta  SCREEN_RAM + $12D    ; $914C
+l_148:                     sta  SCREEN_RAM + $12D    ; $914C
                            iny    ; $914F
                            asl  zp_paint_scratch    ; $9150
-                           bmi  l_157    ; $9152  zp_paint_scratch had bit 7 set?
+                           bmi  l_149    ; $9152  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9154
                            sta  SCREEN_RAM + $12E    ; $9156
-                           bne  l_158    ; $9159  filter_cutoff_status_paint_$96A was non-zero?
-l_157:                     lax  (zp_scratch_9e),y    ; $915B
+                           bne  l_150    ; $9159  paint_page_smc_af_aa_c8_$8F2 was non-zero?
+l_149:                     lax  (zp_scratch_9e),y    ; $915B
                            lda  hex_digit_hi_lut,x    ; $915D
                            sta  SCREEN_RAM + $12E    ; $9160
                            lda  hex_digit_lo_lut,x    ; $9163
-l_158:                     sta  SCREEN_RAM + $12F    ; $9166
+l_150:                     sta  SCREEN_RAM + $12F    ; $9166
                            iny    ; $9169
                            asl  zp_paint_scratch    ; $916A
-                           bmi  l_159    ; $916C  zp_paint_scratch had bit 7 set?
+                           bmi  l_151    ; $916C  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $916E
                            sta  SCREEN_RAM + $131    ; $9170
                            sta  SCREEN_RAM + $132    ; $9173
                            lda  #$20    ; $9176
-                           bne  l_160    ; $9178  filter_cutoff_status_paint_$98C was non-zero?
-l_159:                     lax  (zp_scratch_9e),y    ; $917A
+                           bne  l_152    ; $9178  paint_page_smc_af_aa_c8_$914 was non-zero?
+l_151:                     lax  (zp_scratch_9e),y    ; $917A
                            lda  seqED_color_lut,x    ; $917C
                            sta  SCREEN_RAM + $131    ; $917F
                            lda  seqED_digit_screencode_lut,x    ; $9182
                            sta  SCREEN_RAM + $132    ; $9185
                            lda  seqED_checkerboard_lut,x    ; $9188
-l_160:                     sta  SCREEN_RAM + $133    ; $918B
+l_152:                     sta  SCREEN_RAM + $133    ; $918B
                            iny    ; $918E
-;   step-idiom: source = filter_cutoff_status_paint_$8B9  (= $90A4)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$841  (= $90A4)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $918E
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_161    ; $918F  filter_cutoff_status_paint_$8B9 stepped 4 and had bit 7 clear?
+                           bpl  l_153    ; $918F  paint_page_smc_af_aa_c8_$841 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9191
                            iny    ; $9194
                            jsr  pat_base_resolve_v012    ; $9195
                            ldy  #$00    ; $9198
-l_161:                     lda  seqED_status_ruler_template,y    ; $919A
+l_153:                     lda  seqED_status_ruler_template,y    ; $919A
                            sta  screen_ram_row08    ; $919D
                            lda  seqED_status_template_base,y    ; $91A0
                            sta  SCREEN_RAM + $141    ; $91A3
@@ -9791,50 +9864,50 @@ l_161:                     lda  seqED_status_ruler_template,y    ; $919A
                            sta  SCREEN_RAM + $146    ; $91B8
                            dex    ; $91BB
                            txa    ; $91BC
-                           bpl  l_162    ; $91BD  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_154    ; $91BD  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $91BF
-                           bne  l_163    ; $91C1  filter_cutoff_status_paint_$9D5 was non-zero?
-l_162:                     ldx  #$03    ; $91C3
-l_163:                     stx  COLOR_RAM + $142    ; $91C5
+                           bne  l_155    ; $91C1  paint_page_smc_af_aa_c8_$95D was non-zero?
+l_154:                     ldx  #$03    ; $91C3
+l_155:                     stx  COLOR_RAM + $142    ; $91C5
                            stx  COLOR_RAM + $143    ; $91C8
                            iny    ; $91CB
                            asl  a    ; $91CC
                            sta  zp_paint_scratch    ; $91CD
-                           bmi  l_164    ; $91CF  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_156    ; $91CF  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $91D1
                            sta  SCREEN_RAM + $142    ; $91D3
-                           bne  l_165    ; $91D6  filter_cutoff_status_paint_$9E7 was non-zero?
-l_164:                     lax  (zp_ptr1_lo),y    ; $91D8
+                           bne  l_157    ; $91D6  paint_page_smc_af_aa_c8_$96F was non-zero?
+l_156:                     lax  (zp_ptr1_lo),y    ; $91D8
                            lda  hex_digit_hi_lut,x    ; $91DA
                            sta  SCREEN_RAM + $142    ; $91DD
                            lda  hex_digit_lo_lut,x    ; $91E0
-l_165:                     sta  SCREEN_RAM + $143    ; $91E3
+l_157:                     sta  SCREEN_RAM + $143    ; $91E3
                            iny    ; $91E6
                            asl  zp_paint_scratch    ; $91E7
-                           bmi  l_166    ; $91E9  zp_paint_scratch had bit 7 set?
+                           bmi  l_158    ; $91E9  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $91EB
                            sta  SCREEN_RAM + $144    ; $91ED
-                           bne  l_167    ; $91F0  filter_cutoff_status_paint_$A01 was non-zero?
-l_166:                     lax  (zp_ptr1_lo),y    ; $91F2
+                           bne  l_159    ; $91F0  paint_page_smc_af_aa_c8_$989 was non-zero?
+l_158:                     lax  (zp_ptr1_lo),y    ; $91F2
                            lda  hex_digit_hi_lut,x    ; $91F4
                            sta  SCREEN_RAM + $144    ; $91F7
                            lda  hex_digit_lo_lut,x    ; $91FA
-l_167:                     sta  SCREEN_RAM + $145    ; $91FD
+l_159:                     sta  SCREEN_RAM + $145    ; $91FD
                            iny    ; $9200
                            asl  zp_paint_scratch    ; $9201
-                           bmi  l_168    ; $9203  zp_paint_scratch had bit 7 set?
+                           bmi  l_160    ; $9203  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9205
                            sta  SCREEN_RAM + $147    ; $9207
                            sta  SCREEN_RAM + $148    ; $920A
                            lda  #$20    ; $920D
-                           bne  l_169    ; $920F  filter_cutoff_status_paint_$A23 was non-zero?
-l_168:                     lax  (zp_ptr1_lo),y    ; $9211
+                           bne  l_161    ; $920F  paint_page_smc_af_aa_c8_$9AB was non-zero?
+l_160:                     lax  (zp_ptr1_lo),y    ; $9211
                            lda  seqED_color_lut,x    ; $9213
                            sta  SCREEN_RAM + $147    ; $9216
                            lda  seqED_digit_screencode_lut,x    ; $9219
                            sta  SCREEN_RAM + $148    ; $921C
                            lda  seqED_checkerboard_lut,x    ; $921F
-l_169:                     sta  SCREEN_RAM + $149    ; $9222
+l_161:                     sta  SCREEN_RAM + $149    ; $9222
                            ldy  #$FF    ; $9225  ; ← (SMC operand at $9226, no name)
                            lax  (zp_decoder_dest_lo),y    ; $9227
                            inx    ; $9229
@@ -9842,50 +9915,50 @@ l_169:                     sta  SCREEN_RAM + $149    ; $9222
                            sta  SCREEN_RAM + $14F    ; $922D
                            dex    ; $9230
                            txa    ; $9231
-                           bpl  l_170    ; $9232  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_162    ; $9232  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9234
-                           bne  l_171    ; $9236  filter_cutoff_status_paint_$A4A was non-zero?
-l_170:                     ldx  #$03    ; $9238
-l_171:                     stx  COLOR_RAM + $14B    ; $923A
+                           bne  l_163    ; $9236  paint_page_smc_af_aa_c8_$9D2 was non-zero?
+l_162:                     ldx  #$03    ; $9238
+l_163:                     stx  COLOR_RAM + $14B    ; $923A
                            stx  COLOR_RAM + $14C    ; $923D
                            iny    ; $9240
                            asl  a    ; $9241
                            sta  zp_paint_scratch    ; $9242
-                           bmi  l_172    ; $9244  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_164    ; $9244  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9246
                            sta  SCREEN_RAM + $14B    ; $9248
-                           bne  l_173    ; $924B  filter_cutoff_status_paint_$A5C was non-zero?
-l_172:                     lax  (zp_decoder_dest_lo),y    ; $924D
+                           bne  l_165    ; $924B  paint_page_smc_af_aa_c8_$9E4 was non-zero?
+l_164:                     lax  (zp_decoder_dest_lo),y    ; $924D
                            lda  hex_digit_hi_lut,x    ; $924F
                            sta  SCREEN_RAM + $14B    ; $9252
                            lda  hex_digit_lo_lut,x    ; $9255
-l_173:                     sta  SCREEN_RAM + $14C    ; $9258
+l_165:                     sta  SCREEN_RAM + $14C    ; $9258
                            iny    ; $925B
                            asl  zp_paint_scratch    ; $925C
-                           bmi  l_174    ; $925E  zp_paint_scratch had bit 7 set?
+                           bmi  l_166    ; $925E  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9260
                            sta  SCREEN_RAM + $14D    ; $9262
-                           bne  l_175    ; $9265  filter_cutoff_status_paint_$A76 was non-zero?
-l_174:                     lax  (zp_decoder_dest_lo),y    ; $9267
+                           bne  l_167    ; $9265  paint_page_smc_af_aa_c8_$9FE was non-zero?
+l_166:                     lax  (zp_decoder_dest_lo),y    ; $9267
                            lda  hex_digit_hi_lut,x    ; $9269
                            sta  SCREEN_RAM + $14D    ; $926C
                            lda  hex_digit_lo_lut,x    ; $926F
-l_175:                     sta  SCREEN_RAM + $14E    ; $9272
+l_167:                     sta  SCREEN_RAM + $14E    ; $9272
                            iny    ; $9275
                            asl  zp_paint_scratch    ; $9276
-                           bmi  l_176    ; $9278  zp_paint_scratch had bit 7 set?
+                           bmi  l_168    ; $9278  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $927A
                            sta  SCREEN_RAM + $150    ; $927C
                            sta  SCREEN_RAM + $151    ; $927F
                            lda  #$20    ; $9282
-                           bne  l_177    ; $9284  filter_cutoff_status_paint_$A98 was non-zero?
-l_176:                     lax  (zp_decoder_dest_lo),y    ; $9286
+                           bne  l_169    ; $9284  paint_page_smc_af_aa_c8_$A20 was non-zero?
+l_168:                     lax  (zp_decoder_dest_lo),y    ; $9286
                            lda  seqED_color_lut,x    ; $9288
                            sta  SCREEN_RAM + $150    ; $928B
                            lda  seqED_digit_screencode_lut,x    ; $928E
                            sta  SCREEN_RAM + $151    ; $9291
                            lda  seqED_checkerboard_lut,x    ; $9294
-l_177:                     sta  SCREEN_RAM + $152    ; $9297
+l_169:                     sta  SCREEN_RAM + $152    ; $9297
                            ldy  paint_page_smc_af_aa_c8 + $9C3    ; $929A
                            lax  (zp_scratch_9e),y    ; $929D
                            inx    ; $929F
@@ -9893,60 +9966,60 @@ l_177:                     sta  SCREEN_RAM + $152    ; $9297
                            sta  SCREEN_RAM + $158    ; $92A3
                            dex    ; $92A6
                            txa    ; $92A7
-                           bpl  l_178    ; $92A8  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_170    ; $92A8  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $92AA
-                           bne  l_179    ; $92AC  filter_cutoff_status_paint_$AC0 was non-zero?
-l_178:                     ldx  #$03    ; $92AE
-l_179:                     stx  COLOR_RAM + $154    ; $92B0
+                           bne  l_171    ; $92AC  paint_page_smc_af_aa_c8_$A48 was non-zero?
+l_170:                     ldx  #$03    ; $92AE
+l_171:                     stx  COLOR_RAM + $154    ; $92B0
                            stx  COLOR_RAM + $155    ; $92B3
                            iny    ; $92B6
                            asl  a    ; $92B7
                            sta  zp_paint_scratch    ; $92B8
-                           bmi  l_180    ; $92BA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_172    ; $92BA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $92BC
                            sta  SCREEN_RAM + $154    ; $92BE
-                           bne  l_181    ; $92C1  filter_cutoff_status_paint_$AD2 was non-zero?
-l_180:                     lax  (zp_scratch_9e),y    ; $92C3
+                           bne  l_173    ; $92C1  paint_page_smc_af_aa_c8_$A5A was non-zero?
+l_172:                     lax  (zp_scratch_9e),y    ; $92C3
                            lda  hex_digit_hi_lut,x    ; $92C5
                            sta  SCREEN_RAM + $154    ; $92C8
                            lda  hex_digit_lo_lut,x    ; $92CB
-l_181:                     sta  SCREEN_RAM + $155    ; $92CE
+l_173:                     sta  SCREEN_RAM + $155    ; $92CE
                            iny    ; $92D1
                            asl  zp_paint_scratch    ; $92D2
-                           bmi  l_182    ; $92D4  zp_paint_scratch had bit 7 set?
+                           bmi  l_174    ; $92D4  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $92D6
                            sta  SCREEN_RAM + $156    ; $92D8
-                           bne  l_183    ; $92DB  filter_cutoff_status_paint_$AEC was non-zero?
-l_182:                     lax  (zp_scratch_9e),y    ; $92DD
+                           bne  l_175    ; $92DB  paint_page_smc_af_aa_c8_$A74 was non-zero?
+l_174:                     lax  (zp_scratch_9e),y    ; $92DD
                            lda  hex_digit_hi_lut,x    ; $92DF
                            sta  SCREEN_RAM + $156    ; $92E2
                            lda  hex_digit_lo_lut,x    ; $92E5
-l_183:                     sta  SCREEN_RAM + $157    ; $92E8
+l_175:                     sta  SCREEN_RAM + $157    ; $92E8
                            iny    ; $92EB
                            asl  zp_paint_scratch    ; $92EC
-                           bmi  l_184    ; $92EE  zp_paint_scratch had bit 7 set?
+                           bmi  l_176    ; $92EE  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $92F0
                            sta  SCREEN_RAM + $159    ; $92F2
                            sta  SCREEN_RAM + $15A    ; $92F5
                            lda  #$20    ; $92F8
-                           bne  l_185    ; $92FA  filter_cutoff_status_paint_$B0E was non-zero?
-l_184:                     lax  (zp_scratch_9e),y    ; $92FC
+                           bne  l_177    ; $92FA  paint_page_smc_af_aa_c8_$A96 was non-zero?
+l_176:                     lax  (zp_scratch_9e),y    ; $92FC
                            lda  seqED_color_lut,x    ; $92FE
                            sta  SCREEN_RAM + $159    ; $9301
                            lda  seqED_digit_screencode_lut,x    ; $9304
                            sta  SCREEN_RAM + $15A    ; $9307
                            lda  seqED_checkerboard_lut,x    ; $930A
-l_185:                     sta  SCREEN_RAM + $15B    ; $930D
+l_177:                     sta  SCREEN_RAM + $15B    ; $930D
                            iny    ; $9310
-;   step-idiom: source = filter_cutoff_status_paint_$A3B  (= $9226)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$9C3  (= $9226)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9310
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_186    ; $9311  filter_cutoff_status_paint_$A3B stepped 4 and had bit 7 clear?
+                           bpl  l_178    ; $9311  paint_page_smc_af_aa_c8_$9C3 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9313
                            iny    ; $9316
                            jsr  pat_base_resolve_v012    ; $9317
                            ldy  #$00    ; $931A
-l_186:                     lda  seqED_status_ruler_template,y    ; $931C
+l_178:                     lda  seqED_status_ruler_template,y    ; $931C
                            sta  screen_ram_row09    ; $931F
                            lda  seqED_status_template_base,y    ; $9322
                            sta  SCREEN_RAM + $169    ; $9325
@@ -9960,50 +10033,50 @@ l_186:                     lda  seqED_status_ruler_template,y    ; $931C
                            sta  SCREEN_RAM + $16E    ; $933A
                            dex    ; $933D
                            txa    ; $933E
-                           bpl  l_187    ; $933F  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_179    ; $933F  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9341
-                           bne  l_188    ; $9343  filter_cutoff_status_paint_$B57 was non-zero?
-l_187:                     ldx  #$03    ; $9345
-l_188:                     stx  COLOR_RAM + $16A    ; $9347
+                           bne  l_180    ; $9343  paint_page_smc_af_aa_c8_$ADF was non-zero?
+l_179:                     ldx  #$03    ; $9345
+l_180:                     stx  COLOR_RAM + $16A    ; $9347
                            stx  COLOR_RAM + $16B    ; $934A
                            iny    ; $934D
                            asl  a    ; $934E
                            sta  zp_paint_scratch    ; $934F
-                           bmi  l_189    ; $9351  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_181    ; $9351  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9353
                            sta  SCREEN_RAM + $16A    ; $9355
-                           bne  l_190    ; $9358  filter_cutoff_status_paint_$B69 was non-zero?
-l_189:                     lax  (zp_ptr1_lo),y    ; $935A
+                           bne  l_182    ; $9358  paint_page_smc_af_aa_c8_$AF1 was non-zero?
+l_181:                     lax  (zp_ptr1_lo),y    ; $935A
                            lda  hex_digit_hi_lut,x    ; $935C
                            sta  SCREEN_RAM + $16A    ; $935F
                            lda  hex_digit_lo_lut,x    ; $9362
-l_190:                     sta  SCREEN_RAM + $16B    ; $9365
+l_182:                     sta  SCREEN_RAM + $16B    ; $9365
                            iny    ; $9368
                            asl  zp_paint_scratch    ; $9369
-                           bmi  l_191    ; $936B  zp_paint_scratch had bit 7 set?
+                           bmi  l_183    ; $936B  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $936D
                            sta  SCREEN_RAM + $16C    ; $936F
-                           bne  l_192    ; $9372  filter_cutoff_status_paint_$B83 was non-zero?
-l_191:                     lax  (zp_ptr1_lo),y    ; $9374
+                           bne  l_184    ; $9372  paint_page_smc_af_aa_c8_$B0B was non-zero?
+l_183:                     lax  (zp_ptr1_lo),y    ; $9374
                            lda  hex_digit_hi_lut,x    ; $9376
                            sta  SCREEN_RAM + $16C    ; $9379
                            lda  hex_digit_lo_lut,x    ; $937C
-l_192:                     sta  SCREEN_RAM + $16D    ; $937F
+l_184:                     sta  SCREEN_RAM + $16D    ; $937F
                            iny    ; $9382
                            asl  zp_paint_scratch    ; $9383
-                           bmi  l_193    ; $9385  zp_paint_scratch had bit 7 set?
+                           bmi  l_185    ; $9385  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9387
                            sta  SCREEN_RAM + $16F    ; $9389
                            sta  SCREEN_RAM + $170    ; $938C
                            lda  #$20    ; $938F
-                           bne  l_194    ; $9391  filter_cutoff_status_paint_$BA5 was non-zero?
-l_193:                     lax  (zp_ptr1_lo),y    ; $9393
+                           bne  l_186    ; $9391  paint_page_smc_af_aa_c8_$B2D was non-zero?
+l_185:                     lax  (zp_ptr1_lo),y    ; $9393
                            lda  seqED_color_lut,x    ; $9395
                            sta  SCREEN_RAM + $16F    ; $9398
                            lda  seqED_digit_screencode_lut,x    ; $939B
                            sta  SCREEN_RAM + $170    ; $939E
                            lda  seqED_checkerboard_lut,x    ; $93A1
-l_194:                     sta  SCREEN_RAM + $171    ; $93A4
+l_186:                     sta  SCREEN_RAM + $171    ; $93A4
                            ldy  #$FF    ; $93A7  ; ← (SMC operand at $93A8, no name)
                            lax  (zp_decoder_dest_lo),y    ; $93A9
                            inx    ; $93AB
@@ -10011,50 +10084,50 @@ l_194:                     sta  SCREEN_RAM + $171    ; $93A4
                            sta  SCREEN_RAM + $177    ; $93AF
                            dex    ; $93B2
                            txa    ; $93B3
-                           bpl  l_195    ; $93B4  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_187    ; $93B4  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $93B6
-                           bne  l_196    ; $93B8  filter_cutoff_status_paint_$BCC was non-zero?
-l_195:                     ldx  #$03    ; $93BA
-l_196:                     stx  COLOR_RAM + $173    ; $93BC
+                           bne  l_188    ; $93B8  paint_page_smc_af_aa_c8_$B54 was non-zero?
+l_187:                     ldx  #$03    ; $93BA
+l_188:                     stx  COLOR_RAM + $173    ; $93BC
                            stx  COLOR_RAM + $174    ; $93BF
                            iny    ; $93C2
                            asl  a    ; $93C3
                            sta  zp_paint_scratch    ; $93C4
-                           bmi  l_197    ; $93C6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_189    ; $93C6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $93C8
                            sta  SCREEN_RAM + $173    ; $93CA
-                           bne  l_198    ; $93CD  filter_cutoff_status_paint_$BDE was non-zero?
-l_197:                     lax  (zp_decoder_dest_lo),y    ; $93CF
+                           bne  l_190    ; $93CD  paint_page_smc_af_aa_c8_$B66 was non-zero?
+l_189:                     lax  (zp_decoder_dest_lo),y    ; $93CF
                            lda  hex_digit_hi_lut,x    ; $93D1
                            sta  SCREEN_RAM + $173    ; $93D4
                            lda  hex_digit_lo_lut,x    ; $93D7
-l_198:                     sta  SCREEN_RAM + $174    ; $93DA
+l_190:                     sta  SCREEN_RAM + $174    ; $93DA
                            iny    ; $93DD
                            asl  zp_paint_scratch    ; $93DE
-                           bmi  l_199    ; $93E0  zp_paint_scratch had bit 7 set?
+                           bmi  l_191    ; $93E0  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $93E2
                            sta  SCREEN_RAM + $175    ; $93E4
-                           bne  l_200    ; $93E7  filter_cutoff_status_paint_$BF8 was non-zero?
-l_199:                     lax  (zp_decoder_dest_lo),y    ; $93E9
+                           bne  l_192    ; $93E7  paint_page_smc_af_aa_c8_$B80 was non-zero?
+l_191:                     lax  (zp_decoder_dest_lo),y    ; $93E9
                            lda  hex_digit_hi_lut,x    ; $93EB
                            sta  SCREEN_RAM + $175    ; $93EE
                            lda  hex_digit_lo_lut,x    ; $93F1
-l_200:                     sta  SCREEN_RAM + $176    ; $93F4
+l_192:                     sta  SCREEN_RAM + $176    ; $93F4
                            iny    ; $93F7
                            asl  zp_paint_scratch    ; $93F8
-                           bmi  l_201    ; $93FA  zp_paint_scratch had bit 7 set?
+                           bmi  l_193    ; $93FA  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $93FC
                            sta  SCREEN_RAM + $178    ; $93FE
                            sta  SCREEN_RAM + $179    ; $9401
                            lda  #$20    ; $9404
-                           bne  l_202    ; $9406  filter_cutoff_status_paint_$C1A was non-zero?
-l_201:                     lax  (zp_decoder_dest_lo),y    ; $9408
+                           bne  l_194    ; $9406  paint_page_smc_af_aa_c8_$BA2 was non-zero?
+l_193:                     lax  (zp_decoder_dest_lo),y    ; $9408
                            lda  seqED_color_lut,x    ; $940A
                            sta  SCREEN_RAM + $178    ; $940D
                            lda  seqED_digit_screencode_lut,x    ; $9410
                            sta  SCREEN_RAM + $179    ; $9413
                            lda  seqED_checkerboard_lut,x    ; $9416
-l_202:                     sta  SCREEN_RAM + $17A    ; $9419
+l_194:                     sta  SCREEN_RAM + $17A    ; $9419
                            ldy  paint_page_smc_af_aa_c8 + $B45    ; $941C
                            lax  (zp_scratch_9e),y    ; $941F
                            inx    ; $9421
@@ -10062,60 +10135,60 @@ l_202:                     sta  SCREEN_RAM + $17A    ; $9419
                            sta  SCREEN_RAM + $180    ; $9425
                            dex    ; $9428
                            txa    ; $9429
-                           bpl  l_203    ; $942A  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_195    ; $942A  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $942C
-                           bne  l_204    ; $942E  filter_cutoff_status_paint_$C42 was non-zero?
-l_203:                     ldx  #$03    ; $9430
-l_204:                     stx  COLOR_RAM + $17C    ; $9432
+                           bne  l_196    ; $942E  paint_page_smc_af_aa_c8_$BCA was non-zero?
+l_195:                     ldx  #$03    ; $9430
+l_196:                     stx  COLOR_RAM + $17C    ; $9432
                            stx  COLOR_RAM + $17D    ; $9435
                            iny    ; $9438
                            asl  a    ; $9439
                            sta  zp_paint_scratch    ; $943A
-                           bmi  l_205    ; $943C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_197    ; $943C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $943E
                            sta  SCREEN_RAM + $17C    ; $9440
-                           bne  l_206    ; $9443  filter_cutoff_status_paint_$C54 was non-zero?
-l_205:                     lax  (zp_scratch_9e),y    ; $9445
+                           bne  l_198    ; $9443  paint_page_smc_af_aa_c8_$BDC was non-zero?
+l_197:                     lax  (zp_scratch_9e),y    ; $9445
                            lda  hex_digit_hi_lut,x    ; $9447
                            sta  SCREEN_RAM + $17C    ; $944A
                            lda  hex_digit_lo_lut,x    ; $944D
-l_206:                     sta  SCREEN_RAM + $17D    ; $9450
+l_198:                     sta  SCREEN_RAM + $17D    ; $9450
                            iny    ; $9453
                            asl  zp_paint_scratch    ; $9454
-                           bmi  l_207    ; $9456  zp_paint_scratch had bit 7 set?
+                           bmi  l_199    ; $9456  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9458
                            sta  SCREEN_RAM + $17E    ; $945A
-                           bne  l_208    ; $945D  filter_cutoff_status_paint_$C6E was non-zero?
-l_207:                     lax  (zp_scratch_9e),y    ; $945F
+                           bne  l_200    ; $945D  paint_page_smc_af_aa_c8_$BF6 was non-zero?
+l_199:                     lax  (zp_scratch_9e),y    ; $945F
                            lda  hex_digit_hi_lut,x    ; $9461
                            sta  SCREEN_RAM + $17E    ; $9464
                            lda  hex_digit_lo_lut,x    ; $9467
-l_208:                     sta  SCREEN_RAM + $17F    ; $946A
+l_200:                     sta  SCREEN_RAM + $17F    ; $946A
                            iny    ; $946D
                            asl  zp_paint_scratch    ; $946E
-                           bmi  l_209    ; $9470  zp_paint_scratch had bit 7 set?
+                           bmi  l_201    ; $9470  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9472
                            sta  SCREEN_RAM + $181    ; $9474
                            sta  SCREEN_RAM + $182    ; $9477
                            lda  #$20    ; $947A
-                           bne  l_210    ; $947C  filter_cutoff_status_paint_$C90 was non-zero?
-l_209:                     lax  (zp_scratch_9e),y    ; $947E
+                           bne  l_202    ; $947C  paint_page_smc_af_aa_c8_$C18 was non-zero?
+l_201:                     lax  (zp_scratch_9e),y    ; $947E
                            lda  seqED_color_lut,x    ; $9480
                            sta  SCREEN_RAM + $181    ; $9483
                            lda  seqED_digit_screencode_lut,x    ; $9486
                            sta  SCREEN_RAM + $182    ; $9489
                            lda  seqED_checkerboard_lut,x    ; $948C
-l_210:                     sta  SCREEN_RAM + $183    ; $948F
+l_202:                     sta  SCREEN_RAM + $183    ; $948F
                            iny    ; $9492
-;   step-idiom: source = filter_cutoff_status_paint_$BBD  (= $93A8)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$B45  (= $93A8)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9492
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_211    ; $9493  filter_cutoff_status_paint_$BBD stepped 4 and had bit 7 clear?
+                           bpl  l_203    ; $9493  paint_page_smc_af_aa_c8_$B45 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9495
                            iny    ; $9498
                            jsr  pat_base_resolve_v012    ; $9499
                            ldy  #$00    ; $949C
-l_211:                     lda  seqED_status_ruler_template,y    ; $949E
+l_203:                     lda  seqED_status_ruler_template,y    ; $949E
                            sta  screen_ram_row10    ; $94A1
                            lda  seqED_status_template_base,y    ; $94A4
                            sta  SCREEN_RAM + $191    ; $94A7
@@ -10129,50 +10202,50 @@ l_211:                     lda  seqED_status_ruler_template,y    ; $949E
                            sta  SCREEN_RAM + $196    ; $94BC
                            dex    ; $94BF
                            txa    ; $94C0
-                           bpl  l_212    ; $94C1  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_204    ; $94C1  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $94C3
-                           bne  l_213    ; $94C5  filter_cutoff_status_paint_$CD9 was non-zero?
-l_212:                     ldx  #$03    ; $94C7
-l_213:                     stx  COLOR_RAM + $192    ; $94C9
+                           bne  l_205    ; $94C5  paint_page_smc_af_aa_c8_$C61 was non-zero?
+l_204:                     ldx  #$03    ; $94C7
+l_205:                     stx  COLOR_RAM + $192    ; $94C9
                            stx  COLOR_RAM + $193    ; $94CC
                            iny    ; $94CF
                            asl  a    ; $94D0
                            sta  zp_paint_scratch    ; $94D1
-                           bmi  l_214    ; $94D3  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_206    ; $94D3  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $94D5
                            sta  SCREEN_RAM + $192    ; $94D7
-                           bne  l_215    ; $94DA  filter_cutoff_status_paint_$CEB was non-zero?
-l_214:                     lax  (zp_ptr1_lo),y    ; $94DC
+                           bne  l_207    ; $94DA  paint_page_smc_af_aa_c8_$C73 was non-zero?
+l_206:                     lax  (zp_ptr1_lo),y    ; $94DC
                            lda  hex_digit_hi_lut,x    ; $94DE
                            sta  SCREEN_RAM + $192    ; $94E1
                            lda  hex_digit_lo_lut,x    ; $94E4
-l_215:                     sta  SCREEN_RAM + $193    ; $94E7
+l_207:                     sta  SCREEN_RAM + $193    ; $94E7
                            iny    ; $94EA
                            asl  zp_paint_scratch    ; $94EB
-                           bmi  l_216    ; $94ED  zp_paint_scratch had bit 7 set?
+                           bmi  l_208    ; $94ED  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $94EF
                            sta  SCREEN_RAM + $194    ; $94F1
-                           bne  l_217    ; $94F4  filter_cutoff_status_paint_$D05 was non-zero?
-l_216:                     lax  (zp_ptr1_lo),y    ; $94F6
+                           bne  l_209    ; $94F4  paint_page_smc_af_aa_c8_$C8D was non-zero?
+l_208:                     lax  (zp_ptr1_lo),y    ; $94F6
                            lda  hex_digit_hi_lut,x    ; $94F8
                            sta  SCREEN_RAM + $194    ; $94FB
                            lda  hex_digit_lo_lut,x    ; $94FE
-l_217:                     sta  SCREEN_RAM + $195    ; $9501
+l_209:                     sta  SCREEN_RAM + $195    ; $9501
                            iny    ; $9504
                            asl  zp_paint_scratch    ; $9505
-                           bmi  l_218    ; $9507  zp_paint_scratch had bit 7 set?
+                           bmi  l_210    ; $9507  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9509
                            sta  SCREEN_RAM + $197    ; $950B
                            sta  SCREEN_RAM + $198    ; $950E
                            lda  #$20    ; $9511
-                           bne  l_219    ; $9513  filter_cutoff_status_paint_$D27 was non-zero?
-l_218:                     lax  (zp_ptr1_lo),y    ; $9515
+                           bne  l_211    ; $9513  paint_page_smc_af_aa_c8_$CAF was non-zero?
+l_210:                     lax  (zp_ptr1_lo),y    ; $9515
                            lda  seqED_color_lut,x    ; $9517
                            sta  SCREEN_RAM + $197    ; $951A
                            lda  seqED_digit_screencode_lut,x    ; $951D
                            sta  SCREEN_RAM + $198    ; $9520
                            lda  seqED_checkerboard_lut,x    ; $9523
-l_219:                     sta  SCREEN_RAM + $199    ; $9526
+l_211:                     sta  SCREEN_RAM + $199    ; $9526
                            ldy  #$FF    ; $9529  ; ← (SMC operand at $952A, no name)
                            lax  (zp_decoder_dest_lo),y    ; $952B
                            inx    ; $952D
@@ -10180,50 +10253,50 @@ l_219:                     sta  SCREEN_RAM + $199    ; $9526
                            sta  SCREEN_RAM + $19F    ; $9531
                            dex    ; $9534
                            txa    ; $9535
-                           bpl  l_220    ; $9536  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_212    ; $9536  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9538
-                           bne  l_221    ; $953A  filter_cutoff_status_paint_$D4E was non-zero?
-l_220:                     ldx  #$03    ; $953C
-l_221:                     stx  COLOR_RAM + $19B    ; $953E
+                           bne  l_213    ; $953A  paint_page_smc_af_aa_c8_$CD6 was non-zero?
+l_212:                     ldx  #$03    ; $953C
+l_213:                     stx  COLOR_RAM + $19B    ; $953E
                            stx  COLOR_RAM + $19C    ; $9541
                            iny    ; $9544
                            asl  a    ; $9545
                            sta  zp_paint_scratch    ; $9546
-                           bmi  l_222    ; $9548  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_214    ; $9548  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $954A
                            sta  SCREEN_RAM + $19B    ; $954C
-                           bne  l_223    ; $954F  filter_cutoff_status_paint_$D60 was non-zero?
-l_222:                     lax  (zp_decoder_dest_lo),y    ; $9551
+                           bne  l_215    ; $954F  paint_page_smc_af_aa_c8_$CE8 was non-zero?
+l_214:                     lax  (zp_decoder_dest_lo),y    ; $9551
                            lda  hex_digit_hi_lut,x    ; $9553
                            sta  SCREEN_RAM + $19B    ; $9556
                            lda  hex_digit_lo_lut,x    ; $9559
-l_223:                     sta  SCREEN_RAM + $19C    ; $955C
+l_215:                     sta  SCREEN_RAM + $19C    ; $955C
                            iny    ; $955F
                            asl  zp_paint_scratch    ; $9560
-                           bmi  l_224    ; $9562  zp_paint_scratch had bit 7 set?
+                           bmi  l_216    ; $9562  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9564
                            sta  SCREEN_RAM + $19D    ; $9566
-                           bne  l_225    ; $9569  filter_cutoff_status_paint_$D7A was non-zero?
-l_224:                     lax  (zp_decoder_dest_lo),y    ; $956B
+                           bne  l_217    ; $9569  paint_page_smc_af_aa_c8_$D02 was non-zero?
+l_216:                     lax  (zp_decoder_dest_lo),y    ; $956B
                            lda  hex_digit_hi_lut,x    ; $956D
                            sta  SCREEN_RAM + $19D    ; $9570
                            lda  hex_digit_lo_lut,x    ; $9573
-l_225:                     sta  SCREEN_RAM + $19E    ; $9576
+l_217:                     sta  SCREEN_RAM + $19E    ; $9576
                            iny    ; $9579
                            asl  zp_paint_scratch    ; $957A
-                           bmi  l_226    ; $957C  zp_paint_scratch had bit 7 set?
+                           bmi  l_218    ; $957C  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $957E
                            sta  SCREEN_RAM + $1A0    ; $9580
                            sta  SCREEN_RAM + $1A1    ; $9583
                            lda  #$20    ; $9586
-                           bne  l_227    ; $9588  filter_cutoff_status_paint_$D9C was non-zero?
-l_226:                     lax  (zp_decoder_dest_lo),y    ; $958A
+                           bne  l_219    ; $9588  paint_page_smc_af_aa_c8_$D24 was non-zero?
+l_218:                     lax  (zp_decoder_dest_lo),y    ; $958A
                            lda  seqED_color_lut,x    ; $958C
                            sta  SCREEN_RAM + $1A0    ; $958F
                            lda  seqED_digit_screencode_lut,x    ; $9592
                            sta  SCREEN_RAM + $1A1    ; $9595
                            lda  seqED_checkerboard_lut,x    ; $9598
-l_227:                     sta  SCREEN_RAM + $1A2    ; $959B
+l_219:                     sta  SCREEN_RAM + $1A2    ; $959B
                            ldy  paint_page_smc_af_aa_c8 + $CC7    ; $959E
                            lax  (zp_scratch_9e),y    ; $95A1
                            inx    ; $95A3
@@ -10231,60 +10304,60 @@ l_227:                     sta  SCREEN_RAM + $1A2    ; $959B
                            sta  SCREEN_RAM + $1A8    ; $95A7
                            dex    ; $95AA
                            txa    ; $95AB
-                           bpl  l_228    ; $95AC  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_220    ; $95AC  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $95AE
-                           bne  l_229    ; $95B0  filter_cutoff_status_paint_$DC4 was non-zero?
-l_228:                     ldx  #$03    ; $95B2
-l_229:                     stx  COLOR_RAM + $1A4    ; $95B4
+                           bne  l_221    ; $95B0  paint_page_smc_af_aa_c8_$D4C was non-zero?
+l_220:                     ldx  #$03    ; $95B2
+l_221:                     stx  COLOR_RAM + $1A4    ; $95B4
                            stx  COLOR_RAM + $1A5    ; $95B7
                            iny    ; $95BA
                            asl  a    ; $95BB
                            sta  zp_paint_scratch    ; $95BC
-                           bmi  l_230    ; $95BE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_222    ; $95BE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $95C0
                            sta  SCREEN_RAM + $1A4    ; $95C2
-                           bne  l_231    ; $95C5  filter_cutoff_status_paint_$DD6 was non-zero?
-l_230:                     lax  (zp_scratch_9e),y    ; $95C7
+                           bne  l_223    ; $95C5  paint_page_smc_af_aa_c8_$D5E was non-zero?
+l_222:                     lax  (zp_scratch_9e),y    ; $95C7
                            lda  hex_digit_hi_lut,x    ; $95C9
                            sta  SCREEN_RAM + $1A4    ; $95CC
                            lda  hex_digit_lo_lut,x    ; $95CF
-l_231:                     sta  SCREEN_RAM + $1A5    ; $95D2
+l_223:                     sta  SCREEN_RAM + $1A5    ; $95D2
                            iny    ; $95D5
                            asl  zp_paint_scratch    ; $95D6
-                           bmi  l_232    ; $95D8  zp_paint_scratch had bit 7 set?
+                           bmi  l_224    ; $95D8  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $95DA
                            sta  SCREEN_RAM + $1A6    ; $95DC
-                           bne  l_233    ; $95DF  filter_cutoff_status_paint_$DF0 was non-zero?
-l_232:                     lax  (zp_scratch_9e),y    ; $95E1
+                           bne  l_225    ; $95DF  paint_page_smc_af_aa_c8_$D78 was non-zero?
+l_224:                     lax  (zp_scratch_9e),y    ; $95E1
                            lda  hex_digit_hi_lut,x    ; $95E3
                            sta  SCREEN_RAM + $1A6    ; $95E6
                            lda  hex_digit_lo_lut,x    ; $95E9
-l_233:                     sta  SCREEN_RAM + $1A7    ; $95EC
+l_225:                     sta  SCREEN_RAM + $1A7    ; $95EC
                            iny    ; $95EF
                            asl  zp_paint_scratch    ; $95F0
-                           bmi  l_234    ; $95F2  zp_paint_scratch had bit 7 set?
+                           bmi  l_226    ; $95F2  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $95F4
                            sta  SCREEN_RAM + $1A9    ; $95F6
                            sta  SCREEN_RAM + $1AA    ; $95F9
                            lda  #$20    ; $95FC
-                           bne  l_235    ; $95FE  filter_cutoff_status_paint_$E12 was non-zero?
-l_234:                     lax  (zp_scratch_9e),y    ; $9600
+                           bne  l_227    ; $95FE  paint_page_smc_af_aa_c8_$D9A was non-zero?
+l_226:                     lax  (zp_scratch_9e),y    ; $9600
                            lda  seqED_color_lut,x    ; $9602
                            sta  SCREEN_RAM + $1A9    ; $9605
                            lda  seqED_digit_screencode_lut,x    ; $9608
                            sta  SCREEN_RAM + $1AA    ; $960B
                            lda  seqED_checkerboard_lut,x    ; $960E
-l_235:                     sta  SCREEN_RAM + $1AB    ; $9611
+l_227:                     sta  SCREEN_RAM + $1AB    ; $9611
                            iny    ; $9614
-;   step-idiom: source = filter_cutoff_status_paint_$D3F  (= $952A)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$CC7  (= $952A)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9614
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_236    ; $9615  filter_cutoff_status_paint_$D3F stepped 4 and had bit 7 clear?
+                           bpl  l_228    ; $9615  paint_page_smc_af_aa_c8_$CC7 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9617
                            iny    ; $961A
                            jsr  pat_base_resolve_v012    ; $961B
                            ldy  #$00    ; $961E
-l_236:                     lda  seqED_status_ruler_template,y    ; $9620
+l_228:                     lda  seqED_status_ruler_template,y    ; $9620
                            sta  screen_ram_row11    ; $9623
                            lda  seqED_status_template_base,y    ; $9626
                            sta  SCREEN_RAM + $1B9    ; $9629
@@ -10298,50 +10371,50 @@ l_236:                     lda  seqED_status_ruler_template,y    ; $9620
                            sta  SCREEN_RAM + $1BE    ; $963E
                            dex    ; $9641
                            txa    ; $9642
-                           bpl  l_237    ; $9643  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_229    ; $9643  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9645
-                           bne  l_238    ; $9647  filter_cutoff_status_paint_$E5B was non-zero?
-l_237:                     ldx  #$03    ; $9649
-l_238:                     stx  COLOR_RAM + $1BA    ; $964B
+                           bne  l_230    ; $9647  paint_page_smc_af_aa_c8_$DE3 was non-zero?
+l_229:                     ldx  #$03    ; $9649
+l_230:                     stx  COLOR_RAM + $1BA    ; $964B
                            stx  COLOR_RAM + $1BB    ; $964E
                            iny    ; $9651
                            asl  a    ; $9652
                            sta  zp_paint_scratch    ; $9653
-                           bmi  l_239    ; $9655  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_231    ; $9655  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9657
                            sta  SCREEN_RAM + $1BA    ; $9659
-                           bne  l_240    ; $965C  filter_cutoff_status_paint_$E6D was non-zero?
-l_239:                     lax  (zp_ptr1_lo),y    ; $965E
+                           bne  l_232    ; $965C  paint_page_smc_af_aa_c8_$DF5 was non-zero?
+l_231:                     lax  (zp_ptr1_lo),y    ; $965E
                            lda  hex_digit_hi_lut,x    ; $9660
                            sta  SCREEN_RAM + $1BA    ; $9663
                            lda  hex_digit_lo_lut,x    ; $9666
-l_240:                     sta  SCREEN_RAM + $1BB    ; $9669
+l_232:                     sta  SCREEN_RAM + $1BB    ; $9669
                            iny    ; $966C
                            asl  zp_paint_scratch    ; $966D
-                           bmi  l_241    ; $966F  zp_paint_scratch had bit 7 set?
+                           bmi  l_233    ; $966F  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9671
                            sta  SCREEN_RAM + $1BC    ; $9673
-                           bne  l_242    ; $9676  filter_cutoff_status_paint_$E87 was non-zero?
-l_241:                     lax  (zp_ptr1_lo),y    ; $9678
+                           bne  l_234    ; $9676  paint_page_smc_af_aa_c8_$E0F was non-zero?
+l_233:                     lax  (zp_ptr1_lo),y    ; $9678
                            lda  hex_digit_hi_lut,x    ; $967A
                            sta  SCREEN_RAM + $1BC    ; $967D
                            lda  hex_digit_lo_lut,x    ; $9680
-l_242:                     sta  SCREEN_RAM + $1BD    ; $9683
+l_234:                     sta  SCREEN_RAM + $1BD    ; $9683
                            iny    ; $9686
                            asl  zp_paint_scratch    ; $9687
-                           bmi  l_243    ; $9689  zp_paint_scratch had bit 7 set?
+                           bmi  l_235    ; $9689  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $968B
                            sta  SCREEN_RAM + $1BF    ; $968D
                            sta  SCREEN_RAM + $1C0    ; $9690
                            lda  #$20    ; $9693
-                           bne  l_244    ; $9695  filter_cutoff_status_paint_$EA9 was non-zero?
-l_243:                     lax  (zp_ptr1_lo),y    ; $9697
+                           bne  l_236    ; $9695  paint_page_smc_af_aa_c8_$E31 was non-zero?
+l_235:                     lax  (zp_ptr1_lo),y    ; $9697
                            lda  seqED_color_lut,x    ; $9699
                            sta  SCREEN_RAM + $1BF    ; $969C
                            lda  seqED_digit_screencode_lut,x    ; $969F
                            sta  SCREEN_RAM + $1C0    ; $96A2
                            lda  seqED_checkerboard_lut,x    ; $96A5
-l_244:                     sta  SCREEN_RAM + $1C1    ; $96A8
+l_236:                     sta  SCREEN_RAM + $1C1    ; $96A8
                            ldy  #$FF    ; $96AB  ; ← (SMC operand at $96AC, no name)
                            lax  (zp_decoder_dest_lo),y    ; $96AD
                            inx    ; $96AF
@@ -10349,50 +10422,50 @@ l_244:                     sta  SCREEN_RAM + $1C1    ; $96A8
                            sta  SCREEN_RAM + $1C7    ; $96B3
                            dex    ; $96B6
                            txa    ; $96B7
-                           bpl  l_245    ; $96B8  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_237    ; $96B8  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $96BA
-                           bne  l_246    ; $96BC  filter_cutoff_status_paint_$ED0 was non-zero?
-l_245:                     ldx  #$03    ; $96BE
-l_246:                     stx  COLOR_RAM + $1C3    ; $96C0
+                           bne  l_238    ; $96BC  paint_page_smc_af_aa_c8_$E58 was non-zero?
+l_237:                     ldx  #$03    ; $96BE
+l_238:                     stx  COLOR_RAM + $1C3    ; $96C0
                            stx  COLOR_RAM + $1C4    ; $96C3
                            iny    ; $96C6
                            asl  a    ; $96C7
                            sta  zp_paint_scratch    ; $96C8
-                           bmi  l_247    ; $96CA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_239    ; $96CA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $96CC
                            sta  SCREEN_RAM + $1C3    ; $96CE
-                           bne  l_248    ; $96D1  filter_cutoff_status_paint_$EE2 was non-zero?
-l_247:                     lax  (zp_decoder_dest_lo),y    ; $96D3
+                           bne  l_240    ; $96D1  paint_page_smc_af_aa_c8_$E6A was non-zero?
+l_239:                     lax  (zp_decoder_dest_lo),y    ; $96D3
                            lda  hex_digit_hi_lut,x    ; $96D5
                            sta  SCREEN_RAM + $1C3    ; $96D8
                            lda  hex_digit_lo_lut,x    ; $96DB
-l_248:                     sta  SCREEN_RAM + $1C4    ; $96DE
+l_240:                     sta  SCREEN_RAM + $1C4    ; $96DE
                            iny    ; $96E1
                            asl  zp_paint_scratch    ; $96E2
-                           bmi  l_249    ; $96E4  zp_paint_scratch had bit 7 set?
+                           bmi  l_241    ; $96E4  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $96E6
                            sta  SCREEN_RAM + $1C5    ; $96E8
-                           bne  l_250    ; $96EB  filter_cutoff_status_paint_$EFC was non-zero?
-l_249:                     lax  (zp_decoder_dest_lo),y    ; $96ED
+                           bne  l_242    ; $96EB  paint_page_smc_af_aa_c8_$E84 was non-zero?
+l_241:                     lax  (zp_decoder_dest_lo),y    ; $96ED
                            lda  hex_digit_hi_lut,x    ; $96EF
                            sta  SCREEN_RAM + $1C5    ; $96F2
                            lda  hex_digit_lo_lut,x    ; $96F5
-l_250:                     sta  SCREEN_RAM + $1C6    ; $96F8
+l_242:                     sta  SCREEN_RAM + $1C6    ; $96F8
                            iny    ; $96FB
                            asl  zp_paint_scratch    ; $96FC
-                           bmi  l_251    ; $96FE  zp_paint_scratch had bit 7 set?
+                           bmi  l_243    ; $96FE  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9700
                            sta  SCREEN_RAM + $1C8    ; $9702
                            sta  SCREEN_RAM + $1C9    ; $9705
                            lda  #$20    ; $9708
-                           bne  l_252    ; $970A  filter_cutoff_status_paint_$F1E was non-zero?
-l_251:                     lax  (zp_decoder_dest_lo),y    ; $970C
+                           bne  l_244    ; $970A  paint_page_smc_af_aa_c8_$EA6 was non-zero?
+l_243:                     lax  (zp_decoder_dest_lo),y    ; $970C
                            lda  seqED_color_lut,x    ; $970E
                            sta  SCREEN_RAM + $1C8    ; $9711
                            lda  seqED_digit_screencode_lut,x    ; $9714
                            sta  SCREEN_RAM + $1C9    ; $9717
                            lda  seqED_checkerboard_lut,x    ; $971A
-l_252:                     sta  SCREEN_RAM + $1CA    ; $971D
+l_244:                     sta  SCREEN_RAM + $1CA    ; $971D
                            ldy  paint_page_smc_af_aa_c8 + $E49    ; $9720
                            lax  (zp_scratch_9e),y    ; $9723
                            inx    ; $9725
@@ -10400,60 +10473,60 @@ l_252:                     sta  SCREEN_RAM + $1CA    ; $971D
                            sta  SCREEN_RAM + $1D0    ; $9729
                            dex    ; $972C
                            txa    ; $972D
-                           bpl  l_253    ; $972E  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_245    ; $972E  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9730
-                           bne  l_254    ; $9732  filter_cutoff_status_paint_$F46 was non-zero?
-l_253:                     ldx  #$03    ; $9734
-l_254:                     stx  COLOR_RAM + $1CC    ; $9736
+                           bne  l_246    ; $9732  paint_page_smc_af_aa_c8_$ECE was non-zero?
+l_245:                     ldx  #$03    ; $9734
+l_246:                     stx  COLOR_RAM + $1CC    ; $9736
                            stx  COLOR_RAM + $1CD    ; $9739
                            iny    ; $973C
                            asl  a    ; $973D
                            sta  zp_paint_scratch    ; $973E
-                           bmi  l_255    ; $9740  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_247    ; $9740  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9742
                            sta  SCREEN_RAM + $1CC    ; $9744
-                           bne  l_256    ; $9747  filter_cutoff_status_paint_$F58 was non-zero?
-l_255:                     lax  (zp_scratch_9e),y    ; $9749
+                           bne  l_248    ; $9747  paint_page_smc_af_aa_c8_$EE0 was non-zero?
+l_247:                     lax  (zp_scratch_9e),y    ; $9749
                            lda  hex_digit_hi_lut,x    ; $974B
                            sta  SCREEN_RAM + $1CC    ; $974E
                            lda  hex_digit_lo_lut,x    ; $9751
-l_256:                     sta  SCREEN_RAM + $1CD    ; $9754
+l_248:                     sta  SCREEN_RAM + $1CD    ; $9754
                            iny    ; $9757
                            asl  zp_paint_scratch    ; $9758
-                           bmi  l_257    ; $975A  zp_paint_scratch had bit 7 set?
+                           bmi  l_249    ; $975A  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $975C
                            sta  SCREEN_RAM + $1CE    ; $975E
-                           bne  l_258    ; $9761  filter_cutoff_status_paint_$F72 was non-zero?
-l_257:                     lax  (zp_scratch_9e),y    ; $9763
+                           bne  l_250    ; $9761  paint_page_smc_af_aa_c8_$EFA was non-zero?
+l_249:                     lax  (zp_scratch_9e),y    ; $9763
                            lda  hex_digit_hi_lut,x    ; $9765
                            sta  SCREEN_RAM + $1CE    ; $9768
                            lda  hex_digit_lo_lut,x    ; $976B
-l_258:                     sta  SCREEN_RAM + $1CF    ; $976E
+l_250:                     sta  SCREEN_RAM + $1CF    ; $976E
                            iny    ; $9771
                            asl  zp_paint_scratch    ; $9772
-                           bmi  l_259    ; $9774  zp_paint_scratch had bit 7 set?
+                           bmi  l_251    ; $9774  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9776
                            sta  SCREEN_RAM + $1D1    ; $9778
                            sta  SCREEN_RAM + $1D2    ; $977B
                            lda  #$20    ; $977E
-                           bne  l_260    ; $9780  filter_cutoff_status_paint_$F94 was non-zero?
-l_259:                     lax  (zp_scratch_9e),y    ; $9782
+                           bne  l_252    ; $9780  paint_page_smc_af_aa_c8_$F1C was non-zero?
+l_251:                     lax  (zp_scratch_9e),y    ; $9782
                            lda  seqED_color_lut,x    ; $9784
                            sta  SCREEN_RAM + $1D1    ; $9787
                            lda  seqED_digit_screencode_lut,x    ; $978A
                            sta  SCREEN_RAM + $1D2    ; $978D
                            lda  seqED_checkerboard_lut,x    ; $9790
-l_260:                     sta  SCREEN_RAM + $1D3    ; $9793
+l_252:                     sta  SCREEN_RAM + $1D3    ; $9793
                            iny    ; $9796
-;   step-idiom: source = filter_cutoff_status_paint_$EC1  (= $96AC)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$E49  (= $96AC)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9796
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_261    ; $9797  filter_cutoff_status_paint_$EC1 stepped 4 and had bit 7 clear?
+                           bpl  l_253    ; $9797  paint_page_smc_af_aa_c8_$E49 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9799
                            iny    ; $979C
                            jsr  pat_base_resolve_v012    ; $979D
                            ldy  #$00    ; $97A0
-l_261:                     lda  seqED_status_ruler_template,y    ; $97A2
+l_253:                     lda  seqED_status_ruler_template,y    ; $97A2
                            sta  screen_ram_row12    ; $97A5
                            lda  seqED_status_template_base,y    ; $97A8
                            sta  SCREEN_RAM + $1E1    ; $97AB
@@ -10467,50 +10540,50 @@ l_261:                     lda  seqED_status_ruler_template,y    ; $97A2
                            sta  SCREEN_RAM + $1E6    ; $97C0
                            dex    ; $97C3
                            txa    ; $97C4
-                           bpl  l_262    ; $97C5  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_254    ; $97C5  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $97C7
-                           bne  l_263    ; $97C9  filter_cutoff_status_paint_$FDD was non-zero?
-l_262:                     ldx  #$03    ; $97CB
-l_263:                     stx  COLOR_RAM + $1E2    ; $97CD
+                           bne  l_255    ; $97C9  paint_page_smc_af_aa_c8_$F65 was non-zero?
+l_254:                     ldx  #$03    ; $97CB
+l_255:                     stx  COLOR_RAM + $1E2    ; $97CD
                            stx  COLOR_RAM + $1E3    ; $97D0
                            iny    ; $97D3
                            asl  a    ; $97D4
                            sta  zp_paint_scratch    ; $97D5
-                           bmi  l_264    ; $97D7  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_256    ; $97D7  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $97D9
                            sta  SCREEN_RAM + $1E2    ; $97DB
-                           bne  l_265    ; $97DE  filter_cutoff_status_paint_$FEF was non-zero?
-l_264:                     lax  (zp_ptr1_lo),y    ; $97E0
+                           bne  l_257    ; $97DE  paint_page_smc_af_aa_c8_$F77 was non-zero?
+l_256:                     lax  (zp_ptr1_lo),y    ; $97E0
                            lda  hex_digit_hi_lut,x    ; $97E2
                            sta  SCREEN_RAM + $1E2    ; $97E5
                            lda  hex_digit_lo_lut,x    ; $97E8
-l_265:                     sta  SCREEN_RAM + $1E3    ; $97EB
+l_257:                     sta  SCREEN_RAM + $1E3    ; $97EB
                            iny    ; $97EE
                            asl  zp_paint_scratch    ; $97EF
-                           bmi  l_266    ; $97F1  zp_paint_scratch had bit 7 set?
+                           bmi  l_258    ; $97F1  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $97F3
                            sta  SCREEN_RAM + $1E4    ; $97F5
-                           bne  l_267    ; $97F8  filter_cutoff_status_paint_$1009 was non-zero?
-l_266:                     lax  (zp_ptr1_lo),y    ; $97FA
+                           bne  l_259    ; $97F8  paint_page_smc_af_aa_c8_$F91 was non-zero?
+l_258:                     lax  (zp_ptr1_lo),y    ; $97FA
                            lda  hex_digit_hi_lut,x    ; $97FC
                            sta  SCREEN_RAM + $1E4    ; $97FF
                            lda  hex_digit_lo_lut,x    ; $9802
-l_267:                     sta  SCREEN_RAM + $1E5    ; $9805
+l_259:                     sta  SCREEN_RAM + $1E5    ; $9805
                            iny    ; $9808
                            asl  zp_paint_scratch    ; $9809
-                           bmi  l_268    ; $980B  zp_paint_scratch had bit 7 set?
+                           bmi  l_260    ; $980B  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $980D
                            sta  SCREEN_RAM + $1E7    ; $980F
                            sta  SCREEN_RAM + $1E8    ; $9812
                            lda  #$20    ; $9815
-                           bne  l_269    ; $9817  filter_cutoff_status_paint_$102B was non-zero?
-l_268:                     lax  (zp_ptr1_lo),y    ; $9819
+                           bne  l_261    ; $9817  paint_page_smc_af_aa_c8_$FB3 was non-zero?
+l_260:                     lax  (zp_ptr1_lo),y    ; $9819
                            lda  seqED_color_lut,x    ; $981B
                            sta  SCREEN_RAM + $1E7    ; $981E
                            lda  seqED_digit_screencode_lut,x    ; $9821
                            sta  SCREEN_RAM + $1E8    ; $9824
                            lda  seqED_checkerboard_lut,x    ; $9827
-l_269:                     sta  SCREEN_RAM + $1E9    ; $982A
+l_261:                     sta  SCREEN_RAM + $1E9    ; $982A
                            ldy  #$FF    ; $982D  ; ← (SMC operand at $982E, no name)
                            lax  (zp_decoder_dest_lo),y    ; $982F
                            inx    ; $9831
@@ -10518,50 +10591,50 @@ l_269:                     sta  SCREEN_RAM + $1E9    ; $982A
                            sta  SCREEN_RAM + $1EF    ; $9835
                            dex    ; $9838
                            txa    ; $9839
-                           bpl  l_270    ; $983A  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_262    ; $983A  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $983C
-                           bne  l_271    ; $983E  filter_cutoff_status_paint_$1052 was non-zero?
-l_270:                     ldx  #$03    ; $9840
-l_271:                     stx  COLOR_RAM + $1EB    ; $9842
+                           bne  l_263    ; $983E  paint_page_smc_af_aa_c8_$FDA was non-zero?
+l_262:                     ldx  #$03    ; $9840
+l_263:                     stx  COLOR_RAM + $1EB    ; $9842
                            stx  COLOR_RAM + $1EC    ; $9845
                            iny    ; $9848
                            asl  a    ; $9849
                            sta  zp_paint_scratch    ; $984A
-                           bmi  l_272    ; $984C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_264    ; $984C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $984E
                            sta  SCREEN_RAM + $1EB    ; $9850
-                           bne  l_273    ; $9853  filter_cutoff_status_paint_$1064 was non-zero?
-l_272:                     lax  (zp_decoder_dest_lo),y    ; $9855
+                           bne  l_265    ; $9853  paint_page_smc_af_aa_c8_$FEC was non-zero?
+l_264:                     lax  (zp_decoder_dest_lo),y    ; $9855
                            lda  hex_digit_hi_lut,x    ; $9857
                            sta  SCREEN_RAM + $1EB    ; $985A
                            lda  hex_digit_lo_lut,x    ; $985D
-l_273:                     sta  SCREEN_RAM + $1EC    ; $9860
+l_265:                     sta  SCREEN_RAM + $1EC    ; $9860
                            iny    ; $9863
                            asl  zp_paint_scratch    ; $9864
-                           bmi  l_274    ; $9866  zp_paint_scratch had bit 7 set?
+                           bmi  l_266    ; $9866  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9868
                            sta  SCREEN_RAM + $1ED    ; $986A
-                           bne  l_275    ; $986D  filter_cutoff_status_paint_$107E was non-zero?
-l_274:                     lax  (zp_decoder_dest_lo),y    ; $986F
+                           bne  l_267    ; $986D  paint_page_smc_af_aa_c8_$1006 was non-zero?
+l_266:                     lax  (zp_decoder_dest_lo),y    ; $986F
                            lda  hex_digit_hi_lut,x    ; $9871
                            sta  SCREEN_RAM + $1ED    ; $9874
                            lda  hex_digit_lo_lut,x    ; $9877
-l_275:                     sta  SCREEN_RAM + $1EE    ; $987A
+l_267:                     sta  SCREEN_RAM + $1EE    ; $987A
                            iny    ; $987D
                            asl  zp_paint_scratch    ; $987E
-                           bmi  l_276    ; $9880  zp_paint_scratch had bit 7 set?
+                           bmi  l_268    ; $9880  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9882
                            sta  SCREEN_RAM + $1F0    ; $9884
                            sta  SCREEN_RAM + $1F1    ; $9887
                            lda  #$20    ; $988A
-                           bne  l_277    ; $988C  filter_cutoff_status_paint_$10A0 was non-zero?
-l_276:                     lax  (zp_decoder_dest_lo),y    ; $988E
+                           bne  l_269    ; $988C  paint_page_smc_af_aa_c8_$1028 was non-zero?
+l_268:                     lax  (zp_decoder_dest_lo),y    ; $988E
                            lda  seqED_color_lut,x    ; $9890
                            sta  SCREEN_RAM + $1F0    ; $9893
                            lda  seqED_digit_screencode_lut,x    ; $9896
                            sta  SCREEN_RAM + $1F1    ; $9899
                            lda  seqED_checkerboard_lut,x    ; $989C
-l_277:                     sta  SCREEN_RAM + $1F2    ; $989F
+l_269:                     sta  SCREEN_RAM + $1F2    ; $989F
                            ldy  paint_page_smc_af_aa_c8 + $FCB    ; $98A2
                            lax  (zp_scratch_9e),y    ; $98A5
                            inx    ; $98A7
@@ -10569,60 +10642,60 @@ l_277:                     sta  SCREEN_RAM + $1F2    ; $989F
                            sta  SCREEN_RAM + $1F8    ; $98AB
                            dex    ; $98AE
                            txa    ; $98AF
-                           bpl  l_278    ; $98B0  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_270    ; $98B0  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $98B2
-                           bne  l_279    ; $98B4  filter_cutoff_status_paint_$10C8 was non-zero?
-l_278:                     ldx  #$03    ; $98B6
-l_279:                     stx  COLOR_RAM + $1F4    ; $98B8
+                           bne  l_271    ; $98B4  paint_page_smc_af_aa_c8_$1050 was non-zero?
+l_270:                     ldx  #$03    ; $98B6
+l_271:                     stx  COLOR_RAM + $1F4    ; $98B8
                            stx  COLOR_RAM + $1F5    ; $98BB
                            iny    ; $98BE
                            asl  a    ; $98BF
                            sta  zp_paint_scratch    ; $98C0
-                           bmi  l_280    ; $98C2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_272    ; $98C2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $98C4
                            sta  SCREEN_RAM + $1F4    ; $98C6
-                           bne  l_281    ; $98C9  filter_cutoff_status_paint_$10DA was non-zero?
-l_280:                     lax  (zp_scratch_9e),y    ; $98CB
+                           bne  l_273    ; $98C9  paint_page_smc_af_aa_c8_$1062 was non-zero?
+l_272:                     lax  (zp_scratch_9e),y    ; $98CB
                            lda  hex_digit_hi_lut,x    ; $98CD
                            sta  SCREEN_RAM + $1F4    ; $98D0
                            lda  hex_digit_lo_lut,x    ; $98D3
-l_281:                     sta  SCREEN_RAM + $1F5    ; $98D6
+l_273:                     sta  SCREEN_RAM + $1F5    ; $98D6
                            iny    ; $98D9
                            asl  zp_paint_scratch    ; $98DA
-                           bmi  l_282    ; $98DC  zp_paint_scratch had bit 7 set?
+                           bmi  l_274    ; $98DC  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $98DE
                            sta  SCREEN_RAM + $1F6    ; $98E0
-                           bne  l_283    ; $98E3  filter_cutoff_status_paint_$10F4 was non-zero?
-l_282:                     lax  (zp_scratch_9e),y    ; $98E5
+                           bne  l_275    ; $98E3  paint_page_smc_af_aa_c8_$107C was non-zero?
+l_274:                     lax  (zp_scratch_9e),y    ; $98E5
                            lda  hex_digit_hi_lut,x    ; $98E7
                            sta  SCREEN_RAM + $1F6    ; $98EA
                            lda  hex_digit_lo_lut,x    ; $98ED
-l_283:                     sta  SCREEN_RAM + $1F7    ; $98F0
+l_275:                     sta  SCREEN_RAM + $1F7    ; $98F0
                            iny    ; $98F3
                            asl  zp_paint_scratch    ; $98F4
-                           bmi  l_284    ; $98F6  zp_paint_scratch had bit 7 set?
+                           bmi  l_276    ; $98F6  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $98F8
                            sta  SCREEN_RAM + $1F9    ; $98FA
                            sta  SCREEN_RAM + $1FA    ; $98FD
                            lda  #$20    ; $9900
-                           bne  l_285    ; $9902  filter_cutoff_status_paint_$1116 was non-zero?
-l_284:                     lax  (zp_scratch_9e),y    ; $9904
+                           bne  l_277    ; $9902  paint_page_smc_af_aa_c8_$109E was non-zero?
+l_276:                     lax  (zp_scratch_9e),y    ; $9904
                            lda  seqED_color_lut,x    ; $9906
                            sta  SCREEN_RAM + $1F9    ; $9909
                            lda  seqED_digit_screencode_lut,x    ; $990C
                            sta  SCREEN_RAM + $1FA    ; $990F
                            lda  seqED_checkerboard_lut,x    ; $9912
-l_285:                     sta  SCREEN_RAM + $1FB    ; $9915
+l_277:                     sta  SCREEN_RAM + $1FB    ; $9915
                            iny    ; $9918
-;   step-idiom: source = filter_cutoff_status_paint_$1043  (= $982E)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$FCB  (= $982E)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9918
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_286    ; $9919  filter_cutoff_status_paint_$1043 stepped 4 and had bit 7 clear?
+                           bpl  l_278    ; $9919  paint_page_smc_af_aa_c8_$FCB stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $991B
                            iny    ; $991E
                            jsr  pat_base_resolve_v012    ; $991F
                            ldy  #$00    ; $9922
-l_286:                     lda  seqED_status_ruler_template,y    ; $9924
+l_278:                     lda  seqED_status_ruler_template,y    ; $9924
                            sta  screen_ram_row13    ; $9927
                            lda  seqED_status_template_base,y    ; $992A
                            sta  SCREEN_RAM + $209    ; $992D
@@ -10636,50 +10709,50 @@ l_286:                     lda  seqED_status_ruler_template,y    ; $9924
                            sta  SCREEN_RAM + $20E    ; $9942
                            dex    ; $9945
                            txa    ; $9946
-                           bpl  l_287    ; $9947  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_279    ; $9947  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9949
-                           bne  l_288    ; $994B  filter_cutoff_status_paint_$115F was non-zero?
-l_287:                     ldx  #$03    ; $994D
-l_288:                     stx  COLOR_RAM + $20A    ; $994F
+                           bne  l_280    ; $994B  paint_page_smc_af_aa_c8_$10E7 was non-zero?
+l_279:                     ldx  #$03    ; $994D
+l_280:                     stx  COLOR_RAM + $20A    ; $994F
                            stx  COLOR_RAM + $20B    ; $9952
                            iny    ; $9955
                            asl  a    ; $9956
                            sta  zp_paint_scratch    ; $9957
-                           bmi  l_289    ; $9959  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_281    ; $9959  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $995B
                            sta  SCREEN_RAM + $20A    ; $995D
-                           bne  l_290    ; $9960  filter_cutoff_status_paint_$1171 was non-zero?
-l_289:                     lax  (zp_ptr1_lo),y    ; $9962
+                           bne  l_282    ; $9960  paint_page_smc_af_aa_c8_$10F9 was non-zero?
+l_281:                     lax  (zp_ptr1_lo),y    ; $9962
                            lda  hex_digit_hi_lut,x    ; $9964
                            sta  SCREEN_RAM + $20A    ; $9967
                            lda  hex_digit_lo_lut,x    ; $996A
-l_290:                     sta  SCREEN_RAM + $20B    ; $996D
+l_282:                     sta  SCREEN_RAM + $20B    ; $996D
                            iny    ; $9970
                            asl  zp_paint_scratch    ; $9971
-                           bmi  l_291    ; $9973  zp_paint_scratch had bit 7 set?
+                           bmi  l_283    ; $9973  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9975
                            sta  SCREEN_RAM + $20C    ; $9977
-                           bne  l_292    ; $997A  filter_cutoff_status_paint_$118B was non-zero?
-l_291:                     lax  (zp_ptr1_lo),y    ; $997C
+                           bne  l_284    ; $997A  paint_page_smc_af_aa_c8_$1113 was non-zero?
+l_283:                     lax  (zp_ptr1_lo),y    ; $997C
                            lda  hex_digit_hi_lut,x    ; $997E
                            sta  SCREEN_RAM + $20C    ; $9981
                            lda  hex_digit_lo_lut,x    ; $9984
-l_292:                     sta  SCREEN_RAM + $20D    ; $9987
+l_284:                     sta  SCREEN_RAM + $20D    ; $9987
                            iny    ; $998A
                            asl  zp_paint_scratch    ; $998B
-                           bmi  l_293    ; $998D  zp_paint_scratch had bit 7 set?
+                           bmi  l_285    ; $998D  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $998F
                            sta  SCREEN_RAM + $20F    ; $9991
                            sta  SCREEN_RAM + $210    ; $9994
                            lda  #$20    ; $9997
-                           bne  l_294    ; $9999  filter_cutoff_status_paint_$11AD was non-zero?
-l_293:                     lax  (zp_ptr1_lo),y    ; $999B
+                           bne  l_286    ; $9999  paint_page_smc_af_aa_c8_$1135 was non-zero?
+l_285:                     lax  (zp_ptr1_lo),y    ; $999B
                            lda  seqED_color_lut,x    ; $999D
                            sta  SCREEN_RAM + $20F    ; $99A0
                            lda  seqED_digit_screencode_lut,x    ; $99A3
                            sta  SCREEN_RAM + $210    ; $99A6
                            lda  seqED_checkerboard_lut,x    ; $99A9
-l_294:                     sta  SCREEN_RAM + $211    ; $99AC
+l_286:                     sta  SCREEN_RAM + $211    ; $99AC
                            ldy  #$FF    ; $99AF  ; ← (SMC operand at $99B0, no name)
                            lax  (zp_decoder_dest_lo),y    ; $99B1
                            inx    ; $99B3
@@ -10687,50 +10760,50 @@ l_294:                     sta  SCREEN_RAM + $211    ; $99AC
                            sta  SCREEN_RAM + $217    ; $99B7
                            dex    ; $99BA
                            txa    ; $99BB
-                           bpl  l_295    ; $99BC  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_287    ; $99BC  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $99BE
-                           bne  l_296    ; $99C0  filter_cutoff_status_paint_$11D4 was non-zero?
-l_295:                     ldx  #$03    ; $99C2
-l_296:                     stx  COLOR_RAM + $213    ; $99C4
+                           bne  l_288    ; $99C0  paint_page_smc_af_aa_c8_$115C was non-zero?
+l_287:                     ldx  #$03    ; $99C2
+l_288:                     stx  COLOR_RAM + $213    ; $99C4
                            stx  COLOR_RAM + $214    ; $99C7
                            iny    ; $99CA
                            asl  a    ; $99CB
                            sta  zp_paint_scratch    ; $99CC
-                           bmi  l_297    ; $99CE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_289    ; $99CE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $99D0
                            sta  SCREEN_RAM + $213    ; $99D2
-                           bne  l_298    ; $99D5  filter_cutoff_status_paint_$11E6 was non-zero?
-l_297:                     lax  (zp_decoder_dest_lo),y    ; $99D7
+                           bne  l_290    ; $99D5  paint_page_smc_af_aa_c8_$116E was non-zero?
+l_289:                     lax  (zp_decoder_dest_lo),y    ; $99D7
                            lda  hex_digit_hi_lut,x    ; $99D9
                            sta  SCREEN_RAM + $213    ; $99DC
                            lda  hex_digit_lo_lut,x    ; $99DF
-l_298:                     sta  SCREEN_RAM + $214    ; $99E2
+l_290:                     sta  SCREEN_RAM + $214    ; $99E2
                            iny    ; $99E5
                            asl  zp_paint_scratch    ; $99E6
-                           bmi  l_299    ; $99E8  zp_paint_scratch had bit 7 set?
+                           bmi  l_291    ; $99E8  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $99EA
                            sta  SCREEN_RAM + $215    ; $99EC
-                           bne  l_300    ; $99EF  filter_cutoff_status_paint_$1200 was non-zero?
-l_299:                     lax  (zp_decoder_dest_lo),y    ; $99F1
+                           bne  l_292    ; $99EF  paint_page_smc_af_aa_c8_$1188 was non-zero?
+l_291:                     lax  (zp_decoder_dest_lo),y    ; $99F1
                            lda  hex_digit_hi_lut,x    ; $99F3
                            sta  SCREEN_RAM + $215    ; $99F6
                            lda  hex_digit_lo_lut,x    ; $99F9
-l_300:                     sta  SCREEN_RAM + $216    ; $99FC
+l_292:                     sta  SCREEN_RAM + $216    ; $99FC
                            iny    ; $99FF
                            asl  zp_paint_scratch    ; $9A00
-                           bmi  l_301    ; $9A02  zp_paint_scratch had bit 7 set?
+                           bmi  l_293    ; $9A02  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9A04
                            sta  SCREEN_RAM + $218    ; $9A06
                            sta  SCREEN_RAM + $219    ; $9A09
                            lda  #$20    ; $9A0C
-                           bne  l_302    ; $9A0E  filter_cutoff_status_paint_$1222 was non-zero?
-l_301:                     lax  (zp_decoder_dest_lo),y    ; $9A10
+                           bne  l_294    ; $9A0E  paint_page_smc_af_aa_c8_$11AA was non-zero?
+l_293:                     lax  (zp_decoder_dest_lo),y    ; $9A10
                            lda  seqED_color_lut,x    ; $9A12
                            sta  SCREEN_RAM + $218    ; $9A15
                            lda  seqED_digit_screencode_lut,x    ; $9A18
                            sta  SCREEN_RAM + $219    ; $9A1B
                            lda  seqED_checkerboard_lut,x    ; $9A1E
-l_302:                     sta  SCREEN_RAM + $21A    ; $9A21
+l_294:                     sta  SCREEN_RAM + $21A    ; $9A21
                            ldy  paint_page_smc_af_aa_c8 + $114D    ; $9A24
                            lax  (zp_scratch_9e),y    ; $9A27
                            inx    ; $9A29
@@ -10738,60 +10811,60 @@ l_302:                     sta  SCREEN_RAM + $21A    ; $9A21
                            sta  SCREEN_RAM + $220    ; $9A2D
                            dex    ; $9A30
                            txa    ; $9A31
-                           bpl  l_303    ; $9A32  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_295    ; $9A32  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9A34
-                           bne  l_304    ; $9A36  filter_cutoff_status_paint_$124A was non-zero?
-l_303:                     ldx  #$03    ; $9A38
-l_304:                     stx  COLOR_RAM + $21C    ; $9A3A
+                           bne  l_296    ; $9A36  paint_page_smc_af_aa_c8_$11D2 was non-zero?
+l_295:                     ldx  #$03    ; $9A38
+l_296:                     stx  COLOR_RAM + $21C    ; $9A3A
                            stx  COLOR_RAM + $21D    ; $9A3D
                            iny    ; $9A40
                            asl  a    ; $9A41
                            sta  zp_paint_scratch    ; $9A42
-                           bmi  l_305    ; $9A44  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_297    ; $9A44  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9A46
                            sta  SCREEN_RAM + $21C    ; $9A48
-                           bne  l_306    ; $9A4B  filter_cutoff_status_paint_$125C was non-zero?
-l_305:                     lax  (zp_scratch_9e),y    ; $9A4D
+                           bne  l_298    ; $9A4B  paint_page_smc_af_aa_c8_$11E4 was non-zero?
+l_297:                     lax  (zp_scratch_9e),y    ; $9A4D
                            lda  hex_digit_hi_lut,x    ; $9A4F
                            sta  SCREEN_RAM + $21C    ; $9A52
                            lda  hex_digit_lo_lut,x    ; $9A55
-l_306:                     sta  SCREEN_RAM + $21D    ; $9A58
+l_298:                     sta  SCREEN_RAM + $21D    ; $9A58
                            iny    ; $9A5B
                            asl  zp_paint_scratch    ; $9A5C
-                           bmi  l_307    ; $9A5E  zp_paint_scratch had bit 7 set?
+                           bmi  l_299    ; $9A5E  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9A60
                            sta  SCREEN_RAM + $21E    ; $9A62
-                           bne  l_308    ; $9A65  filter_cutoff_status_paint_$1276 was non-zero?
-l_307:                     lax  (zp_scratch_9e),y    ; $9A67
+                           bne  l_300    ; $9A65  paint_page_smc_af_aa_c8_$11FE was non-zero?
+l_299:                     lax  (zp_scratch_9e),y    ; $9A67
                            lda  hex_digit_hi_lut,x    ; $9A69
                            sta  SCREEN_RAM + $21E    ; $9A6C
                            lda  hex_digit_lo_lut,x    ; $9A6F
-l_308:                     sta  SCREEN_RAM + $21F    ; $9A72
+l_300:                     sta  SCREEN_RAM + $21F    ; $9A72
                            iny    ; $9A75
                            asl  zp_paint_scratch    ; $9A76
-                           bmi  l_309    ; $9A78  zp_paint_scratch had bit 7 set?
+                           bmi  l_301    ; $9A78  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9A7A
                            sta  SCREEN_RAM + $221    ; $9A7C
                            sta  SCREEN_RAM + $222    ; $9A7F
                            lda  #$20    ; $9A82
-                           bne  l_310    ; $9A84  filter_cutoff_status_paint_$1298 was non-zero?
-l_309:                     lax  (zp_scratch_9e),y    ; $9A86
+                           bne  l_302    ; $9A84  paint_page_smc_af_aa_c8_$1220 was non-zero?
+l_301:                     lax  (zp_scratch_9e),y    ; $9A86
                            lda  seqED_color_lut,x    ; $9A88
                            sta  SCREEN_RAM + $221    ; $9A8B
                            lda  seqED_digit_screencode_lut,x    ; $9A8E
                            sta  SCREEN_RAM + $222    ; $9A91
                            lda  seqED_checkerboard_lut,x    ; $9A94
-l_310:                     sta  SCREEN_RAM + $223    ; $9A97
+l_302:                     sta  SCREEN_RAM + $223    ; $9A97
                            iny    ; $9A9A
-;   step-idiom: source = filter_cutoff_status_paint_$11C5  (= $99B0)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$114D  (= $99B0)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9A9A
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_311    ; $9A9B  filter_cutoff_status_paint_$11C5 stepped 4 and had bit 7 clear?
+                           bpl  l_303    ; $9A9B  paint_page_smc_af_aa_c8_$114D stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9A9D
                            iny    ; $9AA0
                            jsr  pat_base_resolve_v012    ; $9AA1
                            ldy  #$00    ; $9AA4
-l_311:                     lda  seqED_status_ruler_template,y    ; $9AA6
+l_303:                     lda  seqED_status_ruler_template,y    ; $9AA6
                            sta  screen_ram_row14    ; $9AA9
                            lda  seqED_status_template_base,y    ; $9AAC
                            sta  SCREEN_RAM + $231    ; $9AAF
@@ -10805,50 +10878,50 @@ l_311:                     lda  seqED_status_ruler_template,y    ; $9AA6
                            sta  SCREEN_RAM + $236    ; $9AC4
                            dex    ; $9AC7
                            txa    ; $9AC8
-                           bpl  l_312    ; $9AC9  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_304    ; $9AC9  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9ACB
-                           bne  l_313    ; $9ACD  filter_cutoff_status_paint_$12E1 was non-zero?
-l_312:                     ldx  #$03    ; $9ACF
-l_313:                     stx  COLOR_RAM + $232    ; $9AD1
+                           bne  l_305    ; $9ACD  paint_page_smc_af_aa_c8_$1269 was non-zero?
+l_304:                     ldx  #$03    ; $9ACF
+l_305:                     stx  COLOR_RAM + $232    ; $9AD1
                            stx  COLOR_RAM + $233    ; $9AD4
                            iny    ; $9AD7
                            asl  a    ; $9AD8
                            sta  zp_paint_scratch    ; $9AD9
-                           bmi  l_314    ; $9ADB  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_306    ; $9ADB  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9ADD
                            sta  SCREEN_RAM + $232    ; $9ADF
-                           bne  l_315    ; $9AE2  filter_cutoff_status_paint_$12F3 was non-zero?
-l_314:                     lax  (zp_ptr1_lo),y    ; $9AE4
+                           bne  l_307    ; $9AE2  paint_page_smc_af_aa_c8_$127B was non-zero?
+l_306:                     lax  (zp_ptr1_lo),y    ; $9AE4
                            lda  hex_digit_hi_lut,x    ; $9AE6
                            sta  SCREEN_RAM + $232    ; $9AE9
                            lda  hex_digit_lo_lut,x    ; $9AEC
-l_315:                     sta  SCREEN_RAM + $233    ; $9AEF
+l_307:                     sta  SCREEN_RAM + $233    ; $9AEF
                            iny    ; $9AF2
                            asl  zp_paint_scratch    ; $9AF3
-                           bmi  l_316    ; $9AF5  zp_paint_scratch had bit 7 set?
+                           bmi  l_308    ; $9AF5  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9AF7
                            sta  SCREEN_RAM + $234    ; $9AF9
-                           bne  l_317    ; $9AFC  filter_cutoff_status_paint_$130D was non-zero?
-l_316:                     lax  (zp_ptr1_lo),y    ; $9AFE
+                           bne  l_309    ; $9AFC  paint_page_smc_af_aa_c8_$1295 was non-zero?
+l_308:                     lax  (zp_ptr1_lo),y    ; $9AFE
                            lda  hex_digit_hi_lut,x    ; $9B00
                            sta  SCREEN_RAM + $234    ; $9B03
                            lda  hex_digit_lo_lut,x    ; $9B06
-l_317:                     sta  SCREEN_RAM + $235    ; $9B09
+l_309:                     sta  SCREEN_RAM + $235    ; $9B09
                            iny    ; $9B0C
                            asl  zp_paint_scratch    ; $9B0D
-                           bmi  l_318    ; $9B0F  zp_paint_scratch had bit 7 set?
+                           bmi  l_310    ; $9B0F  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9B11
                            sta  SCREEN_RAM + $237    ; $9B13
                            sta  SCREEN_RAM + $238    ; $9B16
                            lda  #$20    ; $9B19
-                           bne  l_319    ; $9B1B  filter_cutoff_status_paint_$132F was non-zero?
-l_318:                     lax  (zp_ptr1_lo),y    ; $9B1D
+                           bne  l_311    ; $9B1B  paint_page_smc_af_aa_c8_$12B7 was non-zero?
+l_310:                     lax  (zp_ptr1_lo),y    ; $9B1D
                            lda  seqED_color_lut,x    ; $9B1F
                            sta  SCREEN_RAM + $237    ; $9B22
                            lda  seqED_digit_screencode_lut,x    ; $9B25
                            sta  SCREEN_RAM + $238    ; $9B28
                            lda  seqED_checkerboard_lut,x    ; $9B2B
-l_319:                     sta  SCREEN_RAM + $239    ; $9B2E
+l_311:                     sta  SCREEN_RAM + $239    ; $9B2E
                            ldy  #$FF    ; $9B31  ; ← (SMC operand at $9B32, no name)
                            lax  (zp_decoder_dest_lo),y    ; $9B33
                            inx    ; $9B35
@@ -10856,50 +10929,50 @@ l_319:                     sta  SCREEN_RAM + $239    ; $9B2E
                            sta  SCREEN_RAM + $23F    ; $9B39
                            dex    ; $9B3C
                            txa    ; $9B3D
-                           bpl  l_320    ; $9B3E  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_312    ; $9B3E  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9B40
-                           bne  l_321    ; $9B42  filter_cutoff_status_paint_$1356 was non-zero?
-l_320:                     ldx  #$03    ; $9B44
-l_321:                     stx  COLOR_RAM + $23B    ; $9B46
+                           bne  l_313    ; $9B42  paint_page_smc_af_aa_c8_$12DE was non-zero?
+l_312:                     ldx  #$03    ; $9B44
+l_313:                     stx  COLOR_RAM + $23B    ; $9B46
                            stx  COLOR_RAM + $23C    ; $9B49
                            iny    ; $9B4C
                            asl  a    ; $9B4D
                            sta  zp_paint_scratch    ; $9B4E
-                           bmi  l_322    ; $9B50  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_314    ; $9B50  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9B52
                            sta  SCREEN_RAM + $23B    ; $9B54
-                           bne  l_323    ; $9B57  filter_cutoff_status_paint_$1368 was non-zero?
-l_322:                     lax  (zp_decoder_dest_lo),y    ; $9B59
+                           bne  l_315    ; $9B57  paint_page_smc_af_aa_c8_$12F0 was non-zero?
+l_314:                     lax  (zp_decoder_dest_lo),y    ; $9B59
                            lda  hex_digit_hi_lut,x    ; $9B5B
                            sta  SCREEN_RAM + $23B    ; $9B5E
                            lda  hex_digit_lo_lut,x    ; $9B61
-l_323:                     sta  SCREEN_RAM + $23C    ; $9B64
+l_315:                     sta  SCREEN_RAM + $23C    ; $9B64
                            iny    ; $9B67
                            asl  zp_paint_scratch    ; $9B68
-                           bmi  l_324    ; $9B6A  zp_paint_scratch had bit 7 set?
+                           bmi  l_316    ; $9B6A  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9B6C
                            sta  SCREEN_RAM + $23D    ; $9B6E
-                           bne  l_325    ; $9B71  filter_cutoff_status_paint_$1382 was non-zero?
-l_324:                     lax  (zp_decoder_dest_lo),y    ; $9B73
+                           bne  l_317    ; $9B71  paint_page_smc_af_aa_c8_$130A was non-zero?
+l_316:                     lax  (zp_decoder_dest_lo),y    ; $9B73
                            lda  hex_digit_hi_lut,x    ; $9B75
                            sta  SCREEN_RAM + $23D    ; $9B78
                            lda  hex_digit_lo_lut,x    ; $9B7B
-l_325:                     sta  SCREEN_RAM + $23E    ; $9B7E
+l_317:                     sta  SCREEN_RAM + $23E    ; $9B7E
                            iny    ; $9B81
                            asl  zp_paint_scratch    ; $9B82
-                           bmi  l_326    ; $9B84  zp_paint_scratch had bit 7 set?
+                           bmi  l_318    ; $9B84  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9B86
                            sta  SCREEN_RAM + $240    ; $9B88
                            sta  SCREEN_RAM + $241    ; $9B8B
                            lda  #$20    ; $9B8E
-                           bne  l_327    ; $9B90  filter_cutoff_status_paint_$13A4 was non-zero?
-l_326:                     lax  (zp_decoder_dest_lo),y    ; $9B92
+                           bne  l_319    ; $9B90  paint_page_smc_af_aa_c8_$132C was non-zero?
+l_318:                     lax  (zp_decoder_dest_lo),y    ; $9B92
                            lda  seqED_color_lut,x    ; $9B94
                            sta  SCREEN_RAM + $240    ; $9B97
                            lda  seqED_digit_screencode_lut,x    ; $9B9A
                            sta  SCREEN_RAM + $241    ; $9B9D
                            lda  seqED_checkerboard_lut,x    ; $9BA0
-l_327:                     sta  SCREEN_RAM + $242    ; $9BA3
+l_319:                     sta  SCREEN_RAM + $242    ; $9BA3
                            ldy  paint_page_smc_af_aa_c8 + $12CF    ; $9BA6
                            lax  (zp_scratch_9e),y    ; $9BA9
                            inx    ; $9BAB
@@ -10907,60 +10980,60 @@ l_327:                     sta  SCREEN_RAM + $242    ; $9BA3
                            sta  SCREEN_RAM + $248    ; $9BAF
                            dex    ; $9BB2
                            txa    ; $9BB3
-                           bpl  l_328    ; $9BB4  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_320    ; $9BB4  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9BB6
-                           bne  l_329    ; $9BB8  filter_cutoff_status_paint_$13CC was non-zero?
-l_328:                     ldx  #$03    ; $9BBA
-l_329:                     stx  COLOR_RAM + $244    ; $9BBC
+                           bne  l_321    ; $9BB8  paint_page_smc_af_aa_c8_$1354 was non-zero?
+l_320:                     ldx  #$03    ; $9BBA
+l_321:                     stx  COLOR_RAM + $244    ; $9BBC
                            stx  COLOR_RAM + $245    ; $9BBF
                            iny    ; $9BC2
                            asl  a    ; $9BC3
                            sta  zp_paint_scratch    ; $9BC4
-                           bmi  l_330    ; $9BC6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_322    ; $9BC6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9BC8
                            sta  SCREEN_RAM + $244    ; $9BCA
-                           bne  l_331    ; $9BCD  filter_cutoff_status_paint_$13DE was non-zero?
-l_330:                     lax  (zp_scratch_9e),y    ; $9BCF
+                           bne  l_323    ; $9BCD  paint_page_smc_af_aa_c8_$1366 was non-zero?
+l_322:                     lax  (zp_scratch_9e),y    ; $9BCF
                            lda  hex_digit_hi_lut,x    ; $9BD1
                            sta  SCREEN_RAM + $244    ; $9BD4
                            lda  hex_digit_lo_lut,x    ; $9BD7
-l_331:                     sta  SCREEN_RAM + $245    ; $9BDA
+l_323:                     sta  SCREEN_RAM + $245    ; $9BDA
                            iny    ; $9BDD
                            asl  zp_paint_scratch    ; $9BDE
-                           bmi  l_332    ; $9BE0  zp_paint_scratch had bit 7 set?
+                           bmi  l_324    ; $9BE0  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9BE2
                            sta  SCREEN_RAM + $246    ; $9BE4
-                           bne  l_333    ; $9BE7  filter_cutoff_status_paint_$13F8 was non-zero?
-l_332:                     lax  (zp_scratch_9e),y    ; $9BE9
+                           bne  l_325    ; $9BE7  paint_page_smc_af_aa_c8_$1380 was non-zero?
+l_324:                     lax  (zp_scratch_9e),y    ; $9BE9
                            lda  hex_digit_hi_lut,x    ; $9BEB
                            sta  SCREEN_RAM + $246    ; $9BEE
                            lda  hex_digit_lo_lut,x    ; $9BF1
-l_333:                     sta  SCREEN_RAM + $247    ; $9BF4
+l_325:                     sta  SCREEN_RAM + $247    ; $9BF4
                            iny    ; $9BF7
                            asl  zp_paint_scratch    ; $9BF8
-                           bmi  l_334    ; $9BFA  zp_paint_scratch had bit 7 set?
+                           bmi  l_326    ; $9BFA  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9BFC
                            sta  SCREEN_RAM + $249    ; $9BFE
                            sta  SCREEN_RAM + $24A    ; $9C01
                            lda  #$20    ; $9C04
-                           bne  l_335    ; $9C06  filter_cutoff_status_paint_$141A was non-zero?
-l_334:                     lax  (zp_scratch_9e),y    ; $9C08
+                           bne  l_327    ; $9C06  paint_page_smc_af_aa_c8_$13A2 was non-zero?
+l_326:                     lax  (zp_scratch_9e),y    ; $9C08
                            lda  seqED_color_lut,x    ; $9C0A
                            sta  SCREEN_RAM + $249    ; $9C0D
                            lda  seqED_digit_screencode_lut,x    ; $9C10
                            sta  SCREEN_RAM + $24A    ; $9C13
                            lda  seqED_checkerboard_lut,x    ; $9C16
-l_335:                     sta  SCREEN_RAM + $24B    ; $9C19
+l_327:                     sta  SCREEN_RAM + $24B    ; $9C19
                            iny    ; $9C1C
-;   step-idiom: source = filter_cutoff_status_paint_$1347  (= $9B32)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$12CF  (= $9B32)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9C1C
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_336    ; $9C1D  filter_cutoff_status_paint_$1347 stepped 4 and had bit 7 clear?
+                           bpl  l_328    ; $9C1D  paint_page_smc_af_aa_c8_$12CF stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9C1F
                            iny    ; $9C22
                            jsr  pat_base_resolve_v012    ; $9C23
                            ldy  #$00    ; $9C26
-l_336:                     lda  seqED_status_ruler_template,y    ; $9C28
+l_328:                     lda  seqED_status_ruler_template,y    ; $9C28
                            sta  screen_ram_row15    ; $9C2B
                            lda  seqED_status_template_base,y    ; $9C2E
                            sta  SCREEN_RAM + $259    ; $9C31
@@ -10974,50 +11047,50 @@ l_336:                     lda  seqED_status_ruler_template,y    ; $9C28
                            sta  SCREEN_RAM + $25E    ; $9C46
                            dex    ; $9C49
                            txa    ; $9C4A
-                           bpl  l_337    ; $9C4B  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_329    ; $9C4B  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9C4D
-                           bne  l_338    ; $9C4F  filter_cutoff_status_paint_$1463 was non-zero?
-l_337:                     ldx  #$03    ; $9C51
-l_338:                     stx  COLOR_RAM + $25A    ; $9C53
+                           bne  l_330    ; $9C4F  paint_page_smc_af_aa_c8_$13EB was non-zero?
+l_329:                     ldx  #$03    ; $9C51
+l_330:                     stx  COLOR_RAM + $25A    ; $9C53
                            stx  COLOR_RAM + $25B    ; $9C56
                            iny    ; $9C59
                            asl  a    ; $9C5A
                            sta  zp_paint_scratch    ; $9C5B
-                           bmi  l_339    ; $9C5D  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_331    ; $9C5D  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9C5F
                            sta  SCREEN_RAM + $25A    ; $9C61
-                           bne  l_340    ; $9C64  filter_cutoff_status_paint_$1475 was non-zero?
-l_339:                     lax  (zp_ptr1_lo),y    ; $9C66
+                           bne  l_332    ; $9C64  paint_page_smc_af_aa_c8_$13FD was non-zero?
+l_331:                     lax  (zp_ptr1_lo),y    ; $9C66
                            lda  hex_digit_hi_lut,x    ; $9C68
                            sta  SCREEN_RAM + $25A    ; $9C6B
                            lda  hex_digit_lo_lut,x    ; $9C6E
-l_340:                     sta  SCREEN_RAM + $25B    ; $9C71
+l_332:                     sta  SCREEN_RAM + $25B    ; $9C71
                            iny    ; $9C74
                            asl  zp_paint_scratch    ; $9C75
-                           bmi  l_341    ; $9C77  zp_paint_scratch had bit 7 set?
+                           bmi  l_333    ; $9C77  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9C79
                            sta  SCREEN_RAM + $25C    ; $9C7B
-                           bne  l_342    ; $9C7E  filter_cutoff_status_paint_$148F was non-zero?
-l_341:                     lax  (zp_ptr1_lo),y    ; $9C80
+                           bne  l_334    ; $9C7E  paint_page_smc_af_aa_c8_$1417 was non-zero?
+l_333:                     lax  (zp_ptr1_lo),y    ; $9C80
                            lda  hex_digit_hi_lut,x    ; $9C82
                            sta  SCREEN_RAM + $25C    ; $9C85
                            lda  hex_digit_lo_lut,x    ; $9C88
-l_342:                     sta  SCREEN_RAM + $25D    ; $9C8B
+l_334:                     sta  SCREEN_RAM + $25D    ; $9C8B
                            iny    ; $9C8E
                            asl  zp_paint_scratch    ; $9C8F
-                           bmi  l_343    ; $9C91  zp_paint_scratch had bit 7 set?
+                           bmi  l_335    ; $9C91  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9C93
                            sta  SCREEN_RAM + $25F    ; $9C95
                            sta  SCREEN_RAM + $260    ; $9C98
                            lda  #$20    ; $9C9B
-                           bne  l_344    ; $9C9D  filter_cutoff_status_paint_$14B1 was non-zero?
-l_343:                     lax  (zp_ptr1_lo),y    ; $9C9F
+                           bne  l_336    ; $9C9D  paint_page_smc_af_aa_c8_$1439 was non-zero?
+l_335:                     lax  (zp_ptr1_lo),y    ; $9C9F
                            lda  seqED_color_lut,x    ; $9CA1
                            sta  SCREEN_RAM + $25F    ; $9CA4
                            lda  seqED_digit_screencode_lut,x    ; $9CA7
                            sta  SCREEN_RAM + $260    ; $9CAA
                            lda  seqED_checkerboard_lut,x    ; $9CAD
-l_344:                     sta  SCREEN_RAM + $261    ; $9CB0
+l_336:                     sta  SCREEN_RAM + $261    ; $9CB0
                            ldy  #$FF    ; $9CB3  ; ← (SMC operand at $9CB4, no name)
                            lax  (zp_decoder_dest_lo),y    ; $9CB5
                            inx    ; $9CB7
@@ -11025,50 +11098,50 @@ l_344:                     sta  SCREEN_RAM + $261    ; $9CB0
                            sta  SCREEN_RAM + $267    ; $9CBB
                            dex    ; $9CBE
                            txa    ; $9CBF
-                           bpl  l_345    ; $9CC0  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_337    ; $9CC0  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9CC2
-                           bne  l_346    ; $9CC4  filter_cutoff_status_paint_$14D8 was non-zero?
-l_345:                     ldx  #$03    ; $9CC6
-l_346:                     stx  COLOR_RAM + $263    ; $9CC8
+                           bne  l_338    ; $9CC4  paint_page_smc_af_aa_c8_$1460 was non-zero?
+l_337:                     ldx  #$03    ; $9CC6
+l_338:                     stx  COLOR_RAM + $263    ; $9CC8
                            stx  COLOR_RAM + $264    ; $9CCB
                            iny    ; $9CCE
                            asl  a    ; $9CCF
                            sta  zp_paint_scratch    ; $9CD0
-                           bmi  l_347    ; $9CD2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_339    ; $9CD2  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9CD4
                            sta  SCREEN_RAM + $263    ; $9CD6
-                           bne  l_348    ; $9CD9  filter_cutoff_status_paint_$14EA was non-zero?
-l_347:                     lax  (zp_decoder_dest_lo),y    ; $9CDB
+                           bne  l_340    ; $9CD9  paint_page_smc_af_aa_c8_$1472 was non-zero?
+l_339:                     lax  (zp_decoder_dest_lo),y    ; $9CDB
                            lda  hex_digit_hi_lut,x    ; $9CDD
                            sta  SCREEN_RAM + $263    ; $9CE0
                            lda  hex_digit_lo_lut,x    ; $9CE3
-l_348:                     sta  SCREEN_RAM + $264    ; $9CE6
+l_340:                     sta  SCREEN_RAM + $264    ; $9CE6
                            iny    ; $9CE9
                            asl  zp_paint_scratch    ; $9CEA
-                           bmi  l_349    ; $9CEC  zp_paint_scratch had bit 7 set?
+                           bmi  l_341    ; $9CEC  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9CEE
                            sta  SCREEN_RAM + $265    ; $9CF0
-                           bne  l_350    ; $9CF3  filter_cutoff_status_paint_$1504 was non-zero?
-l_349:                     lax  (zp_decoder_dest_lo),y    ; $9CF5
+                           bne  l_342    ; $9CF3  paint_page_smc_af_aa_c8_$148C was non-zero?
+l_341:                     lax  (zp_decoder_dest_lo),y    ; $9CF5
                            lda  hex_digit_hi_lut,x    ; $9CF7
                            sta  SCREEN_RAM + $265    ; $9CFA
                            lda  hex_digit_lo_lut,x    ; $9CFD
-l_350:                     sta  SCREEN_RAM + $266    ; $9D00
+l_342:                     sta  SCREEN_RAM + $266    ; $9D00
                            iny    ; $9D03
                            asl  zp_paint_scratch    ; $9D04
-                           bmi  l_351    ; $9D06  zp_paint_scratch had bit 7 set?
+                           bmi  l_343    ; $9D06  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9D08
                            sta  SCREEN_RAM + $268    ; $9D0A
                            sta  SCREEN_RAM + $269    ; $9D0D
                            lda  #$20    ; $9D10
-                           bne  l_352    ; $9D12  filter_cutoff_status_paint_$1526 was non-zero?
-l_351:                     lax  (zp_decoder_dest_lo),y    ; $9D14
+                           bne  l_344    ; $9D12  paint_page_smc_af_aa_c8_$14AE was non-zero?
+l_343:                     lax  (zp_decoder_dest_lo),y    ; $9D14
                            lda  seqED_color_lut,x    ; $9D16
                            sta  SCREEN_RAM + $268    ; $9D19
                            lda  seqED_digit_screencode_lut,x    ; $9D1C
                            sta  SCREEN_RAM + $269    ; $9D1F
                            lda  seqED_checkerboard_lut,x    ; $9D22
-l_352:                     sta  SCREEN_RAM + $26A    ; $9D25
+l_344:                     sta  SCREEN_RAM + $26A    ; $9D25
                            ldy  paint_page_smc_af_aa_c8 + $1451    ; $9D28
                            lax  (zp_scratch_9e),y    ; $9D2B
                            inx    ; $9D2D
@@ -11076,60 +11149,60 @@ l_352:                     sta  SCREEN_RAM + $26A    ; $9D25
                            sta  SCREEN_RAM + $270    ; $9D31
                            dex    ; $9D34
                            txa    ; $9D35
-                           bpl  l_353    ; $9D36  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_345    ; $9D36  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9D38
-                           bne  l_354    ; $9D3A  filter_cutoff_status_paint_$154E was non-zero?
-l_353:                     ldx  #$03    ; $9D3C
-l_354:                     stx  COLOR_RAM + $26C    ; $9D3E
+                           bne  l_346    ; $9D3A  paint_page_smc_af_aa_c8_$14D6 was non-zero?
+l_345:                     ldx  #$03    ; $9D3C
+l_346:                     stx  COLOR_RAM + $26C    ; $9D3E
                            stx  COLOR_RAM + $26D    ; $9D41
                            iny    ; $9D44
                            asl  a    ; $9D45
                            sta  zp_paint_scratch    ; $9D46
-                           bmi  l_355    ; $9D48  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_347    ; $9D48  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9D4A
                            sta  SCREEN_RAM + $26C    ; $9D4C
-                           bne  l_356    ; $9D4F  filter_cutoff_status_paint_$1560 was non-zero?
-l_355:                     lax  (zp_scratch_9e),y    ; $9D51
+                           bne  l_348    ; $9D4F  paint_page_smc_af_aa_c8_$14E8 was non-zero?
+l_347:                     lax  (zp_scratch_9e),y    ; $9D51
                            lda  hex_digit_hi_lut,x    ; $9D53
                            sta  SCREEN_RAM + $26C    ; $9D56
                            lda  hex_digit_lo_lut,x    ; $9D59
-l_356:                     sta  SCREEN_RAM + $26D    ; $9D5C
+l_348:                     sta  SCREEN_RAM + $26D    ; $9D5C
                            iny    ; $9D5F
                            asl  zp_paint_scratch    ; $9D60
-                           bmi  l_357    ; $9D62  zp_paint_scratch had bit 7 set?
+                           bmi  l_349    ; $9D62  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9D64
                            sta  SCREEN_RAM + $26E    ; $9D66
-                           bne  l_358    ; $9D69  filter_cutoff_status_paint_$157A was non-zero?
-l_357:                     lax  (zp_scratch_9e),y    ; $9D6B
+                           bne  l_350    ; $9D69  paint_page_smc_af_aa_c8_$1502 was non-zero?
+l_349:                     lax  (zp_scratch_9e),y    ; $9D6B
                            lda  hex_digit_hi_lut,x    ; $9D6D
                            sta  SCREEN_RAM + $26E    ; $9D70
                            lda  hex_digit_lo_lut,x    ; $9D73
-l_358:                     sta  SCREEN_RAM + $26F    ; $9D76
+l_350:                     sta  SCREEN_RAM + $26F    ; $9D76
                            iny    ; $9D79
                            asl  zp_paint_scratch    ; $9D7A
-                           bmi  l_359    ; $9D7C  zp_paint_scratch had bit 7 set?
+                           bmi  l_351    ; $9D7C  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9D7E
                            sta  SCREEN_RAM + $271    ; $9D80
                            sta  SCREEN_RAM + $272    ; $9D83
                            lda  #$20    ; $9D86
-                           bne  l_360    ; $9D88  filter_cutoff_status_paint_$159C was non-zero?
-l_359:                     lax  (zp_scratch_9e),y    ; $9D8A
+                           bne  l_352    ; $9D88  paint_page_smc_af_aa_c8_$1524 was non-zero?
+l_351:                     lax  (zp_scratch_9e),y    ; $9D8A
                            lda  seqED_color_lut,x    ; $9D8C
                            sta  SCREEN_RAM + $271    ; $9D8F
                            lda  seqED_digit_screencode_lut,x    ; $9D92
                            sta  SCREEN_RAM + $272    ; $9D95
                            lda  seqED_checkerboard_lut,x    ; $9D98
-l_360:                     sta  SCREEN_RAM + $273    ; $9D9B
+l_352:                     sta  SCREEN_RAM + $273    ; $9D9B
                            iny    ; $9D9E
-;   step-idiom: source = filter_cutoff_status_paint_$14C9  (= $9CB4)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$1451  (= $9CB4)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9D9E
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_361    ; $9D9F  filter_cutoff_status_paint_$14C9 stepped 4 and had bit 7 clear?
+                           bpl  l_353    ; $9D9F  paint_page_smc_af_aa_c8_$1451 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9DA1
                            iny    ; $9DA4
                            jsr  pat_base_resolve_v012    ; $9DA5
                            ldy  #$00    ; $9DA8
-l_361:                     lda  seqED_status_ruler_template,y    ; $9DAA
+l_353:                     lda  seqED_status_ruler_template,y    ; $9DAA
                            sta  screen_ram_row16    ; $9DAD
                            lda  seqED_status_template_base,y    ; $9DB0
                            sta  SCREEN_RAM + $281    ; $9DB3
@@ -11143,50 +11216,50 @@ l_361:                     lda  seqED_status_ruler_template,y    ; $9DAA
                            sta  SCREEN_RAM + $286    ; $9DC8
                            dex    ; $9DCB
                            txa    ; $9DCC
-                           bpl  l_362    ; $9DCD  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_354    ; $9DCD  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9DCF
-                           bne  l_363    ; $9DD1  filter_cutoff_status_paint_$15E5 was non-zero?
-l_362:                     ldx  #$03    ; $9DD3
-l_363:                     stx  COLOR_RAM + $282    ; $9DD5
+                           bne  l_355    ; $9DD1  paint_page_smc_af_aa_c8_$156D was non-zero?
+l_354:                     ldx  #$03    ; $9DD3
+l_355:                     stx  COLOR_RAM + $282    ; $9DD5
                            stx  COLOR_RAM + $283    ; $9DD8
                            iny    ; $9DDB
                            asl  a    ; $9DDC
                            sta  zp_paint_scratch    ; $9DDD
-                           bmi  l_364    ; $9DDF  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_356    ; $9DDF  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9DE1
                            sta  SCREEN_RAM + $282    ; $9DE3
-                           bne  l_365    ; $9DE6  filter_cutoff_status_paint_$15F7 was non-zero?
-l_364:                     lax  (zp_ptr1_lo),y    ; $9DE8
+                           bne  l_357    ; $9DE6  paint_page_smc_af_aa_c8_$157F was non-zero?
+l_356:                     lax  (zp_ptr1_lo),y    ; $9DE8
                            lda  hex_digit_hi_lut,x    ; $9DEA
                            sta  SCREEN_RAM + $282    ; $9DED
                            lda  hex_digit_lo_lut,x    ; $9DF0
-l_365:                     sta  SCREEN_RAM + $283    ; $9DF3
+l_357:                     sta  SCREEN_RAM + $283    ; $9DF3
                            iny    ; $9DF6
                            asl  zp_paint_scratch    ; $9DF7
-                           bmi  l_366    ; $9DF9  zp_paint_scratch had bit 7 set?
+                           bmi  l_358    ; $9DF9  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9DFB
                            sta  SCREEN_RAM + $284    ; $9DFD
-                           bne  l_367    ; $9E00  filter_cutoff_status_paint_$1611 was non-zero?
-l_366:                     lax  (zp_ptr1_lo),y    ; $9E02
+                           bne  l_359    ; $9E00  paint_page_smc_af_aa_c8_$1599 was non-zero?
+l_358:                     lax  (zp_ptr1_lo),y    ; $9E02
                            lda  hex_digit_hi_lut,x    ; $9E04
                            sta  SCREEN_RAM + $284    ; $9E07
                            lda  hex_digit_lo_lut,x    ; $9E0A
-l_367:                     sta  SCREEN_RAM + $285    ; $9E0D
+l_359:                     sta  SCREEN_RAM + $285    ; $9E0D
                            iny    ; $9E10
                            asl  zp_paint_scratch    ; $9E11
-                           bmi  l_368    ; $9E13  zp_paint_scratch had bit 7 set?
+                           bmi  l_360    ; $9E13  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9E15
                            sta  SCREEN_RAM + $287    ; $9E17
                            sta  SCREEN_RAM + $288    ; $9E1A
                            lda  #$20    ; $9E1D
-                           bne  l_369    ; $9E1F  filter_cutoff_status_paint_$1633 was non-zero?
-l_368:                     lax  (zp_ptr1_lo),y    ; $9E21
+                           bne  l_361    ; $9E1F  paint_page_smc_af_aa_c8_$15BB was non-zero?
+l_360:                     lax  (zp_ptr1_lo),y    ; $9E21
                            lda  seqED_color_lut,x    ; $9E23
                            sta  SCREEN_RAM + $287    ; $9E26
                            lda  seqED_digit_screencode_lut,x    ; $9E29
                            sta  SCREEN_RAM + $288    ; $9E2C
                            lda  seqED_checkerboard_lut,x    ; $9E2F
-l_369:                     sta  SCREEN_RAM + $289    ; $9E32
+l_361:                     sta  SCREEN_RAM + $289    ; $9E32
                            ldy  #$FF    ; $9E35  ; ← (SMC operand at $9E36, no name)
                            lax  (zp_decoder_dest_lo),y    ; $9E37
                            inx    ; $9E39
@@ -11194,50 +11267,50 @@ l_369:                     sta  SCREEN_RAM + $289    ; $9E32
                            sta  SCREEN_RAM + $28F    ; $9E3D
                            dex    ; $9E40
                            txa    ; $9E41
-                           bpl  l_370    ; $9E42  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_362    ; $9E42  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9E44
-                           bne  l_371    ; $9E46  filter_cutoff_status_paint_$165A was non-zero?
-l_370:                     ldx  #$03    ; $9E48
-l_371:                     stx  COLOR_RAM + $28B    ; $9E4A
+                           bne  l_363    ; $9E46  paint_page_smc_af_aa_c8_$15E2 was non-zero?
+l_362:                     ldx  #$03    ; $9E48
+l_363:                     stx  COLOR_RAM + $28B    ; $9E4A
                            stx  COLOR_RAM + $28C    ; $9E4D
                            iny    ; $9E50
                            asl  a    ; $9E51
                            sta  zp_paint_scratch    ; $9E52
-                           bmi  l_372    ; $9E54  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_364    ; $9E54  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9E56
                            sta  SCREEN_RAM + $28B    ; $9E58
-                           bne  l_373    ; $9E5B  filter_cutoff_status_paint_$166C was non-zero?
-l_372:                     lax  (zp_decoder_dest_lo),y    ; $9E5D
+                           bne  l_365    ; $9E5B  paint_page_smc_af_aa_c8_$15F4 was non-zero?
+l_364:                     lax  (zp_decoder_dest_lo),y    ; $9E5D
                            lda  hex_digit_hi_lut,x    ; $9E5F
                            sta  SCREEN_RAM + $28B    ; $9E62
                            lda  hex_digit_lo_lut,x    ; $9E65
-l_373:                     sta  SCREEN_RAM + $28C    ; $9E68
+l_365:                     sta  SCREEN_RAM + $28C    ; $9E68
                            iny    ; $9E6B
                            asl  zp_paint_scratch    ; $9E6C
-                           bmi  l_374    ; $9E6E  zp_paint_scratch had bit 7 set?
+                           bmi  l_366    ; $9E6E  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9E70
                            sta  SCREEN_RAM + $28D    ; $9E72
-                           bne  l_375    ; $9E75  filter_cutoff_status_paint_$1686 was non-zero?
-l_374:                     lax  (zp_decoder_dest_lo),y    ; $9E77
+                           bne  l_367    ; $9E75  paint_page_smc_af_aa_c8_$160E was non-zero?
+l_366:                     lax  (zp_decoder_dest_lo),y    ; $9E77
                            lda  hex_digit_hi_lut,x    ; $9E79
                            sta  SCREEN_RAM + $28D    ; $9E7C
                            lda  hex_digit_lo_lut,x    ; $9E7F
-l_375:                     sta  SCREEN_RAM + $28E    ; $9E82
+l_367:                     sta  SCREEN_RAM + $28E    ; $9E82
                            iny    ; $9E85
                            asl  zp_paint_scratch    ; $9E86
-                           bmi  l_376    ; $9E88  zp_paint_scratch had bit 7 set?
+                           bmi  l_368    ; $9E88  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9E8A
                            sta  SCREEN_RAM + $290    ; $9E8C
                            sta  SCREEN_RAM + $291    ; $9E8F
                            lda  #$20    ; $9E92
-                           bne  l_377    ; $9E94  filter_cutoff_status_paint_$16A8 was non-zero?
-l_376:                     lax  (zp_decoder_dest_lo),y    ; $9E96
+                           bne  l_369    ; $9E94  paint_page_smc_af_aa_c8_$1630 was non-zero?
+l_368:                     lax  (zp_decoder_dest_lo),y    ; $9E96
                            lda  seqED_color_lut,x    ; $9E98
                            sta  SCREEN_RAM + $290    ; $9E9B
                            lda  seqED_digit_screencode_lut,x    ; $9E9E
                            sta  SCREEN_RAM + $291    ; $9EA1
                            lda  seqED_checkerboard_lut,x    ; $9EA4
-l_377:                     sta  SCREEN_RAM + $292    ; $9EA7
+l_369:                     sta  SCREEN_RAM + $292    ; $9EA7
                            ldy  paint_page_smc_af_aa_c8 + $15D3    ; $9EAA
                            lax  (zp_scratch_9e),y    ; $9EAD
                            inx    ; $9EAF
@@ -11245,60 +11318,60 @@ l_377:                     sta  SCREEN_RAM + $292    ; $9EA7
                            sta  SCREEN_RAM + $298    ; $9EB3
                            dex    ; $9EB6
                            txa    ; $9EB7
-                           bpl  l_378    ; $9EB8  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_370    ; $9EB8  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9EBA
-                           bne  l_379    ; $9EBC  filter_cutoff_status_paint_$16D0 was non-zero?
-l_378:                     ldx  #$03    ; $9EBE
-l_379:                     stx  COLOR_RAM + $294    ; $9EC0
+                           bne  l_371    ; $9EBC  paint_page_smc_af_aa_c8_$1658 was non-zero?
+l_370:                     ldx  #$03    ; $9EBE
+l_371:                     stx  COLOR_RAM + $294    ; $9EC0
                            stx  COLOR_RAM + $295    ; $9EC3
                            iny    ; $9EC6
                            asl  a    ; $9EC7
                            sta  zp_paint_scratch    ; $9EC8
-                           bmi  l_380    ; $9ECA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_372    ; $9ECA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9ECC
                            sta  SCREEN_RAM + $294    ; $9ECE
-                           bne  l_381    ; $9ED1  filter_cutoff_status_paint_$16E2 was non-zero?
-l_380:                     lax  (zp_scratch_9e),y    ; $9ED3
+                           bne  l_373    ; $9ED1  paint_page_smc_af_aa_c8_$166A was non-zero?
+l_372:                     lax  (zp_scratch_9e),y    ; $9ED3
                            lda  hex_digit_hi_lut,x    ; $9ED5
                            sta  SCREEN_RAM + $294    ; $9ED8
                            lda  hex_digit_lo_lut,x    ; $9EDB
-l_381:                     sta  SCREEN_RAM + $295    ; $9EDE
+l_373:                     sta  SCREEN_RAM + $295    ; $9EDE
                            iny    ; $9EE1
                            asl  zp_paint_scratch    ; $9EE2
-                           bmi  l_382    ; $9EE4  zp_paint_scratch had bit 7 set?
+                           bmi  l_374    ; $9EE4  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9EE6
                            sta  SCREEN_RAM + $296    ; $9EE8
-                           bne  l_383    ; $9EEB  filter_cutoff_status_paint_$16FC was non-zero?
-l_382:                     lax  (zp_scratch_9e),y    ; $9EED
+                           bne  l_375    ; $9EEB  paint_page_smc_af_aa_c8_$1684 was non-zero?
+l_374:                     lax  (zp_scratch_9e),y    ; $9EED
                            lda  hex_digit_hi_lut,x    ; $9EEF
                            sta  SCREEN_RAM + $296    ; $9EF2
                            lda  hex_digit_lo_lut,x    ; $9EF5
-l_383:                     sta  SCREEN_RAM + $297    ; $9EF8
+l_375:                     sta  SCREEN_RAM + $297    ; $9EF8
                            iny    ; $9EFB
                            asl  zp_paint_scratch    ; $9EFC
-                           bmi  l_384    ; $9EFE  zp_paint_scratch had bit 7 set?
+                           bmi  l_376    ; $9EFE  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9F00
                            sta  SCREEN_RAM + $299    ; $9F02
                            sta  SCREEN_RAM + $29A    ; $9F05
                            lda  #$20    ; $9F08
-                           bne  l_385    ; $9F0A  filter_cutoff_status_paint_$171E was non-zero?
-l_384:                     lax  (zp_scratch_9e),y    ; $9F0C
+                           bne  l_377    ; $9F0A  paint_page_smc_af_aa_c8_$16A6 was non-zero?
+l_376:                     lax  (zp_scratch_9e),y    ; $9F0C
                            lda  seqED_color_lut,x    ; $9F0E
                            sta  SCREEN_RAM + $299    ; $9F11
                            lda  seqED_digit_screencode_lut,x    ; $9F14
                            sta  SCREEN_RAM + $29A    ; $9F17
                            lda  seqED_checkerboard_lut,x    ; $9F1A
-l_385:                     sta  SCREEN_RAM + $29B    ; $9F1D
+l_377:                     sta  SCREEN_RAM + $29B    ; $9F1D
                            iny    ; $9F20
-;   step-idiom: source = filter_cutoff_status_paint_$164B  (= $9E36)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$15D3  (= $9E36)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $9F20
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_386    ; $9F21  filter_cutoff_status_paint_$164B stepped 4 and had bit 7 clear?
+                           bpl  l_378    ; $9F21  paint_page_smc_af_aa_c8_$15D3 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $9F23
                            iny    ; $9F26
                            jsr  pat_base_resolve_v012    ; $9F27
                            ldy  #$00    ; $9F2A
-l_386:                     lda  seqED_status_ruler_template,y    ; $9F2C
+l_378:                     lda  seqED_status_ruler_template,y    ; $9F2C
                            sta  screen_ram_row17    ; $9F2F
                            lda  seqED_status_template_base,y    ; $9F32
                            sta  SCREEN_RAM + $2A9    ; $9F35
@@ -11312,50 +11385,50 @@ l_386:                     lda  seqED_status_ruler_template,y    ; $9F2C
                            sta  SCREEN_RAM + $2AE    ; $9F4A
                            dex    ; $9F4D
                            txa    ; $9F4E
-                           bpl  l_387    ; $9F4F  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_379    ; $9F4F  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $9F51
-                           bne  l_388    ; $9F53  filter_cutoff_status_paint_$1767 was non-zero?
-l_387:                     ldx  #$03    ; $9F55
-l_388:                     stx  COLOR_RAM + $2AA    ; $9F57
+                           bne  l_380    ; $9F53  paint_page_smc_af_aa_c8_$16EF was non-zero?
+l_379:                     ldx  #$03    ; $9F55
+l_380:                     stx  COLOR_RAM + $2AA    ; $9F57
                            stx  COLOR_RAM + $2AB    ; $9F5A
                            iny    ; $9F5D
                            asl  a    ; $9F5E
                            sta  zp_paint_scratch    ; $9F5F
-                           bmi  l_389    ; $9F61  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_381    ; $9F61  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $9F63
                            sta  SCREEN_RAM + $2AA    ; $9F65
-                           bne  l_390    ; $9F68  filter_cutoff_status_paint_$1779 was non-zero?
-l_389:                     lax  (zp_ptr1_lo),y    ; $9F6A
+                           bne  l_382    ; $9F68  paint_page_smc_af_aa_c8_$1701 was non-zero?
+l_381:                     lax  (zp_ptr1_lo),y    ; $9F6A
                            lda  hex_digit_hi_lut,x    ; $9F6C
                            sta  SCREEN_RAM + $2AA    ; $9F6F
                            lda  hex_digit_lo_lut,x    ; $9F72
-l_390:                     sta  SCREEN_RAM + $2AB    ; $9F75
+l_382:                     sta  SCREEN_RAM + $2AB    ; $9F75
                            iny    ; $9F78
                            asl  zp_paint_scratch    ; $9F79
-                           bmi  l_391    ; $9F7B  zp_paint_scratch had bit 7 set?
+                           bmi  l_383    ; $9F7B  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9F7D
                            sta  SCREEN_RAM + $2AC    ; $9F7F
-                           bne  l_392    ; $9F82  filter_cutoff_status_paint_$1793 was non-zero?
-l_391:                     lax  (zp_ptr1_lo),y    ; $9F84
+                           bne  l_384    ; $9F82  paint_page_smc_af_aa_c8_$171B was non-zero?
+l_383:                     lax  (zp_ptr1_lo),y    ; $9F84
                            lda  hex_digit_hi_lut,x    ; $9F86
                            sta  SCREEN_RAM + $2AC    ; $9F89
                            lda  hex_digit_lo_lut,x    ; $9F8C
-l_392:                     sta  SCREEN_RAM + $2AD    ; $9F8F
+l_384:                     sta  SCREEN_RAM + $2AD    ; $9F8F
                            iny    ; $9F92
                            asl  zp_paint_scratch    ; $9F93
-                           bmi  l_393    ; $9F95  zp_paint_scratch had bit 7 set?
+                           bmi  l_385    ; $9F95  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $9F97
                            sta  SCREEN_RAM + $2AF    ; $9F99
                            sta  SCREEN_RAM + $2B0    ; $9F9C
                            lda  #$20    ; $9F9F
-                           bne  l_394    ; $9FA1  filter_cutoff_status_paint_$17B5 was non-zero?
-l_393:                     lax  (zp_ptr1_lo),y    ; $9FA3
+                           bne  l_386    ; $9FA1  paint_page_smc_af_aa_c8_$173D was non-zero?
+l_385:                     lax  (zp_ptr1_lo),y    ; $9FA3
                            lda  seqED_color_lut,x    ; $9FA5
                            sta  SCREEN_RAM + $2AF    ; $9FA8
                            lda  seqED_digit_screencode_lut,x    ; $9FAB
                            sta  SCREEN_RAM + $2B0    ; $9FAE
                            lda  seqED_checkerboard_lut,x    ; $9FB1
-l_394:                     sta  SCREEN_RAM + $2B1    ; $9FB4
+l_386:                     sta  SCREEN_RAM + $2B1    ; $9FB4
                            ldy  #$FF    ; $9FB7  ; ← (SMC operand at $9FB8, no name)
                            lax  (zp_decoder_dest_lo),y    ; $9FB9
                            inx    ; $9FBB
@@ -11363,50 +11436,50 @@ l_394:                     sta  SCREEN_RAM + $2B1    ; $9FB4
                            sta  SCREEN_RAM + $2B7    ; $9FBF
                            dex    ; $9FC2
                            txa    ; $9FC3
-                           bpl  l_395    ; $9FC4  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_387    ; $9FC4  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $9FC6
-                           bne  l_396    ; $9FC8  filter_cutoff_status_paint_$17DC was non-zero?
-l_395:                     ldx  #$03    ; $9FCA
-l_396:                     stx  COLOR_RAM + $2B3    ; $9FCC
+                           bne  l_388    ; $9FC8  paint_page_smc_af_aa_c8_$1764 was non-zero?
+l_387:                     ldx  #$03    ; $9FCA
+l_388:                     stx  COLOR_RAM + $2B3    ; $9FCC
                            stx  COLOR_RAM + $2B4    ; $9FCF
                            iny    ; $9FD2
                            asl  a    ; $9FD3
                            sta  zp_paint_scratch    ; $9FD4
-                           bmi  l_397    ; $9FD6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_389    ; $9FD6  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $9FD8
                            sta  SCREEN_RAM + $2B3    ; $9FDA
-                           bne  l_398    ; $9FDD  filter_cutoff_status_paint_$17EE was non-zero?
-l_397:                     lax  (zp_decoder_dest_lo),y    ; $9FDF
+                           bne  l_390    ; $9FDD  paint_page_smc_af_aa_c8_$1776 was non-zero?
+l_389:                     lax  (zp_decoder_dest_lo),y    ; $9FDF
                            lda  hex_digit_hi_lut,x    ; $9FE1
                            sta  SCREEN_RAM + $2B3    ; $9FE4
                            lda  hex_digit_lo_lut,x    ; $9FE7
-l_398:                     sta  SCREEN_RAM + $2B4    ; $9FEA
+l_390:                     sta  SCREEN_RAM + $2B4    ; $9FEA
                            iny    ; $9FED
                            asl  zp_paint_scratch    ; $9FEE
-                           bmi  l_399    ; $9FF0  zp_paint_scratch had bit 7 set?
+                           bmi  l_391    ; $9FF0  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $9FF2
                            sta  SCREEN_RAM + $2B5    ; $9FF4
-                           bne  l_400    ; $9FF7  filter_cutoff_status_paint_$1808 was non-zero?
-l_399:                     lax  (zp_decoder_dest_lo),y    ; $9FF9
+                           bne  l_392    ; $9FF7  paint_page_smc_af_aa_c8_$1790 was non-zero?
+l_391:                     lax  (zp_decoder_dest_lo),y    ; $9FF9
                            lda  hex_digit_hi_lut,x    ; $9FFB
                            sta  SCREEN_RAM + $2B5    ; $9FFE
                            lda  hex_digit_lo_lut,x    ; $A001
-l_400:                     sta  SCREEN_RAM + $2B6    ; $A004
+l_392:                     sta  SCREEN_RAM + $2B6    ; $A004
                            iny    ; $A007
                            asl  zp_paint_scratch    ; $A008
-                           bmi  l_401    ; $A00A  zp_paint_scratch had bit 7 set?
+                           bmi  l_393    ; $A00A  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A00C
                            sta  SCREEN_RAM + $2B8    ; $A00E
                            sta  SCREEN_RAM + $2B9    ; $A011
                            lda  #$20    ; $A014
-                           bne  l_402    ; $A016  filter_cutoff_status_paint_$182A was non-zero?
-l_401:                     lax  (zp_decoder_dest_lo),y    ; $A018
+                           bne  l_394    ; $A016  paint_page_smc_af_aa_c8_$17B2 was non-zero?
+l_393:                     lax  (zp_decoder_dest_lo),y    ; $A018
                            lda  seqED_color_lut,x    ; $A01A
                            sta  SCREEN_RAM + $2B8    ; $A01D
                            lda  seqED_digit_screencode_lut,x    ; $A020
                            sta  SCREEN_RAM + $2B9    ; $A023
                            lda  seqED_checkerboard_lut,x    ; $A026
-l_402:                     sta  SCREEN_RAM + $2BA    ; $A029
+l_394:                     sta  SCREEN_RAM + $2BA    ; $A029
                            ldy  paint_page_smc_af_aa_c8 + $1755    ; $A02C
                            lax  (zp_scratch_9e),y    ; $A02F
                            inx    ; $A031
@@ -11414,60 +11487,60 @@ l_402:                     sta  SCREEN_RAM + $2BA    ; $A029
                            sta  SCREEN_RAM + $2C0    ; $A035
                            dex    ; $A038
                            txa    ; $A039
-                           bpl  l_403    ; $A03A  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_395    ; $A03A  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A03C
-                           bne  l_404    ; $A03E  filter_cutoff_status_paint_$1852 was non-zero?
-l_403:                     ldx  #$03    ; $A040
-l_404:                     stx  COLOR_RAM + $2BC    ; $A042
+                           bne  l_396    ; $A03E  paint_page_smc_af_aa_c8_$17DA was non-zero?
+l_395:                     ldx  #$03    ; $A040
+l_396:                     stx  COLOR_RAM + $2BC    ; $A042
                            stx  COLOR_RAM + $2BD    ; $A045
                            iny    ; $A048
                            asl  a    ; $A049
                            sta  zp_paint_scratch    ; $A04A
-                           bmi  l_405    ; $A04C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_397    ; $A04C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A04E
                            sta  SCREEN_RAM + $2BC    ; $A050
-                           bne  l_406    ; $A053  filter_cutoff_status_paint_$1864 was non-zero?
-l_405:                     lax  (zp_scratch_9e),y    ; $A055
+                           bne  l_398    ; $A053  paint_page_smc_af_aa_c8_$17EC was non-zero?
+l_397:                     lax  (zp_scratch_9e),y    ; $A055
                            lda  hex_digit_hi_lut,x    ; $A057
                            sta  SCREEN_RAM + $2BC    ; $A05A
                            lda  hex_digit_lo_lut,x    ; $A05D
-l_406:                     sta  SCREEN_RAM + $2BD    ; $A060
+l_398:                     sta  SCREEN_RAM + $2BD    ; $A060
                            iny    ; $A063
                            asl  zp_paint_scratch    ; $A064
-                           bmi  l_407    ; $A066  zp_paint_scratch had bit 7 set?
+                           bmi  l_399    ; $A066  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A068
                            sta  SCREEN_RAM + $2BE    ; $A06A
-                           bne  l_408    ; $A06D  filter_cutoff_status_paint_$187E was non-zero?
-l_407:                     lax  (zp_scratch_9e),y    ; $A06F
+                           bne  l_400    ; $A06D  paint_page_smc_af_aa_c8_$1806 was non-zero?
+l_399:                     lax  (zp_scratch_9e),y    ; $A06F
                            lda  hex_digit_hi_lut,x    ; $A071
                            sta  SCREEN_RAM + $2BE    ; $A074
                            lda  hex_digit_lo_lut,x    ; $A077
-l_408:                     sta  SCREEN_RAM + $2BF    ; $A07A
+l_400:                     sta  SCREEN_RAM + $2BF    ; $A07A
                            iny    ; $A07D
                            asl  zp_paint_scratch    ; $A07E
-                           bmi  l_409    ; $A080  zp_paint_scratch had bit 7 set?
+                           bmi  l_401    ; $A080  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A082
                            sta  SCREEN_RAM + $2C1    ; $A084
                            sta  SCREEN_RAM + $2C2    ; $A087
                            lda  #$20    ; $A08A
-                           bne  l_410    ; $A08C  filter_cutoff_status_paint_$18A0 was non-zero?
-l_409:                     lax  (zp_scratch_9e),y    ; $A08E
+                           bne  l_402    ; $A08C  paint_page_smc_af_aa_c8_$1828 was non-zero?
+l_401:                     lax  (zp_scratch_9e),y    ; $A08E
                            lda  seqED_color_lut,x    ; $A090
                            sta  SCREEN_RAM + $2C1    ; $A093
                            lda  seqED_digit_screencode_lut,x    ; $A096
                            sta  SCREEN_RAM + $2C2    ; $A099
                            lda  seqED_checkerboard_lut,x    ; $A09C
-l_410:                     sta  SCREEN_RAM + $2C3    ; $A09F
+l_402:                     sta  SCREEN_RAM + $2C3    ; $A09F
                            iny    ; $A0A2
-;   step-idiom: source = filter_cutoff_status_paint_$17CD  (= $9FB8)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$1755  (= $9FB8)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $A0A2
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_411    ; $A0A3  filter_cutoff_status_paint_$17CD stepped 4 and had bit 7 clear?
+                           bpl  l_403    ; $A0A3  paint_page_smc_af_aa_c8_$1755 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $A0A5
                            iny    ; $A0A8
                            jsr  pat_base_resolve_v012    ; $A0A9
                            ldy  #$00    ; $A0AC
-l_411:                     lda  seqED_status_ruler_template,y    ; $A0AE
+l_403:                     lda  seqED_status_ruler_template,y    ; $A0AE
                            sta  screen_ram_row18    ; $A0B1
                            lda  seqED_status_template_base,y    ; $A0B4
                            sta  SCREEN_RAM + $2D1    ; $A0B7
@@ -11481,50 +11554,50 @@ l_411:                     lda  seqED_status_ruler_template,y    ; $A0AE
                            sta  SCREEN_RAM + $2D6    ; $A0CC
                            dex    ; $A0CF
                            txa    ; $A0D0
-                           bpl  l_412    ; $A0D1  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_404    ; $A0D1  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $A0D3
-                           bne  l_413    ; $A0D5  filter_cutoff_status_paint_$18E9 was non-zero?
-l_412:                     ldx  #$03    ; $A0D7
-l_413:                     stx  COLOR_RAM + $2D2    ; $A0D9
+                           bne  l_405    ; $A0D5  paint_page_smc_af_aa_c8_$1871 was non-zero?
+l_404:                     ldx  #$03    ; $A0D7
+l_405:                     stx  COLOR_RAM + $2D2    ; $A0D9
                            stx  COLOR_RAM + $2D3    ; $A0DC
                            iny    ; $A0DF
                            asl  a    ; $A0E0
                            sta  zp_paint_scratch    ; $A0E1
-                           bmi  l_414    ; $A0E3  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_406    ; $A0E3  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $A0E5
                            sta  SCREEN_RAM + $2D2    ; $A0E7
-                           bne  l_415    ; $A0EA  filter_cutoff_status_paint_$18FB was non-zero?
-l_414:                     lax  (zp_ptr1_lo),y    ; $A0EC
+                           bne  l_407    ; $A0EA  paint_page_smc_af_aa_c8_$1883 was non-zero?
+l_406:                     lax  (zp_ptr1_lo),y    ; $A0EC
                            lda  hex_digit_hi_lut,x    ; $A0EE
                            sta  SCREEN_RAM + $2D2    ; $A0F1
                            lda  hex_digit_lo_lut,x    ; $A0F4
-l_415:                     sta  SCREEN_RAM + $2D3    ; $A0F7
+l_407:                     sta  SCREEN_RAM + $2D3    ; $A0F7
                            iny    ; $A0FA
                            asl  zp_paint_scratch    ; $A0FB
-                           bmi  l_416    ; $A0FD  zp_paint_scratch had bit 7 set?
+                           bmi  l_408    ; $A0FD  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A0FF
                            sta  SCREEN_RAM + $2D4    ; $A101
-                           bne  l_417    ; $A104  filter_cutoff_status_paint_$1915 was non-zero?
-l_416:                     lax  (zp_ptr1_lo),y    ; $A106
+                           bne  l_409    ; $A104  paint_page_smc_af_aa_c8_$189D was non-zero?
+l_408:                     lax  (zp_ptr1_lo),y    ; $A106
                            lda  hex_digit_hi_lut,x    ; $A108
                            sta  SCREEN_RAM + $2D4    ; $A10B
                            lda  hex_digit_lo_lut,x    ; $A10E
-l_417:                     sta  SCREEN_RAM + $2D5    ; $A111
+l_409:                     sta  SCREEN_RAM + $2D5    ; $A111
                            iny    ; $A114
                            asl  zp_paint_scratch    ; $A115
-                           bmi  l_418    ; $A117  zp_paint_scratch had bit 7 set?
+                           bmi  l_410    ; $A117  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A119
                            sta  SCREEN_RAM + $2D7    ; $A11B
                            sta  SCREEN_RAM + $2D8    ; $A11E
                            lda  #$20    ; $A121
-                           bne  l_419    ; $A123  filter_cutoff_status_paint_$1937 was non-zero?
-l_418:                     lax  (zp_ptr1_lo),y    ; $A125
+                           bne  l_411    ; $A123  paint_page_smc_af_aa_c8_$18BF was non-zero?
+l_410:                     lax  (zp_ptr1_lo),y    ; $A125
                            lda  seqED_color_lut,x    ; $A127
                            sta  SCREEN_RAM + $2D7    ; $A12A
                            lda  seqED_digit_screencode_lut,x    ; $A12D
                            sta  SCREEN_RAM + $2D8    ; $A130
                            lda  seqED_checkerboard_lut,x    ; $A133
-l_419:                     sta  SCREEN_RAM + $2D9    ; $A136
+l_411:                     sta  SCREEN_RAM + $2D9    ; $A136
                            ldy  #$FF    ; $A139  ; ← (SMC operand at $A13A, no name)
                            lax  (zp_decoder_dest_lo),y    ; $A13B
                            inx    ; $A13D
@@ -11532,50 +11605,50 @@ l_419:                     sta  SCREEN_RAM + $2D9    ; $A136
                            sta  SCREEN_RAM + $2DF    ; $A141
                            dex    ; $A144
                            txa    ; $A145
-                           bpl  l_420    ; $A146  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_412    ; $A146  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A148
-                           bne  l_421    ; $A14A  filter_cutoff_status_paint_$195E was non-zero?
-l_420:                     ldx  #$03    ; $A14C
-l_421:                     stx  COLOR_RAM + $2DB    ; $A14E
+                           bne  l_413    ; $A14A  paint_page_smc_af_aa_c8_$18E6 was non-zero?
+l_412:                     ldx  #$03    ; $A14C
+l_413:                     stx  COLOR_RAM + $2DB    ; $A14E
                            stx  COLOR_RAM + $2DC    ; $A151
                            iny    ; $A154
                            asl  a    ; $A155
                            sta  zp_paint_scratch    ; $A156
-                           bmi  l_422    ; $A158  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_414    ; $A158  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A15A
                            sta  SCREEN_RAM + $2DB    ; $A15C
-                           bne  l_423    ; $A15F  filter_cutoff_status_paint_$1970 was non-zero?
-l_422:                     lax  (zp_decoder_dest_lo),y    ; $A161
+                           bne  l_415    ; $A15F  paint_page_smc_af_aa_c8_$18F8 was non-zero?
+l_414:                     lax  (zp_decoder_dest_lo),y    ; $A161
                            lda  hex_digit_hi_lut,x    ; $A163
                            sta  SCREEN_RAM + $2DB    ; $A166
                            lda  hex_digit_lo_lut,x    ; $A169
-l_423:                     sta  SCREEN_RAM + $2DC    ; $A16C
+l_415:                     sta  SCREEN_RAM + $2DC    ; $A16C
                            iny    ; $A16F
                            asl  zp_paint_scratch    ; $A170
-                           bmi  l_424    ; $A172  zp_paint_scratch had bit 7 set?
+                           bmi  l_416    ; $A172  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A174
                            sta  SCREEN_RAM + $2DD    ; $A176
-                           bne  l_425    ; $A179  filter_cutoff_status_paint_$198A was non-zero?
-l_424:                     lax  (zp_decoder_dest_lo),y    ; $A17B
+                           bne  l_417    ; $A179  paint_page_smc_af_aa_c8_$1912 was non-zero?
+l_416:                     lax  (zp_decoder_dest_lo),y    ; $A17B
                            lda  hex_digit_hi_lut,x    ; $A17D
                            sta  SCREEN_RAM + $2DD    ; $A180
                            lda  hex_digit_lo_lut,x    ; $A183
-l_425:                     sta  SCREEN_RAM + $2DE    ; $A186
+l_417:                     sta  SCREEN_RAM + $2DE    ; $A186
                            iny    ; $A189
                            asl  zp_paint_scratch    ; $A18A
-                           bmi  l_426    ; $A18C  zp_paint_scratch had bit 7 set?
+                           bmi  l_418    ; $A18C  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A18E
                            sta  SCREEN_RAM + $2E0    ; $A190
                            sta  SCREEN_RAM + $2E1    ; $A193
                            lda  #$20    ; $A196
-                           bne  l_427    ; $A198  filter_cutoff_status_paint_$19AC was non-zero?
-l_426:                     lax  (zp_decoder_dest_lo),y    ; $A19A
+                           bne  l_419    ; $A198  paint_page_smc_af_aa_c8_$1934 was non-zero?
+l_418:                     lax  (zp_decoder_dest_lo),y    ; $A19A
                            lda  seqED_color_lut,x    ; $A19C
                            sta  SCREEN_RAM + $2E0    ; $A19F
                            lda  seqED_digit_screencode_lut,x    ; $A1A2
                            sta  SCREEN_RAM + $2E1    ; $A1A5
                            lda  seqED_checkerboard_lut,x    ; $A1A8
-l_427:                     sta  SCREEN_RAM + $2E2    ; $A1AB
+l_419:                     sta  SCREEN_RAM + $2E2    ; $A1AB
                            ldy  paint_page_smc_af_aa_c8 + $18D7    ; $A1AE
                            lax  (zp_scratch_9e),y    ; $A1B1
                            inx    ; $A1B3
@@ -11583,60 +11656,60 @@ l_427:                     sta  SCREEN_RAM + $2E2    ; $A1AB
                            sta  SCREEN_RAM + $2E8    ; $A1B7
                            dex    ; $A1BA
                            txa    ; $A1BB
-                           bpl  l_428    ; $A1BC  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_420    ; $A1BC  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A1BE
-                           bne  l_429    ; $A1C0  filter_cutoff_status_paint_$19D4 was non-zero?
-l_428:                     ldx  #$03    ; $A1C2
-l_429:                     stx  COLOR_RAM + $2E4    ; $A1C4
+                           bne  l_421    ; $A1C0  paint_page_smc_af_aa_c8_$195C was non-zero?
+l_420:                     ldx  #$03    ; $A1C2
+l_421:                     stx  COLOR_RAM + $2E4    ; $A1C4
                            stx  COLOR_RAM + $2E5    ; $A1C7
                            iny    ; $A1CA
                            asl  a    ; $A1CB
                            sta  zp_paint_scratch    ; $A1CC
-                           bmi  l_430    ; $A1CE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_422    ; $A1CE  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A1D0
                            sta  SCREEN_RAM + $2E4    ; $A1D2
-                           bne  l_431    ; $A1D5  filter_cutoff_status_paint_$19E6 was non-zero?
-l_430:                     lax  (zp_scratch_9e),y    ; $A1D7
+                           bne  l_423    ; $A1D5  paint_page_smc_af_aa_c8_$196E was non-zero?
+l_422:                     lax  (zp_scratch_9e),y    ; $A1D7
                            lda  hex_digit_hi_lut,x    ; $A1D9
                            sta  SCREEN_RAM + $2E4    ; $A1DC
                            lda  hex_digit_lo_lut,x    ; $A1DF
-l_431:                     sta  SCREEN_RAM + $2E5    ; $A1E2
+l_423:                     sta  SCREEN_RAM + $2E5    ; $A1E2
                            iny    ; $A1E5
                            asl  zp_paint_scratch    ; $A1E6
-                           bmi  l_432    ; $A1E8  zp_paint_scratch had bit 7 set?
+                           bmi  l_424    ; $A1E8  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A1EA
                            sta  SCREEN_RAM + $2E6    ; $A1EC
-                           bne  l_433    ; $A1EF  filter_cutoff_status_paint_$1A00 was non-zero?
-l_432:                     lax  (zp_scratch_9e),y    ; $A1F1
+                           bne  l_425    ; $A1EF  paint_page_smc_af_aa_c8_$1988 was non-zero?
+l_424:                     lax  (zp_scratch_9e),y    ; $A1F1
                            lda  hex_digit_hi_lut,x    ; $A1F3
                            sta  SCREEN_RAM + $2E6    ; $A1F6
                            lda  hex_digit_lo_lut,x    ; $A1F9
-l_433:                     sta  SCREEN_RAM + $2E7    ; $A1FC
+l_425:                     sta  SCREEN_RAM + $2E7    ; $A1FC
                            iny    ; $A1FF
                            asl  zp_paint_scratch    ; $A200
-                           bmi  l_434    ; $A202  zp_paint_scratch had bit 7 set?
+                           bmi  l_426    ; $A202  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A204
                            sta  SCREEN_RAM + $2E9    ; $A206
                            sta  SCREEN_RAM + $2EA    ; $A209
                            lda  #$20    ; $A20C
-                           bne  l_435    ; $A20E  filter_cutoff_status_paint_$1A22 was non-zero?
-l_434:                     lax  (zp_scratch_9e),y    ; $A210
+                           bne  l_427    ; $A20E  paint_page_smc_af_aa_c8_$19AA was non-zero?
+l_426:                     lax  (zp_scratch_9e),y    ; $A210
                            lda  seqED_color_lut,x    ; $A212
                            sta  SCREEN_RAM + $2E9    ; $A215
                            lda  seqED_digit_screencode_lut,x    ; $A218
                            sta  SCREEN_RAM + $2EA    ; $A21B
                            lda  seqED_checkerboard_lut,x    ; $A21E
-l_435:                     sta  SCREEN_RAM + $2EB    ; $A221
+l_427:                     sta  SCREEN_RAM + $2EB    ; $A221
                            iny    ; $A224
-;   step-idiom: source = filter_cutoff_status_paint_$194F  (= $A13A)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$18D7  (= $A13A)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $A224
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_436    ; $A225  filter_cutoff_status_paint_$194F stepped 4 and had bit 7 clear?
+                           bpl  l_428    ; $A225  paint_page_smc_af_aa_c8_$18D7 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $A227
                            iny    ; $A22A
                            jsr  pat_base_resolve_v012    ; $A22B
                            ldy  #$00    ; $A22E
-l_436:                     lda  seqED_status_ruler_template,y    ; $A230
+l_428:                     lda  seqED_status_ruler_template,y    ; $A230
                            sta  screen_ram_row19    ; $A233
                            lda  seqED_status_template_base,y    ; $A236
                            sta  SCREEN_RAM + $2F9    ; $A239
@@ -11650,50 +11723,50 @@ l_436:                     lda  seqED_status_ruler_template,y    ; $A230
                            sta  SCREEN_RAM + $2FE    ; $A24E
                            dex    ; $A251
                            txa    ; $A252
-                           bpl  l_437    ; $A253  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_429    ; $A253  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $A255
-                           bne  l_438    ; $A257  filter_cutoff_status_paint_$1A6B was non-zero?
-l_437:                     ldx  #$03    ; $A259
-l_438:                     stx  COLOR_RAM + $2FA    ; $A25B
+                           bne  l_430    ; $A257  paint_page_smc_af_aa_c8_$19F3 was non-zero?
+l_429:                     ldx  #$03    ; $A259
+l_430:                     stx  COLOR_RAM + $2FA    ; $A25B
                            stx  COLOR_RAM + $2FB    ; $A25E
                            iny    ; $A261
                            asl  a    ; $A262
                            sta  zp_paint_scratch    ; $A263
-                           bmi  l_439    ; $A265  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_431    ; $A265  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $A267
                            sta  SCREEN_RAM + $2FA    ; $A269
-                           bne  l_440    ; $A26C  filter_cutoff_status_paint_$1A7D was non-zero?
-l_439:                     lax  (zp_ptr1_lo),y    ; $A26E
+                           bne  l_432    ; $A26C  paint_page_smc_af_aa_c8_$1A05 was non-zero?
+l_431:                     lax  (zp_ptr1_lo),y    ; $A26E
                            lda  hex_digit_hi_lut,x    ; $A270
                            sta  SCREEN_RAM + $2FA    ; $A273
                            lda  hex_digit_lo_lut,x    ; $A276
-l_440:                     sta  SCREEN_RAM + $2FB    ; $A279
+l_432:                     sta  SCREEN_RAM + $2FB    ; $A279
                            iny    ; $A27C
                            asl  zp_paint_scratch    ; $A27D
-                           bmi  l_441    ; $A27F  zp_paint_scratch had bit 7 set?
+                           bmi  l_433    ; $A27F  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A281
                            sta  SCREEN_RAM + $2FC    ; $A283
-                           bne  l_442    ; $A286  filter_cutoff_status_paint_$1A97 was non-zero?
-l_441:                     lax  (zp_ptr1_lo),y    ; $A288
+                           bne  l_434    ; $A286  paint_page_smc_af_aa_c8_$1A1F was non-zero?
+l_433:                     lax  (zp_ptr1_lo),y    ; $A288
                            lda  hex_digit_hi_lut,x    ; $A28A
                            sta  SCREEN_RAM + $2FC    ; $A28D
                            lda  hex_digit_lo_lut,x    ; $A290
-l_442:                     sta  SCREEN_RAM + $2FD    ; $A293
+l_434:                     sta  SCREEN_RAM + $2FD    ; $A293
                            iny    ; $A296
                            asl  zp_paint_scratch    ; $A297
-                           bmi  l_443    ; $A299  zp_paint_scratch had bit 7 set?
+                           bmi  l_435    ; $A299  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A29B
                            sta  SCREEN_RAM + $2FF    ; $A29D
                            sta  SCREEN_RAM_P4    ; $A2A0
                            lda  #$20    ; $A2A3
-                           bne  l_444    ; $A2A5  filter_cutoff_status_paint_$1AB9 was non-zero?
-l_443:                     lax  (zp_ptr1_lo),y    ; $A2A7
+                           bne  l_436    ; $A2A5  paint_page_smc_af_aa_c8_$1A41 was non-zero?
+l_435:                     lax  (zp_ptr1_lo),y    ; $A2A7
                            lda  seqED_color_lut,x    ; $A2A9
                            sta  SCREEN_RAM + $2FF    ; $A2AC
                            lda  seqED_digit_screencode_lut,x    ; $A2AF
                            sta  SCREEN_RAM_P4    ; $A2B2
                            lda  seqED_checkerboard_lut,x    ; $A2B5
-l_444:                     sta  SCREEN_RAM + $301    ; $A2B8
+l_436:                     sta  SCREEN_RAM + $301    ; $A2B8
                            ldy  #$FF    ; $A2BB  ; ← (SMC operand at $A2BC, no name)
                            lax  (zp_decoder_dest_lo),y    ; $A2BD
                            inx    ; $A2BF
@@ -11701,50 +11774,50 @@ l_444:                     sta  SCREEN_RAM + $301    ; $A2B8
                            sta  SCREEN_RAM + $307    ; $A2C3
                            dex    ; $A2C6
                            txa    ; $A2C7
-                           bpl  l_445    ; $A2C8  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_437    ; $A2C8  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A2CA
-                           bne  l_446    ; $A2CC  filter_cutoff_status_paint_$1AE0 was non-zero?
-l_445:                     ldx  #$03    ; $A2CE
-l_446:                     stx  COLOR_RAM + $303    ; $A2D0
+                           bne  l_438    ; $A2CC  paint_page_smc_af_aa_c8_$1A68 was non-zero?
+l_437:                     ldx  #$03    ; $A2CE
+l_438:                     stx  COLOR_RAM + $303    ; $A2D0
                            stx  COLOR_RAM + $304    ; $A2D3
                            iny    ; $A2D6
                            asl  a    ; $A2D7
                            sta  zp_paint_scratch    ; $A2D8
-                           bmi  l_447    ; $A2DA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_439    ; $A2DA  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A2DC
                            sta  SCREEN_RAM + $303    ; $A2DE
-                           bne  l_448    ; $A2E1  filter_cutoff_status_paint_$1AF2 was non-zero?
-l_447:                     lax  (zp_decoder_dest_lo),y    ; $A2E3
+                           bne  l_440    ; $A2E1  paint_page_smc_af_aa_c8_$1A7A was non-zero?
+l_439:                     lax  (zp_decoder_dest_lo),y    ; $A2E3
                            lda  hex_digit_hi_lut,x    ; $A2E5
                            sta  SCREEN_RAM + $303    ; $A2E8
                            lda  hex_digit_lo_lut,x    ; $A2EB
-l_448:                     sta  SCREEN_RAM + $304    ; $A2EE
+l_440:                     sta  SCREEN_RAM + $304    ; $A2EE
                            iny    ; $A2F1
                            asl  zp_paint_scratch    ; $A2F2
-                           bmi  l_449    ; $A2F4  zp_paint_scratch had bit 7 set?
+                           bmi  l_441    ; $A2F4  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A2F6
                            sta  SCREEN_RAM + $305    ; $A2F8
-                           bne  l_450    ; $A2FB  filter_cutoff_status_paint_$1B0C was non-zero?
-l_449:                     lax  (zp_decoder_dest_lo),y    ; $A2FD
+                           bne  l_442    ; $A2FB  paint_page_smc_af_aa_c8_$1A94 was non-zero?
+l_441:                     lax  (zp_decoder_dest_lo),y    ; $A2FD
                            lda  hex_digit_hi_lut,x    ; $A2FF
                            sta  SCREEN_RAM + $305    ; $A302
                            lda  hex_digit_lo_lut,x    ; $A305
-l_450:                     sta  SCREEN_RAM + $306    ; $A308
+l_442:                     sta  SCREEN_RAM + $306    ; $A308
                            iny    ; $A30B
                            asl  zp_paint_scratch    ; $A30C
-                           bmi  l_451    ; $A30E  zp_paint_scratch had bit 7 set?
+                           bmi  l_443    ; $A30E  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A310
                            sta  SCREEN_RAM + $308    ; $A312
                            sta  SCREEN_RAM + $309    ; $A315
                            lda  #$20    ; $A318
-                           bne  l_452    ; $A31A  filter_cutoff_status_paint_$1B2E was non-zero?
-l_451:                     lax  (zp_decoder_dest_lo),y    ; $A31C
+                           bne  l_444    ; $A31A  paint_page_smc_af_aa_c8_$1AB6 was non-zero?
+l_443:                     lax  (zp_decoder_dest_lo),y    ; $A31C
                            lda  seqED_color_lut,x    ; $A31E
                            sta  SCREEN_RAM + $308    ; $A321
                            lda  seqED_digit_screencode_lut,x    ; $A324
                            sta  SCREEN_RAM + $309    ; $A327
                            lda  seqED_checkerboard_lut,x    ; $A32A
-l_452:                     sta  SCREEN_RAM + $30A    ; $A32D
+l_444:                     sta  SCREEN_RAM + $30A    ; $A32D
                            ldy  paint_page_smc_af_aa_c8 + $1A59    ; $A330
                            lax  (zp_scratch_9e),y    ; $A333
                            inx    ; $A335
@@ -11752,60 +11825,60 @@ l_452:                     sta  SCREEN_RAM + $30A    ; $A32D
                            sta  SCREEN_RAM + $310    ; $A339
                            dex    ; $A33C
                            txa    ; $A33D
-                           bpl  l_453    ; $A33E  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_445    ; $A33E  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A340
-                           bne  l_454    ; $A342  filter_cutoff_status_paint_$1B56 was non-zero?
-l_453:                     ldx  #$03    ; $A344
-l_454:                     stx  COLOR_RAM + $30C    ; $A346
+                           bne  l_446    ; $A342  paint_page_smc_af_aa_c8_$1ADE was non-zero?
+l_445:                     ldx  #$03    ; $A344
+l_446:                     stx  COLOR_RAM + $30C    ; $A346
                            stx  COLOR_RAM + $30D    ; $A349
                            iny    ; $A34C
                            asl  a    ; $A34D
                            sta  zp_paint_scratch    ; $A34E
-                           bmi  l_455    ; $A350  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_447    ; $A350  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A352
                            sta  SCREEN_RAM + $30C    ; $A354
-                           bne  l_456    ; $A357  filter_cutoff_status_paint_$1B68 was non-zero?
-l_455:                     lax  (zp_scratch_9e),y    ; $A359
+                           bne  l_448    ; $A357  paint_page_smc_af_aa_c8_$1AF0 was non-zero?
+l_447:                     lax  (zp_scratch_9e),y    ; $A359
                            lda  hex_digit_hi_lut,x    ; $A35B
                            sta  SCREEN_RAM + $30C    ; $A35E
                            lda  hex_digit_lo_lut,x    ; $A361
-l_456:                     sta  SCREEN_RAM + $30D    ; $A364
+l_448:                     sta  SCREEN_RAM + $30D    ; $A364
                            iny    ; $A367
                            asl  zp_paint_scratch    ; $A368
-                           bmi  l_457    ; $A36A  zp_paint_scratch had bit 7 set?
+                           bmi  l_449    ; $A36A  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A36C
                            sta  SCREEN_RAM + $30E    ; $A36E
-                           bne  l_458    ; $A371  filter_cutoff_status_paint_$1B82 was non-zero?
-l_457:                     lax  (zp_scratch_9e),y    ; $A373
+                           bne  l_450    ; $A371  paint_page_smc_af_aa_c8_$1B0A was non-zero?
+l_449:                     lax  (zp_scratch_9e),y    ; $A373
                            lda  hex_digit_hi_lut,x    ; $A375
                            sta  SCREEN_RAM + $30E    ; $A378
                            lda  hex_digit_lo_lut,x    ; $A37B
-l_458:                     sta  SCREEN_RAM + $30F    ; $A37E
+l_450:                     sta  SCREEN_RAM + $30F    ; $A37E
                            iny    ; $A381
                            asl  zp_paint_scratch    ; $A382
-                           bmi  l_459    ; $A384  zp_paint_scratch had bit 7 set?
+                           bmi  l_451    ; $A384  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A386
                            sta  SCREEN_RAM + $311    ; $A388
                            sta  SCREEN_RAM + $312    ; $A38B
                            lda  #$20    ; $A38E
-                           bne  l_460    ; $A390  filter_cutoff_status_paint_$1BA4 was non-zero?
-l_459:                     lax  (zp_scratch_9e),y    ; $A392
+                           bne  l_452    ; $A390  paint_page_smc_af_aa_c8_$1B2C was non-zero?
+l_451:                     lax  (zp_scratch_9e),y    ; $A392
                            lda  seqED_color_lut,x    ; $A394
                            sta  SCREEN_RAM + $311    ; $A397
                            lda  seqED_digit_screencode_lut,x    ; $A39A
                            sta  SCREEN_RAM + $312    ; $A39D
                            lda  seqED_checkerboard_lut,x    ; $A3A0
-l_460:                     sta  SCREEN_RAM + $313    ; $A3A3
+l_452:                     sta  SCREEN_RAM + $313    ; $A3A3
                            iny    ; $A3A6
-;   step-idiom: source = filter_cutoff_status_paint_$1AD1  (= $A2BC)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$1A59  (= $A2BC)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $A3A6
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_461    ; $A3A7  filter_cutoff_status_paint_$1AD1 stepped 4 and had bit 7 clear?
+                           bpl  l_453    ; $A3A7  paint_page_smc_af_aa_c8_$1A59 stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $A3A9
                            iny    ; $A3AC
                            jsr  pat_base_resolve_v012    ; $A3AD
                            ldy  #$00    ; $A3B0
-l_461:                     lda  seqED_status_ruler_template,y    ; $A3B2
+l_453:                     lda  seqED_status_ruler_template,y    ; $A3B2
                            sta  screen_ram_row20    ; $A3B5
                            lda  seqED_status_template_base,y    ; $A3B8
                            sta  SCREEN_RAM + $321    ; $A3BB
@@ -11819,50 +11892,50 @@ l_461:                     lda  seqED_status_ruler_template,y    ; $A3B2
                            sta  SCREEN_RAM + $326    ; $A3D0
                            dex    ; $A3D3
                            txa    ; $A3D4
-                           bpl  l_462    ; $A3D5  (zp_ptr1_lo),Y had bit 7 clear?
+                           bpl  l_454    ; $A3D5  (zp_ptr1_lo),Y had bit 7 clear?
                            ldx  #$02    ; $A3D7
-                           bne  l_463    ; $A3D9  filter_cutoff_status_paint_$1BED was non-zero?
-l_462:                     ldx  #$03    ; $A3DB
-l_463:                     stx  COLOR_RAM + $322    ; $A3DD
+                           bne  l_455    ; $A3D9  paint_page_smc_af_aa_c8_$1B75 was non-zero?
+l_454:                     ldx  #$03    ; $A3DB
+l_455:                     stx  COLOR_RAM + $322    ; $A3DD
                            stx  COLOR_RAM + $323    ; $A3E0
                            iny    ; $A3E3
                            asl  a    ; $A3E4
                            sta  zp_paint_scratch    ; $A3E5
-                           bmi  l_464    ; $A3E7  (zp_ptr1_lo),Y had bit 7 set?
+                           bmi  l_456    ; $A3E7  (zp_ptr1_lo),Y had bit 7 set?
                            lda  #$2E    ; $A3E9
                            sta  SCREEN_RAM + $322    ; $A3EB
-                           bne  l_465    ; $A3EE  filter_cutoff_status_paint_$1BFF was non-zero?
-l_464:                     lax  (zp_ptr1_lo),y    ; $A3F0
+                           bne  l_457    ; $A3EE  paint_page_smc_af_aa_c8_$1B87 was non-zero?
+l_456:                     lax  (zp_ptr1_lo),y    ; $A3F0
                            lda  hex_digit_hi_lut,x    ; $A3F2
                            sta  SCREEN_RAM + $322    ; $A3F5
                            lda  hex_digit_lo_lut,x    ; $A3F8
-l_465:                     sta  SCREEN_RAM + $323    ; $A3FB
+l_457:                     sta  SCREEN_RAM + $323    ; $A3FB
                            iny    ; $A3FE
                            asl  zp_paint_scratch    ; $A3FF
-                           bmi  l_466    ; $A401  zp_paint_scratch had bit 7 set?
+                           bmi  l_458    ; $A401  zp_paint_scratch had bit 7 set?
                            lda  #$2E    ; $A403
                            sta  SCREEN_RAM + $324    ; $A405
-                           bne  l_467    ; $A408  filter_cutoff_status_paint_$1C19 was non-zero?
-l_466:                     lax  (zp_ptr1_lo),y    ; $A40A
+                           bne  l_459    ; $A408  paint_page_smc_af_aa_c8_$1BA1 was non-zero?
+l_458:                     lax  (zp_ptr1_lo),y    ; $A40A
                            lda  hex_digit_hi_lut,x    ; $A40C
                            sta  SCREEN_RAM + $324    ; $A40F
                            lda  hex_digit_lo_lut,x    ; $A412
-l_467:                     sta  SCREEN_RAM + $325    ; $A415
+l_459:                     sta  SCREEN_RAM + $325    ; $A415
                            iny    ; $A418
                            asl  zp_paint_scratch    ; $A419
-                           bmi  l_468    ; $A41B  zp_paint_scratch had bit 7 set?
+                           bmi  l_460    ; $A41B  zp_paint_scratch had bit 7 set?
                            lda  #$2D    ; $A41D
                            sta  SCREEN_RAM + $327    ; $A41F
                            sta  SCREEN_RAM + $328    ; $A422
                            lda  #$20    ; $A425
-                           bne  l_469    ; $A427  filter_cutoff_status_paint_$1C3B was non-zero?
-l_468:                     lax  (zp_ptr1_lo),y    ; $A429
+                           bne  l_461    ; $A427  paint_page_smc_af_aa_c8_$1BC3 was non-zero?
+l_460:                     lax  (zp_ptr1_lo),y    ; $A429
                            lda  seqED_color_lut,x    ; $A42B
                            sta  SCREEN_RAM + $327    ; $A42E
                            lda  seqED_digit_screencode_lut,x    ; $A431
                            sta  SCREEN_RAM + $328    ; $A434
                            lda  seqED_checkerboard_lut,x    ; $A437
-l_469:                     sta  SCREEN_RAM + $329    ; $A43A
+l_461:                     sta  SCREEN_RAM + $329    ; $A43A
                            ldy  #$FF    ; $A43D  ; ← (SMC operand at $A43E, no name)
                            lax  (zp_decoder_dest_lo),y    ; $A43F
                            inx    ; $A441
@@ -11870,24 +11943,24 @@ l_469:                     sta  SCREEN_RAM + $329    ; $A43A
                            sta  SCREEN_RAM + $32F    ; $A445
                            dex    ; $A448
                            txa    ; $A449
-                           bpl  l_470    ; $A44A  paint cell src byte bit 7 clear (positive value, default color path)
+                           bpl  l_462    ; $A44A  paint cell src byte bit 7 clear (positive value, default color path)
                            ldx  #$02    ; $A44C
-                           bne  l_471    ; $A44E  filter_cutoff_status_paint_$1C62 was non-zero?
-l_470:                     ldx  #$03    ; $A450
-l_471:                     stx  COLOR_RAM + $32B    ; $A452
+                           bne  l_463    ; $A44E  paint_page_smc_af_aa_c8_$1BEA was non-zero?
+l_462:                     ldx  #$03    ; $A450
+l_463:                     stx  COLOR_RAM + $32B    ; $A452
                            stx  COLOR_RAM + $32C    ; $A455
                            iny    ; $A458
                            asl  a    ; $A459
                            sta  zp_paint_scratch    ; $A45A
-                           bmi  l_472    ; $A45C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
+                           bmi  l_464    ; $A45C  paint cell src byte bit 6 set after ASL (render digit, skip placeholder)
                            lda  #$2E    ; $A45E
                            sta  SCREEN_RAM + $32B    ; $A460
-                           bne  l_473    ; $A463  filter_cutoff_status_paint_$1C74 was non-zero?
-l_472:                     lax  (zp_decoder_dest_lo),y    ; $A465
+                           bne  l_465    ; $A463  paint_page_smc_af_aa_c8_$1BFC was non-zero?
+l_464:                     lax  (zp_decoder_dest_lo),y    ; $A465
                            lda  hex_digit_hi_lut,x    ; $A467
                            sta  SCREEN_RAM + $32B    ; $A46A
                            lda  hex_digit_lo_lut,x    ; $A46D
-l_473:                     sta  SCREEN_RAM + $32C    ; $A470
+l_465:                     sta  SCREEN_RAM + $32C    ; $A470
                            iny    ; $A473
 .bend
 
@@ -11896,7 +11969,7 @@ l_473:                     sta  SCREEN_RAM + $32C    ; $A470
 ; ──────────────────────────────────────────────────────────────────────
 ; Internal label inside the VIC sprite/screen init helper at vic_sprite_init.
 ;
-;   code edges:          fall-through from $A473 in filter_cutoff_status_paint_473 (1 bytes earlier)
+;   code edges:          fall-through from $A473 in paint_page_smc_af_aa_c8_465 (1 bytes earlier)
 ;
 ;   Reached during the boot-init chain.
 vic_sprite_init_internal .block
@@ -11977,10 +12050,10 @@ l_11:                      lax  (zp_scratch_9e),y    ; $A514
                            lda  seqED_checkerboard_lut,x    ; $A522
 l_12:                      sta  SCREEN_RAM + $33B    ; $A525
                            iny    ; $A528
-;   step-idiom: source = filter_cutoff_status_paint_$1C53  (= $A43E)
+;   step-idiom: source = paint_page_smc_af_aa_c8_$1BDB  (= $A43E)
 ;               decremented 4× via DEX/DEY/DEC     ; final step @ $A528
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_13    ; $A529  filter_cutoff_status_paint_$1C53 stepped 4 and had bit 7 clear?
+                           bpl  l_13    ; $A529  paint_page_smc_af_aa_c8_$1BDB stepped 4 and had bit 7 clear?
                            ldy  page_pair_counter    ; $A52B
                            iny    ; $A52E
                            jsr  pat_base_resolve_v012    ; $A52F
@@ -16793,7 +16866,7 @@ l_13:                      ldx  #$00    ; $C947
 ;   step-idiom: source = sid2_v1_sc1_step_counter  (= $C94A)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $C94D
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_20    ; $C950  sid2_v1_sc1_step_counter walked back 1 and had bit 7 clear?
+                           bpl  sid2_v0_row_read_ldy_smc.l_1    ; $C950  sid2_v1_sc1_step_counter walked back 1 and had bit 7 clear?
                            lda  sid2_filter_slot_c986    ; $C952
                            sta  sid2_voice_record_v2 + $127    ; $C955
                            sta  sid2_voice_record_v2 + $119    ; $C958
@@ -16810,7 +16883,7 @@ l_13:                      ldx  #$00    ; $C947
                            sta  sid2_voice_record_v2 + $115    ; $C975
                            asl  a    ; $C978
                            sta  sid2_voice_record_v2 + $123    ; $C979
-                           jmp  l_20    ; $C97C
+                           jmp  sid2_v0_row_read_ldy_smc.l_1    ; $C97C
 l_14:                      ldy  #$01    ; $C97F
                            lda  #$FF    ; $C981  ; ← (SMC operand at $C982, no name)
                            bpl  l_15    ; $C983  sid2_register_write_body_$160 had bit 7 clear?
@@ -16836,7 +16909,7 @@ l_17:                      iny    ; $C9B3
                            ldx  #$FF    ; $C9B4  ; ← (SMC operand at $C9B5, no name)
                            bpl  l_18    ; $C9B6  sid2_register_write_body_$193 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $C9B8
-                           bmi  l_20    ; $C9BB  sid2_register_write_body_$193 had bit 7 set?
+                           bmi  sid2_v0_row_read_ldy_smc.l_1    ; $C9BB  sid2_register_write_body_$193 had bit 7 set?
 l_18:                      tya    ; $C9BD
                            clc    ; $C9BE
                            adc  sid2_filter_slot_c986    ; $C9BF
@@ -16844,15 +16917,26 @@ l_18:                      tya    ; $C9BD
                            bcc  l_19    ; $C9C5  sid2_filter_slot_c986 no carry
                            inc  sid2_filter_slot_c987    ; $C9C7
 l_19:                      lda  #$0F    ; $C9CA
-        .byte $8F, $4A, $C9    ; $C9CC
-l_20:                      ldx  #$00    ; $C9CF
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $C9CC  sid2_v0_row_read_ldy_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $8F (abs): SID#2 mirror of the voice-0 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
+;
+;   code edges:          fall-through from $C9CA sid2_register_write_body_19 (2 bytes earlier)
+;
+;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
+sid2_v0_row_read_ldy_smc .block
+                           sax  sid2_v1_sc1_step_counter    ; $C9CC
+l_1:                       ldx  #$00    ; $C9CF
                            lda  #$FF    ; $C9D1  ; ← sid2_v2_sc1_step_counter
-                           bmi  l_21    ; $C9D3  sid2_v2_sc1_step_counter had bit 7 set?
+                           bmi  l_2    ; $C9D3  sid2_v2_sc1_step_counter had bit 7 set?
                            dec  sid2_v2_sc1_step_counter    ; $C9D5
 ;   step-idiom: source = sid2_v2_sc1_step_counter  (= $C9D2)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $C9D5
 ;               test     = BPL "had bit 7 clear?"
-                           bpl  l_27    ; $C9D8  sid2_v2_sc1_step_counter walked back 1 and had bit 7 clear?
+                           bpl  sid2_row_advance_ldy_smc.l_1    ; $C9D8  sid2_v2_sc1_step_counter walked back 1 and had bit 7 clear?
                            lda  sid2_filter_slot_ca0e    ; $C9DA
                            sta  sid2_v0_row_read_ldy_smc + $5E    ; $C9DD
                            sta  sid2_v0_row_read_ldy_smc + $50    ; $C9E0
@@ -16869,44 +16953,55 @@ l_20:                      ldx  #$00    ; $C9CF
                            sta  sid2_v0_row_read_ldy_smc + $4C    ; $C9FD
                            asl  a    ; $CA00
                            sta  sid2_v0_row_read_ldy_smc + $5A    ; $CA01
-                           jmp  l_27    ; $CA04
-l_21:                      ldy  #$01    ; $CA07
+                           jmp  sid2_row_advance_ldy_smc.l_1    ; $CA04
+l_2:                       ldy  #$01    ; $CA07
                            lda  #$FF    ; $CA09  ; ← (SMC operand at $CA0A, no name)
-                           bpl  l_22    ; $CA0B  sid2_register_write_body_$1E8 had bit 7 clear?
+                           bpl  l_3    ; $CA0B  sid2_v0_row_read_ldy_smc_$3E had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CA0D
                            sta  sid2_cascade_silence_latch_counter    ; $CA10
                            stx  sid2_v0_sc1_counter    ; $CA13
-l_22:                      iny    ; $CA16
+l_3:                       iny    ; $CA16
                            lda  #$FF    ; $CA17  ; ← (SMC operand at $CA18, no name)
-                           bpl  l_23    ; $CA19  sid2_register_write_body_$1F6 had bit 7 clear?
+                           bpl  l_4    ; $CA19  sid2_v0_row_read_ldy_smc_$4C had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CA1B
                            sta  sid2_cascade_v0_sc2_silence_counter    ; $CA1E
                            stx  sid2_v0_sc2_counter    ; $CA21
-l_23:                      iny    ; $CA24
+l_4:                       iny    ; $CA24
                            lda  #$FF    ; $CA25  ; ← (SMC operand at $CA26, no name)
-                           bpl  l_24    ; $CA27  sid2_register_write_body_$204 had bit 7 clear?
+                           bpl  l_5    ; $CA27  sid2_v0_row_read_ldy_smc_$5A had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CA29
                            sta  sid2_v0_cascade_slot_triple + $02    ; $CA2C
                            sta  sid2_v0_sc2_cascade_slot_triple + $01    ; $CA2F
                            stx  sid2_voice_record_v1    ; $CA32
                            stx  sid2_voice_record_v1.slide_acc_lo    ; $CA35
                            stx  sid2_voice_record_v1.slide_mode    ; $CA38
-l_24:                      iny    ; $CA3B
+l_5:                       iny    ; $CA3B
                            ldx  #$FF    ; $CA3C  ; ← (SMC operand at $CA3D, no name)
-                           bpl  l_25    ; $CA3E  sid2_register_write_body_$21B had bit 7 clear?
+                           bpl  l_6    ; $CA3E  sid2_v0_row_read_ldy_smc_$71 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $CA40
-                           bmi  l_27    ; $CA43  sid2_register_write_body_$21B had bit 7 set?
-l_25:                      tya    ; $CA45
+                           bmi  sid2_row_advance_ldy_smc.l_1    ; $CA43  sid2_v0_row_read_ldy_smc_$71 had bit 7 set?
+l_6:                       tya    ; $CA45
                            clc    ; $CA46
                            adc  sid2_filter_slot_ca0e    ; $CA47
                            sta  sid2_filter_slot_ca0e    ; $CA4A
-                           bcc  l_26    ; $CA4D  sid2_filter_slot_ca0e no carry
+                           bcc  l_7    ; $CA4D  sid2_filter_slot_ca0e no carry
                            inc  sid2_filter_slot_ca0f    ; $CA4F
-l_26:                      lda  #$0F    ; $CA52
-        .byte $8F, $D2, $C9    ; $CA54
-l_27:                      ldx  #$00    ; $CA57
+l_7:                       lda  #$0F    ; $CA52
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CA54  sid2_row_advance_ldy_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $8F (abs): SID#2 mirror of the voice-1 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
+;
+;   code edges:          fall-through from $CA52 sid2_v0_row_read_ldy_smc_7 (2 bytes earlier)
+;
+;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
+sid2_row_advance_ldy_smc .block
+                           sax  sid2_v2_sc1_step_counter    ; $CA54
+l_1:                       ldx  #$00    ; $CA57
                            lda  #$FF    ; $CA59  ; ← sid2_v0_sc2_step_counter
-                           bmi  l_28    ; $CA5B  sid2_v0_sc2_step_counter had bit 7 set?
+                           bmi  l_2    ; $CA5B  sid2_v0_sc2_step_counter had bit 7 set?
                            dec  sid2_v0_sc2_step_counter    ; $CA5D
 ;   step-idiom: source = sid2_v0_sc2_step_counter  (= $CA5A)
 ;               decremented 1× via DEX/DEY/DEC     ; final step @ $CA5D
@@ -16929,40 +17024,51 @@ l_27:                      ldx  #$00    ; $CA57
                            asl  a    ; $CA88
                            sta  sid2_row_advance_ldy_smc + $5A    ; $CA89
                            jmp  sid2_cascade_post_tick_gate    ; $CA8C
-l_28:                      ldy  #$01    ; $CA8F
+l_2:                       ldy  #$01    ; $CA8F
                            lda  #$FF    ; $CA91  ; ← (SMC operand at $CA92, no name)
-                           bpl  l_29    ; $CA93  sid2_register_write_body_$270 had bit 7 clear?
+                           bpl  l_3    ; $CA93  sid2_row_advance_ldy_smc_$3E had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CA95
                            sta  sid2_cascade_v1_silence_counter    ; $CA98
                            stx  sid2_v1_sc1_counter    ; $CA9B
-l_29:                      iny    ; $CA9E
+l_3:                       iny    ; $CA9E
                            lda  #$FF    ; $CA9F  ; ← (SMC operand at $CAA0, no name)
-                           bpl  l_30    ; $CAA1  sid2_register_write_body_$27E had bit 7 clear?
+                           bpl  l_4    ; $CAA1  sid2_row_advance_ldy_smc_$4C had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CAA3
                            sta  sid2_cascade_v1_sc2_silence_counter    ; $CAA6
                            stx  sid2_v1_sc2_counter    ; $CAA9
-l_30:                      iny    ; $CAAC
+l_4:                       iny    ; $CAAC
                            lda  #$FF    ; $CAAD  ; ← (SMC operand at $CAAE, no name)
-                           bpl  l_31    ; $CAAF  sid2_register_write_body_$28C had bit 7 clear?
+                           bpl  l_5    ; $CAAF  sid2_row_advance_ldy_smc_$5A had bit 7 clear?
                            lda  VEC_IRQ_HI,y    ; $CAB1
                            sta  sid2_v1_cascade_slot_triple + $02    ; $CAB4
                            sta  sid2_v1_sc2_cascade_slot_triple + $01    ; $CAB7
                            stx  sid2_voice_record_v2    ; $CABA
                            stx  sid2_voice_record_v2.slide_acc_lo    ; $CABD
                            stx  sid2_voice_record_v2.slide_mode    ; $CAC0
-l_31:                      iny    ; $CAC3
+l_5:                       iny    ; $CAC3
                            ldx  #$FF    ; $CAC4  ; ← (SMC operand at $CAC5, no name)
-                           bpl  l_32    ; $CAC6  sid2_register_write_body_$2A3 had bit 7 clear?
+                           bpl  l_6    ; $CAC6  sid2_row_advance_ldy_smc_$71 had bit 7 clear?
                            stx  sid2_v1_voice_record_slot_b    ; $CAC8
-                           bmi  sid2_cascade_post_tick_gate    ; $CACB  sid2_register_write_body_$2A3 had bit 7 set?
-l_32:                      tya    ; $CACD
+                           bmi  sid2_cascade_post_tick_gate    ; $CACB  sid2_row_advance_ldy_smc_$71 had bit 7 set?
+l_6:                       tya    ; $CACD
                            clc    ; $CACE
                            adc  sid2_filter_slot_ca96    ; $CACF
                            sta  sid2_filter_slot_ca96    ; $CAD2
-                           bcc  l_33    ; $CAD5  sid2_filter_slot_ca96 no carry
+                           bcc  l_7    ; $CAD5  sid2_filter_slot_ca96 no carry
                            inc  sid2_filter_slot_ca97    ; $CAD7
-l_33:                      lda  #$0F    ; $CADA
-        .byte $8F, $5A, $CA    ; $CADC
+l_7:                       lda  #$0F    ; $CADA
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $CADC  sid2_row_advance_step_smc
+; ──────────────────────────────────────────────────────────────────────
+; Undocumented opcode $8F (abs): SID#2 mirror of the voice-2 row-timer dur-nibble store (the SAX_v0_dur_nibble family).
+;
+;   code edges:          fall-through from $CADA sid2_row_advance_ldy_smc_7 (2 bytes earlier)
+;
+;   Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot.
+sid2_row_advance_step_smc .block
+                           sax  sid2_v0_sc2_step_counter    ; $CADC
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────

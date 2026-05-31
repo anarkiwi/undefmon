@@ -5413,13 +5413,13 @@ notes = "The $02/$04/$FB tail is the pre-loaded ps_depth seed for V2 (compare V0
 
 [region."$1254"]
 name  = "row_read_body_v2_ldy_smc"
-role  = "Self-mod operand triple ($8F $D2 $11), 3 bytes — the operand of `Y←v1_row_timer,X` at row_read_body_v1 (V2's row-advance entry inside the row_advance_band_v0/row_advance_band_v1/row_advance_band_v2 trio)."
-notes = "The byte at row_read_body_v2_ldy_smc ($8F) is patched by V0_gate_n_branch-v0_gate_n_tail V0 slide-reset; the high byte at row_read_body_v2_ldy_smc stays v1_row_timer."
+role  = "Undocumented opcode $8F (abs): stores A & X into voice 1's row-timer reload — the V1 analog of SAX_v0_dur_nibble (A=$0F, X=row flag, result = duration nibble)."
+notes = "Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone SAX instruction, not a patched operand slot."
 
 [region."$12DC"]
 name  = "row_advance_band_v2_ldy_smc"
-role  = "Self-mod operand pair ($8F $5A), 2 bytes — the indexed-load address slot patched by row_read_body_v2 inside V0's cascade step body."
-notes = "Adjacent to row_advance_band_end = V0_sc1_row_idx counter."
+role  = "Undocumented opcode $8F (abs): stores A & X into voice 2's row-timer reload — the V2 analog of SAX_v0_dur_nibble."
+notes = "Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone SAX instruction."
 
 [region."$12EB"]
 name  = "v0_cascade_step_bytes"
@@ -5521,20 +5521,23 @@ kbd_probe_excluded = true
 
 [region."$8832"]
 name  = "paint_page_smc_af_af_10"
-role  = "Paint-page self-mod operand triple ($AF $AF $10), 3 bytes — bytes inside the seqED_paint_unroll-seqED_paint_unroll_end unrolled paint-template pages (~$100 stride per page across 35 pages)."
-notes = "Encodes a glyph + color pair used by one of the per-page paint arms."
+role  = "Undocumented opcode $AF (abs): a chip-view-dependent status load in the seqED unrolled-paint code, the SID#1 arm of the sid_chip_view branch (falls through here when the view is SID#1)."
+notes = "Not paint-operand data; name retained from when the $AF opcode byte was read as a byte triple."
 
 [region."$8838"]
 name = "paint_page_smc_af_af_c8"
-role = "Paint-page self-mod operand triple ($AF $AF $C8), 3 bytes — companion to paint_page_smc_af_af_10 with the $C8 iny-opcode terminator instead of $10 bpl."
+role = "Undocumented opcode $AF (abs): the SID#2 arm of the sid_chip_view branch that pairs with paint_page_smc_af_af_10 (taken when the view is not SID#1)."
+notes = "Not paint-operand data; name retained from the byte triple."
 
 [region."$885D"]
 name = "paint_page_smc_af_aa_10"
-role = "Paint-page self-mod operand triple ($AF $AA $10), 3 bytes — variant of paint_page_smc_af_af_10 with $AA glyph instead of $AF."
+role = "Undocumented opcode $AF (abs): a chip-view-dependent status load in the seqED unrolled-paint code (the $AA operand low byte distinguishes it from paint_page_smc_af_af_10)."
+notes = "Not paint-operand data; name retained from the byte triple."
 
 [region."$8863"]
 name = "paint_page_smc_af_aa_c8"
-role = "Paint-page self-mod operand triple ($AF $AA $C8), 3 bytes — companion to paint_page_smc_af_aa_10 with $C8 terminator."
+role = "Undocumented opcode $AF (abs): companion chip-view status load to paint_page_smc_af_aa_10 in the seqED unrolled-paint code."
+notes = "Not paint-operand data; name retained from the byte triple."
 
 [region."$B20B"]
 name  = "auto_advance_count_slot"
@@ -5614,15 +5617,18 @@ notes = "Pre-loaded sentinel triple $02/$04/$FB at the tail."
 
 [region."$C9CC"]
 name = "sid2_v0_row_read_ldy_smc"
-role = "Self-mod operand triple ($8F $4A $C9), 3 bytes — SID#2 mirror of row_read_body_v2_ldy_smc (operand of an ldy-abs,X inside SID#2 V0 row-advance)."
+role = "Undocumented opcode $8F (abs): SID#2 mirror of the voice-0 row-timer dur-nibble store (the SAX_v0_dur_nibble family)."
+notes = "Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot."
 
 [region."$CA54"]
 name = "sid2_row_advance_ldy_smc"
-role = "Self-mod operand triple ($8F $D2 $C9), 3 bytes — SID#2 mirror of another row-advance self-mod operand inside the SID#2 dispatch chain."
+role = "Undocumented opcode $8F (abs): SID#2 mirror of the voice-1 row-timer dur-nibble store (the SAX_v0_dur_nibble family)."
+notes = "Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot."
 
 [region."$CADC"]
 name = "sid2_row_advance_step_smc"
-role = "Self-mod operand triple ($8F $5A $CA), 3 bytes — SID#2 mirror of row_advance_band_v2_ldy_smc (V0 step body self-mod operand)."
+role = "Undocumented opcode $8F (abs): SID#2 mirror of the voice-2 row-timer dur-nibble store (the SAX_v0_dur_nibble family)."
+notes = "Name retained from when the $8F opcode byte was read as an ldy operand; it is a standalone store of A & X, not an operand slot."
 
 [region."$CAEB"]
 name  = "sid2_v0_cascade_step_bytes"
