@@ -241,7 +241,7 @@
   },
   "$D780": {
     "jsr_pc": 55168,
-    "description": "SMC-JMP. Operand bytes patched at $D769/$D7BE (STA-sourced from the surrounding setup chain). The JMP redirects execution to a runtime-computed target \u2014 emit_setup chooses where to resume after the configurable emitter writes a row.",
+    "description": "SMC-JMP selecting the configurable emitter's post-write hook. Two arms patch the operand with immediates: $D767/$D769/$D76E (advance hook -> $D784) and $D772/$D774/$D779 (write-only/noop -> $D790). The target set is therefore statically fixed.",
     "patch_sources_annotated": [
       55145,
       55150
@@ -250,7 +250,18 @@
       55145,
       55150
     ],
-    "targets": [],
+    "targets": [
+      {
+        "addr": 55172,
+        "name": "configurable_emitter_advance_hook",
+        "context": "advance ($D767 arm)"
+      },
+      {
+        "addr": 55184,
+        "name": "configurable_emitter_noop_tail",
+        "context": "noop ($D772 arm)"
+      }
+    ],
     "annotated": true,
     "discovered": true
   }

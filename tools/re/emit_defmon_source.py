@@ -1002,6 +1002,10 @@ SEED_LANDMARKS = {
     # Statically unreachable (entered via the post-NMI branch fan-out),
     # so seed it explicitly to decode as code instead of a .byte run.
     0x0AD9: "nmi_sid2_silence_count",
+    # $D780 auto-advance dispatch targets (reached only via the
+    # self_modifying_byte_emitter JMP at $D780; no I/O aliasing).
+    0xD784: "configurable_emitter_advance_hook",
+    0xD790: "configurable_emitter_noop_tail",
     # Player API (per docs:callingtheplayer)
     0x1000: "player_init",
     0x1003: "player_play",
