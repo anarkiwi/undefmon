@@ -2988,7 +2988,6 @@ l_2:                       ldy  #$0C    ; $0F18
 ; 3-instruction helper: Y←$02 / Y→kbd_debounce_counter / return.
 ;
 ;   callers:             kbd_scan_samemod_branch BEQ (only).
-;   outputs:             Y
 ;   registers clobbered: Y
 ;
 ;   Resets the keyboard-state retry counter at kbd_debounce_counter to 2. Reached by →retry_counter_reload when zero from kbd_scan_samemod_branch (the retry-budget-exhausted branch of kbd_dead_trampoline's dead path).
@@ -5675,6 +5674,7 @@ l_2:                       jsr  KERNAL_CHRIN    ; $74D3
 ; Directory-entry inner loop (continuation of dir_read_open).
 ;
 ;   callers:             dir_read_open (fall-through after BAM-skip); dir_chrin_drain (loop-back JMP after dir_chrin_drain drain); dir_entry_inner_loop (BEQ back to entry header on null byte)
+;   registers clobbered: A, X, Y
 ;
 ;   For each directory entry:
 ;     - 4× CHRIN to skip the entry preamble + call kbd_scan / compare =$93 abort check.
@@ -5775,6 +5775,7 @@ l_2:                       jsr  dir_paint_reset_cell    ; $7557
 ;
 ;   callers:             3 code sites: $7568, $7579, $75B6
 ;   inputs:              (none — reads from KERNAL active input channel, opened against the 1541 directory by the disk-menu open path)
+;   registers clobbered: A, X, Y
 ;
 ;   Reads characters from the active input channel (KERNAL CHRIN) until a $00 byte arrives, then jumps to dir_entry_inner_loop to paint the next row.
 ;
@@ -5812,6 +5813,7 @@ dir_read_close_tail .block
 ; Disk-menu directory-fetch 'R' (read-error retry) handler.
 ;
 ;   callers:             dir_entry_inner_loop BEQ (in save_ui_entry disk-menu input cascade, CMP #$12 / BEQ disk_menu_R_handler arm).
+;   registers clobbered: A, X, Y
 ;
 ;   call dir_paint_reset_cell (re-attempt file open with current cursor selection) / jump dir_chrin_drain (CHRIN-drain + cleanup). Reached when the user holds an 'R' key ($12 screen code) on a stalled directory fetch. Same shape as disk_menu_B_handler but with a retry pre-step.
 disk_menu_R_handler .block
@@ -5825,6 +5827,7 @@ disk_menu_R_handler .block
 ; Disk-menu directory-fetch 'B' (back) handler.
 ;
 ;   callers:             dir_entry_inner_loop BEQ (in save_ui_entry disk-menu input cascade, CMP #$42 / BEQ disk_menu_B_handler arm).
+;   registers clobbered: A, X, Y
 ;
 ;   jump dir_line_advance (back to the directory-display top). Reached when the user types 'B' ($42 screen code) at the directory prompt — restarts directory listing from page 0.
 disk_menu_B_handler .block
@@ -5845,6 +5848,7 @@ l_2:                       lda  disk_confirm_prompt_template,x    ; $758F
 ;   callers:             Only reached as JMP disk_confirm_prompt_jmp_trampoline → disk_confirm_prompt_loop fall-through from the prompt-paint at disk_confirm_prompt_template (paints the prompt string disk_confirm_prompt_template = '\x12\x05\x01\x04 \x0f\x0f\x12\x05\x3f ' = REV-ON 'READ OR?' style banner). 1 references (disk_confirm_prompt_jmp_trampoline JMP disk_confirm_prompt_loop).
 ;   inputs:              kbd_decoded_key = decoded key (set by kbd_scan); VIC_BORDER = border color (used as flash buffer).
 ;   outputs:             On confirm: JSR disk_menu_screen_init fires the staged action. On decline: file 1 closed via dir_read_close_tail. Border restored to $00 on either decision.
+;   registers clobbered: A, X, Y
 ;
 ;   Polls kbd_scan and dispatches on the decoded key. 'N' (screen code $0E) takes the decline path — clears the border and jumps to dir_read_close_tail (close file 1 + CLRCHN). 'Y' ($19) takes the confirm path — clears the border, calls disk_menu_screen_init to run the gated action, then drains the CHRIN channel via dir_chrin_drain. Any other key flashes the border (EOR with $07) and re-polls — purely cosmetic feedback that the input was seen but rejected.
 disk_confirm_prompt_loop .block
@@ -5919,7 +5923,6 @@ dir_paint_glyph .block
 ; Reset directory per-line cell-offset.
 ;
 ;   callers:             disk_clear_loop_smc (disk_menu_screen_init epilogue, initial paint cursor reset); dir_line_advance (dir_line_advance line-advance, resets between rows); disk_menu_R_handler (dir_entry_inner_loop's RVS-flag entry — locked-file branch)
-;   outputs:             A
 ;   registers clobbered: A
 ;
 ;   Called at the start of each new directory line (and at disk_menu_screen_init initial setup) to rewind the within-column cursor to byte 0.
@@ -6428,6 +6431,7 @@ tune_load_entry .block
 ;   callers:             save_overwrite_body JSR (the SAVE prompt entry inside disk_menu_return_handler save-tune chain).
 ;   inputs:              A = initial display char (e.g. cursor glyph); X = screen-RAM column offset for the name's first char.
 ;   outputs:             save_name_input_state = SAVE-name input state slots.
+;   registers clobbered: A, X, Y
 ;
 ;   Sets up the per-keypress accumulator state for the SAVE filename prompt before its input loop body runs.
 save_name_input_state_init .block
@@ -6580,6 +6584,7 @@ l_9:                       sec    ; $7974
 ; KERNAL LOAD wrapper: SETNAM + SETLFS + LOAD.
 ;
 ;   callers:             1 code sites: $7895
+;   registers clobbered: A, X, Y
 ;
 ;   The single JSR KERNAL_LOAD in the entire static image is here at kernal_load_call_site.
 ;   kernal_load_call_site is the canonical decoder-window start: KERNAL LOAD returns
@@ -6605,6 +6610,9 @@ l_1:                       ldy  save_name_input_state    ; $79A4
 ; $79B2  kernal_load_call_site
 ; ──────────────────────────────────────────────────────────────────────
 ; call KERNAL_LOAD — the one and only KERNAL LOAD call site.
+;
+;   inputs:              A, X, Y
+;   registers clobbered: A, X, Y
 ;
 ;   code edges:          fall-through from $79B0 in kernal_load_wrapper_1 (2 bytes earlier)
 kernal_load_call_site .block
@@ -7015,6 +7023,7 @@ l_2:                       dec  data_band_no_op_tail    ; $807C
 ; 1541 command-channel reader (drive status check).
 ;
 ;   callers:             2 code sites: $76CE, $76F8
+;   registers clobbered: A, X, Y
 ;
 ;   NOT the decoder.
 ;
