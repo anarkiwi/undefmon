@@ -1003,6 +1003,11 @@ SEED_LANDMARKS = {
     # so seed it explicitly to decode as code instead of a .byte run.
     0x0889: "post_load_startup",
     0x0AD9: "nmi_sid2_silence_count",
+    0xE491: "pattern_bank_lookup_helper",
+    0xE4C8: "seqlist_pattern_bank_full",
+    0xE4CF: "seqlist_row_clone_setup",
+    0xE4FD: "seqlist_row_insert_setup",
+    0xE517: "seqlist_row_copy_loop",
     0x7735: "save_failure_panic_loop",
     0xD772: "configurable_emitter_post_write_hook_writeonly",
     0xE357: "seqLIST_writer_super_arg_dispatch",
