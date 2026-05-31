@@ -1,7 +1,7 @@
 # defMON RE annotations
 #
 # Single source of truth for facts about specific addresses in defmon-static.bin.
-# Merged into `tools/re/defmon.s` by emit_defmon_source.py as block comments
+# Merged into `defmon.asm` by emit_defmon_source.py as block comments
 # above the relevant code-start labels and segment headers.
 #
 # Schema (post-split):
@@ -284,7 +284,7 @@ Internal labels (NOT separate functions — sub-labels of mode_transition_wrappe
  mode_transition_wrapper_tail common tail. STA ui_mode_range_bound = UI_MODE_SIDTAB (cursor repaint flag); JMP
  super_cmd_state_init (editor repaint dispatch).
 """
-evidence            = "harness/probe_boot_init.py 2026-05-14 (count=1 cold boot from $0853); defmon.s $0BBA-$0C0E body."
+evidence            = "harness/probe_boot_init.py 2026-05-14 (count=1 cold boot from $0853); defmon.asm $0BBA-$0C0E body."
 
 [function."$0BA4"]
 name                = "jsr_with_ram_helper"
@@ -689,7 +689,7 @@ control to defMON at this address.
 [function."$79B2"]
 name     = "kernal_load_call_site"
 role     = "call KERNAL_LOAD — the one and only KERNAL LOAD call site."
-evidence = "grep across defmon.s"
+evidence = "grep across defmon.asm"
 
 [function."$0889"]
 name     = "post_load_startup"
@@ -1413,7 +1413,7 @@ Sequence at post_load_chain..load_decoder_block_call_site:
  LDA post_load_pattern_marker_gate / BEQ +3 / JSR secondary_pattern_marker (pattern bit-7 marker).
  CLC; RTS.
 """
-evidence = "tools/re/defmon.s lines 11821-11823; verified 2026-05-12."
+evidence = "defmon.asm lines 11821-11823; verified 2026-05-12."
 
 [function."$CF42"]
 name     = "secondary_song_position_transform"
@@ -1429,7 +1429,7 @@ function only rewrites the per-index *pointer* arrays at sidtab_row_lo/sidtab_ro
 not the row bodies. The Tune class composes row bodies directly via
 set_sidtab_row(row, 15 bytes raw).
 """
-evidence = "tools/re/defmon.s lines 11827-11829."
+evidence = "defmon.asm lines 11827-11829."
 
 [function."$D004"]
 name     = "secondary_pat_base_init"
@@ -1444,7 +1444,7 @@ implication: the Tune class can leave pat_base zeroed because secondary_pat_base
 unconditionally rebuilds the default layout whenever post_load_pat_base_gate=$01 (which
 the corpus templates all set).
 """
-evidence = "tools/re/defmon.s lines 11876-11878."
+evidence = "defmon.asm lines 11876-11878."
 
 [function."$CFB8"]
 name     = "secondary_pattern_marker"
@@ -1459,7 +1459,7 @@ set). Compose-time implication: the Tune class can write step-31 speed
 bytes WITHOUT bit 7; secondary_pattern_marker will set it post-LOAD as long as the
 template's post_load_pattern_marker_gate flag is preserved.
 """
-evidence = "tools/re/defmon.s lines 11866-11870."
+evidence = "defmon.asm lines 11866-11870."
 
 [function."$BE44"]
 name           = "sidtab_row_decoder"
@@ -1639,7 +1639,7 @@ evidence = "tools/re/xref.py --target 0x16B0 → 6 callers (all inside the sidTA
 name           = "load_decoder_src_floor_patch"
 role           = "LOAD-decoder src-floor patcher — sets the sbc-immediate operand bytes at decoder_term_lo_smc / decoder_term_hi_smc to lo/hi of the src_floor (typically $00 / $18 = sidtab_row_lo)."
 notes          = "Static image has $FF $FF at those operands (compares src against VEC_IRQ_HI, never matching). Patches the lo/hi pair to $00/$18 (= sidtab_row_lo) before the call to decoder_block_helper. Net effect: the termination check inside decoder_block_helper compares src against sidtab_row_lo and terminates when src < sidtab_row_lo (NOT src < pitch_lut_band_alt_base)."
-evidence       = "harness/probe_jp_target_origin.py 2026-05-14 PM; defmon.s $CED0-$CEE1; tools/re/dasm6502 disasm of $D6D5-$D6E1."
+evidence       = "harness/probe_jp_target_origin.py 2026-05-14 PM; defmon.asm $CED0-$CEE1; tools/re/dasm6502 disasm of $D6D5-$D6E1."
 internal_notes = "2-iteration discrepancy vs `src < src_floor + 2` affected preframr's `_load_format.py` decoder before 2026-05-14 PM and caused the .AUTOMATAS2017 V1 cascade divergence."
 
 [function."$1053"]
@@ -1805,7 +1805,7 @@ sidtab_cascade_v2_sc1 V2 sc1 / sidtab_cascade_v0_sc2 V0 sc2 / sidtab_cascade_v1_
 LDA #counter; BEQ refetch (sidtab_refetch_v0_sc1/v1_sc1_refetch/v2_cascade_slot_triple/v0_sc2_cascade_slot_triple/v1_sc2_cascade_slot_triple/v2_sc2_cascade_slot_triple);
 BMI skip-to-next-arm; else DEC counter + JMP to next arm.
 """
-evidence       = "defmon.s $12DF body; harness/probe_cascade_gate.py 2026-05-14."
+evidence       = "defmon.asm $12DF body; harness/probe_cascade_gate.py 2026-05-14."
 internal_notes = """
 Sub-frame call-rate was probed 2026-05-14 PM by probe_cascade_gate.py
 (24 consecutive NMI stops on .AUTOMATAS2017). An earlier probe
@@ -3705,19 +3705,19 @@ name     = "cia2_timer_lo"
 role     = "low byte of CIA2 Timer A interval."
 values   = "Per-tune. Example: $F9 (single-tick layout); $98 (8-sub-frame layout, 2456 cycles per NMI)."
 notes    = "defMON's irq_banking_setup IRQ install does `read cia2_timer_lo; write CIA2_TA_LO`. Combined with cia2_timer_hi as a 16-bit count; effective player main-tick rate = (cia2_timer_lo | cia2_timer_hi<<8) × sub_frame_count cycles. Per-tune. Saved in the tune's runtime-state region (runtime_state_page-super_cmd_staged), which lives in the LOAD-decoded snapshot."
-evidence = "harness/probe_player_init_state.py 2026-05-14; defmon.s $0A98 LDA $715A."
+evidence = "harness/probe_player_init_state.py 2026-05-14; defmon.asm $0A98 LDA $715A."
 
 [region."$715B"]
 name     = "cia2_timer_hi"
 role     = "high byte of CIA2 Timer A interval."
 notes    = "See cia2_timer_lo."
-evidence = "defmon.s $0A9E LDA $715B."
+evidence = "defmon.asm $0A9E LDA $715B."
 
 [region."$715C"]
 name           = "sub_frame_count"
 role           = "number of NMIs per main player tick."
 notes          = "defMON's nmi_post_player_tail post-player tail increments sub_frame_phase mod sub_frame_count; when sub_frame_phase == 0 the NEXT NMI is a main tick (player_play), otherwise a sub-frame (player_sound_update). Effective main-tick cycle interval = (cia2_timer_lo | cia2_timer_hi<<8) × sub_frame_count. Per-tune."
-evidence       = "harness/probe_pattern_advance.py 2026-05-14; defmon.s $0B53-$0B63."
+evidence       = "harness/probe_pattern_advance.py 2026-05-14; defmon.asm $0B53-$0B63."
 internal_notes = "preframr.defmon_player reads this as `self.sub_frame_count` and runs `sub_frame_count - 1` extra cascade ticks per `play_frame()` to model defMON's sub-frame cascade ticks. Empirically the actual effective cascade decrement rate on AUTOMATAS is only ~2/main-frame (not 8) — some gating in $1006's JMP $12DF cascade tail not yet statically located."
 
 [region."$715C".values]
@@ -4384,7 +4384,7 @@ notes = "jump pitch_oscillator_loop_tail from the four exit points (ps_sweep_anc
 [region."$14E3"]
 name  = "pitch_oscillator_loop_tail"
 role  = "A←X (A := X = $62/$31/$00); SBX #$31 ($CB $31 — undocumented AXS opcode: X := (A and X) - #$31, sets carry as for sbc); →groove_song_position when negative if result negative (X went below $00 = wrapped from $00); else jump pitch_oscillator_voice_loop_body (re-enter loop with X = X - $31)."
-notes = "At entry X=$62 → X-$31 = $31 (V1 next); X=$31 → X-$31 = $00 (V0 next); X=$00 → wrap (→fires) when negative → return at groove_song_position. The AXS opcode is unusual — `X := (A and X) - #imm` in a single 2-byte instruction without clobbering A. Reading defmon.s, expect to see the `.byte $CB, $31` block in place of an `axs` mnemonic."
+notes = "At entry X=$62 → X-$31 = $31 (V1 next); X=$31 → X-$31 = $00 (V0 next); X=$00 → wrap (→fires) when negative → return at groove_song_position. The AXS opcode is unusual — `X := (A and X) - #imm` in a single 2-byte instruction without clobbering A. Kick Assembler assembles it from the `axs #$31` mnemonic."
 
 [region."$14F8"]
 name  = "slide_dec_lut_lo"
@@ -4708,7 +4708,7 @@ notes = "Cleared by secondary_pattern_marker before return."
 [region."$0800"]
 name  = "cold_boot_origin"
 role  = "defMON image origin."
-notes = "Static PRG load address; first byte of the cold_boot_origin-defmon_image_end reconstruction in tools/re/defmon.s."
+notes = "Static PRG load address; first byte of the cold_boot_origin-defmon_image_end reconstruction in defmon.asm."
 
 [region."$080D"]
 name  = "cold_boot_prelude_midbyte"
@@ -4880,7 +4880,7 @@ kbd_probe_excluded = true
 [region."$D000"]
 name  = "VIC_SP0_X"
 role  = "Start of the RAM-under-I/O region (ram_under_io-ram_under_io_end)."
-notes = "Accessible only when $01=#$35 (KERNAL ROM banked OUT). defMON's irq_banking_setup sets up the banking; the LOAD decoder and the save-encoder helpers live here. Linter skips this address as a VIC-II SFR; the entry is for emit_defmon_source to label the region in defmon.s."
+notes = "Accessible only when $01=#$35 (KERNAL ROM banked OUT). defMON's irq_banking_setup sets up the banking; the LOAD decoder and the save-encoder helpers live here. Linter skips this address as a VIC-II SFR; the entry is for emit_defmon_source to label the region in defmon.asm."
 
 [region."$DFFF"]
 name  = "ram_under_io_end"
@@ -4906,7 +4906,7 @@ System address (CIA2 SFR), but called out because defMON's use is specifically t
 name     = "decoder_rle_lax_indy_site"
 role     = "read A=X=($02),Y site inside the decoder_block_helper Path-D RLE fill (reached via decoder_rle_fill_path)."
 notes    = "The lone undocumented opcode in the LOAD-decoder body; loads byte[src+2] simultaneously into A and X to seed the descending fill loop at decoder_emit_byte_dec."
-evidence = "Hand-disasm of $D6CC-$D74B 2026-05-12; tools/re/dasm6502.py models LAX so roundtrip_check passes 64tass -i."
+evidence = "Hand-disasm of $D6CC-$D74B 2026-05-12; tools/re/dasm6502.py models LAX so roundtrip_check passes under Kick Assembler."
 
 [region."$7842"]
 name     = "save_end_ptr_lo_read"
@@ -5318,7 +5318,7 @@ kbd_probe_excluded = true
 name     = "boot_init_band"
 role     = "Start of the secondary boot-init helper band (boot_init_band-boot_init_band_end, ~200 bytes)."
 notes    = "Fired once at boot from the chain rooted at post_load_init_decoder / the main `jump post_load_init_decoder` after LOAD (disk_menu_return_handler chain). Mostly screen-init, IRQ vector install, ZP setup."
-evidence = "Bytes already force-disassembled into defmon.s; per-routine annotations need re-enabled boot-init probe (§1 of probe_disasm_evidence) with ≤50 watchpoints."
+evidence = "Bytes already force-disassembled into defmon.asm; per-routine annotations need re-enabled boot-init probe (§1 of probe_disasm_evidence) with ≤50 watchpoints."
 
 [region."$0BA3"]
 name  = "boot_init_band_end"
@@ -5456,7 +5456,7 @@ notes = "Mirror of v0_sc2_cascade_slot_triple / v1_sc2_cascade_slot_triple."
 
 [region."$149D"]
 name  = "ps_sweep_anc_imm_smc"
-role  = "Undocumented opcode $2B (immediate): masks A with #$7F and copies bit 7 into carry, in the PS-sweep add path; rendered as .byte because 64tass emits the $0B encoding for that mnemonic."
+role  = "Undocumented opcode $2B (immediate): masks A with #$7F and copies bit 7 into carry, in the PS-sweep add path; emitted as the anc2 mnemonic, which Kick Assembler assembles to the $2B encoding (anc maps to the duplicate $0B)."
 notes = "Continues the ps_sweep_add_path_smc instruction stream; the $2B byte is one of two ANC encodings (the other is $0B)."
 
 [region."$14E4"]
@@ -6125,7 +6125,7 @@ condition = "paint cell src byte bit 6 set after ASL (render digit, skip placeho
 #
 # Schema:
 #   [imm."$XXXX"]
-#   name = "SYMBOLIC_NAME"   # valid 64tass identifier; UPPER_SNAKE convention
+#   name = "SYMBOLIC_NAME"   # valid assembler identifier; UPPER_SNAKE convention
 #
 # Use when an immediate isn't bound to a value_names enum but reads
 # clearer as a named threshold/constant — typically `(SBC|ADC|AND|ORA)

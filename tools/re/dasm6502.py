@@ -39,96 +39,184 @@ from pathlib import Path
 
 OPS: dict[int, tuple[str, str, int]] = {
     # ADC
-    0x69: ("ADC", "imm", 2), 0x65: ("ADC", "zp", 2), 0x75: ("ADC", "zpx", 2),
-    0x6D: ("ADC", "abs", 3), 0x7D: ("ADC", "abx", 3), 0x79: ("ADC", "aby", 3),
-    0x61: ("ADC", "izx", 2), 0x71: ("ADC", "izy", 2),
+    0x69: ("ADC", "imm", 2),
+    0x65: ("ADC", "zp", 2),
+    0x75: ("ADC", "zpx", 2),
+    0x6D: ("ADC", "abs", 3),
+    0x7D: ("ADC", "abx", 3),
+    0x79: ("ADC", "aby", 3),
+    0x61: ("ADC", "izx", 2),
+    0x71: ("ADC", "izy", 2),
     # AND
-    0x29: ("AND", "imm", 2), 0x25: ("AND", "zp", 2), 0x35: ("AND", "zpx", 2),
-    0x2D: ("AND", "abs", 3), 0x3D: ("AND", "abx", 3), 0x39: ("AND", "aby", 3),
-    0x21: ("AND", "izx", 2), 0x31: ("AND", "izy", 2),
+    0x29: ("AND", "imm", 2),
+    0x25: ("AND", "zp", 2),
+    0x35: ("AND", "zpx", 2),
+    0x2D: ("AND", "abs", 3),
+    0x3D: ("AND", "abx", 3),
+    0x39: ("AND", "aby", 3),
+    0x21: ("AND", "izx", 2),
+    0x31: ("AND", "izy", 2),
     # ASL
-    0x0A: ("ASL", "acc", 1), 0x06: ("ASL", "zp", 2), 0x16: ("ASL", "zpx", 2),
-    0x0E: ("ASL", "abs", 3), 0x1E: ("ASL", "abx", 3),
+    0x0A: ("ASL", "acc", 1),
+    0x06: ("ASL", "zp", 2),
+    0x16: ("ASL", "zpx", 2),
+    0x0E: ("ASL", "abs", 3),
+    0x1E: ("ASL", "abx", 3),
     # branches
-    0x10: ("BPL", "rel", 2), 0x30: ("BMI", "rel", 2), 0x50: ("BVC", "rel", 2),
-    0x70: ("BVS", "rel", 2), 0x90: ("BCC", "rel", 2), 0xB0: ("BCS", "rel", 2),
-    0xD0: ("BNE", "rel", 2), 0xF0: ("BEQ", "rel", 2),
+    0x10: ("BPL", "rel", 2),
+    0x30: ("BMI", "rel", 2),
+    0x50: ("BVC", "rel", 2),
+    0x70: ("BVS", "rel", 2),
+    0x90: ("BCC", "rel", 2),
+    0xB0: ("BCS", "rel", 2),
+    0xD0: ("BNE", "rel", 2),
+    0xF0: ("BEQ", "rel", 2),
     # BIT
-    0x24: ("BIT", "zp", 2), 0x2C: ("BIT", "abs", 3),
+    0x24: ("BIT", "zp", 2),
+    0x2C: ("BIT", "abs", 3),
     # BRK
     0x00: ("BRK", "imp", 1),
     # CMP
-    0xC9: ("CMP", "imm", 2), 0xC5: ("CMP", "zp", 2), 0xD5: ("CMP", "zpx", 2),
-    0xCD: ("CMP", "abs", 3), 0xDD: ("CMP", "abx", 3), 0xD9: ("CMP", "aby", 3),
-    0xC1: ("CMP", "izx", 2), 0xD1: ("CMP", "izy", 2),
+    0xC9: ("CMP", "imm", 2),
+    0xC5: ("CMP", "zp", 2),
+    0xD5: ("CMP", "zpx", 2),
+    0xCD: ("CMP", "abs", 3),
+    0xDD: ("CMP", "abx", 3),
+    0xD9: ("CMP", "aby", 3),
+    0xC1: ("CMP", "izx", 2),
+    0xD1: ("CMP", "izy", 2),
     # CPX/CPY
-    0xE0: ("CPX", "imm", 2), 0xE4: ("CPX", "zp", 2), 0xEC: ("CPX", "abs", 3),
-    0xC0: ("CPY", "imm", 2), 0xC4: ("CPY", "zp", 2), 0xCC: ("CPY", "abs", 3),
+    0xE0: ("CPX", "imm", 2),
+    0xE4: ("CPX", "zp", 2),
+    0xEC: ("CPX", "abs", 3),
+    0xC0: ("CPY", "imm", 2),
+    0xC4: ("CPY", "zp", 2),
+    0xCC: ("CPY", "abs", 3),
     # DEC
-    0xC6: ("DEC", "zp", 2), 0xD6: ("DEC", "zpx", 2),
-    0xCE: ("DEC", "abs", 3), 0xDE: ("DEC", "abx", 3),
+    0xC6: ("DEC", "zp", 2),
+    0xD6: ("DEC", "zpx", 2),
+    0xCE: ("DEC", "abs", 3),
+    0xDE: ("DEC", "abx", 3),
     # EOR
-    0x49: ("EOR", "imm", 2), 0x45: ("EOR", "zp", 2), 0x55: ("EOR", "zpx", 2),
-    0x4D: ("EOR", "abs", 3), 0x5D: ("EOR", "abx", 3), 0x59: ("EOR", "aby", 3),
-    0x41: ("EOR", "izx", 2), 0x51: ("EOR", "izy", 2),
+    0x49: ("EOR", "imm", 2),
+    0x45: ("EOR", "zp", 2),
+    0x55: ("EOR", "zpx", 2),
+    0x4D: ("EOR", "abs", 3),
+    0x5D: ("EOR", "abx", 3),
+    0x59: ("EOR", "aby", 3),
+    0x41: ("EOR", "izx", 2),
+    0x51: ("EOR", "izy", 2),
     # flags
-    0x18: ("CLC", "imp", 1), 0x38: ("SEC", "imp", 1),
-    0x58: ("CLI", "imp", 1), 0x78: ("SEI", "imp", 1),
-    0xB8: ("CLV", "imp", 1), 0xD8: ("CLD", "imp", 1), 0xF8: ("SED", "imp", 1),
+    0x18: ("CLC", "imp", 1),
+    0x38: ("SEC", "imp", 1),
+    0x58: ("CLI", "imp", 1),
+    0x78: ("SEI", "imp", 1),
+    0xB8: ("CLV", "imp", 1),
+    0xD8: ("CLD", "imp", 1),
+    0xF8: ("SED", "imp", 1),
     # INC
-    0xE6: ("INC", "zp", 2), 0xF6: ("INC", "zpx", 2),
-    0xEE: ("INC", "abs", 3), 0xFE: ("INC", "abx", 3),
+    0xE6: ("INC", "zp", 2),
+    0xF6: ("INC", "zpx", 2),
+    0xEE: ("INC", "abs", 3),
+    0xFE: ("INC", "abx", 3),
     # JMP / JSR / RTS / RTI
-    0x4C: ("JMP", "abs", 3), 0x6C: ("JMP", "ind", 3),
+    0x4C: ("JMP", "abs", 3),
+    0x6C: ("JMP", "ind", 3),
     0x20: ("JSR", "abs", 3),
-    0x60: ("RTS", "imp", 1), 0x40: ("RTI", "imp", 1),
+    0x60: ("RTS", "imp", 1),
+    0x40: ("RTI", "imp", 1),
     # LDA
-    0xA9: ("LDA", "imm", 2), 0xA5: ("LDA", "zp", 2), 0xB5: ("LDA", "zpx", 2),
-    0xAD: ("LDA", "abs", 3), 0xBD: ("LDA", "abx", 3), 0xB9: ("LDA", "aby", 3),
-    0xA1: ("LDA", "izx", 2), 0xB1: ("LDA", "izy", 2),
+    0xA9: ("LDA", "imm", 2),
+    0xA5: ("LDA", "zp", 2),
+    0xB5: ("LDA", "zpx", 2),
+    0xAD: ("LDA", "abs", 3),
+    0xBD: ("LDA", "abx", 3),
+    0xB9: ("LDA", "aby", 3),
+    0xA1: ("LDA", "izx", 2),
+    0xB1: ("LDA", "izy", 2),
     # LDX
-    0xA2: ("LDX", "imm", 2), 0xA6: ("LDX", "zp", 2), 0xB6: ("LDX", "zpy", 2),
-    0xAE: ("LDX", "abs", 3), 0xBE: ("LDX", "aby", 3),
+    0xA2: ("LDX", "imm", 2),
+    0xA6: ("LDX", "zp", 2),
+    0xB6: ("LDX", "zpy", 2),
+    0xAE: ("LDX", "abs", 3),
+    0xBE: ("LDX", "aby", 3),
     # LDY
-    0xA0: ("LDY", "imm", 2), 0xA4: ("LDY", "zp", 2), 0xB4: ("LDY", "zpx", 2),
-    0xAC: ("LDY", "abs", 3), 0xBC: ("LDY", "abx", 3),
+    0xA0: ("LDY", "imm", 2),
+    0xA4: ("LDY", "zp", 2),
+    0xB4: ("LDY", "zpx", 2),
+    0xAC: ("LDY", "abs", 3),
+    0xBC: ("LDY", "abx", 3),
     # LSR
-    0x4A: ("LSR", "acc", 1), 0x46: ("LSR", "zp", 2), 0x56: ("LSR", "zpx", 2),
-    0x4E: ("LSR", "abs", 3), 0x5E: ("LSR", "abx", 3),
+    0x4A: ("LSR", "acc", 1),
+    0x46: ("LSR", "zp", 2),
+    0x56: ("LSR", "zpx", 2),
+    0x4E: ("LSR", "abs", 3),
+    0x5E: ("LSR", "abx", 3),
     # NOP
     0xEA: ("NOP", "imp", 1),
     # ORA
-    0x09: ("ORA", "imm", 2), 0x05: ("ORA", "zp", 2), 0x15: ("ORA", "zpx", 2),
-    0x0D: ("ORA", "abs", 3), 0x1D: ("ORA", "abx", 3), 0x19: ("ORA", "aby", 3),
-    0x01: ("ORA", "izx", 2), 0x11: ("ORA", "izy", 2),
+    0x09: ("ORA", "imm", 2),
+    0x05: ("ORA", "zp", 2),
+    0x15: ("ORA", "zpx", 2),
+    0x0D: ("ORA", "abs", 3),
+    0x1D: ("ORA", "abx", 3),
+    0x19: ("ORA", "aby", 3),
+    0x01: ("ORA", "izx", 2),
+    0x11: ("ORA", "izy", 2),
     # PHA/PLA/PHP/PLP
-    0x48: ("PHA", "imp", 1), 0x68: ("PLA", "imp", 1),
-    0x08: ("PHP", "imp", 1), 0x28: ("PLP", "imp", 1),
+    0x48: ("PHA", "imp", 1),
+    0x68: ("PLA", "imp", 1),
+    0x08: ("PHP", "imp", 1),
+    0x28: ("PLP", "imp", 1),
     # ROL/ROR
-    0x2A: ("ROL", "acc", 1), 0x26: ("ROL", "zp", 2), 0x36: ("ROL", "zpx", 2),
-    0x2E: ("ROL", "abs", 3), 0x3E: ("ROL", "abx", 3),
-    0x6A: ("ROR", "acc", 1), 0x66: ("ROR", "zp", 2), 0x76: ("ROR", "zpx", 2),
-    0x6E: ("ROR", "abs", 3), 0x7E: ("ROR", "abx", 3),
+    0x2A: ("ROL", "acc", 1),
+    0x26: ("ROL", "zp", 2),
+    0x36: ("ROL", "zpx", 2),
+    0x2E: ("ROL", "abs", 3),
+    0x3E: ("ROL", "abx", 3),
+    0x6A: ("ROR", "acc", 1),
+    0x66: ("ROR", "zp", 2),
+    0x76: ("ROR", "zpx", 2),
+    0x6E: ("ROR", "abs", 3),
+    0x7E: ("ROR", "abx", 3),
     # SBC
-    0xE9: ("SBC", "imm", 2), 0xE5: ("SBC", "zp", 2), 0xF5: ("SBC", "zpx", 2),
-    0xED: ("SBC", "abs", 3), 0xFD: ("SBC", "abx", 3), 0xF9: ("SBC", "aby", 3),
-    0xE1: ("SBC", "izx", 2), 0xF1: ("SBC", "izy", 2),
+    0xE9: ("SBC", "imm", 2),
+    0xE5: ("SBC", "zp", 2),
+    0xF5: ("SBC", "zpx", 2),
+    0xED: ("SBC", "abs", 3),
+    0xFD: ("SBC", "abx", 3),
+    0xF9: ("SBC", "aby", 3),
+    0xE1: ("SBC", "izx", 2),
+    0xF1: ("SBC", "izy", 2),
     # STA
-    0x85: ("STA", "zp", 2), 0x95: ("STA", "zpx", 2),
-    0x8D: ("STA", "abs", 3), 0x9D: ("STA", "abx", 3), 0x99: ("STA", "aby", 3),
-    0x81: ("STA", "izx", 2), 0x91: ("STA", "izy", 2),
+    0x85: ("STA", "zp", 2),
+    0x95: ("STA", "zpx", 2),
+    0x8D: ("STA", "abs", 3),
+    0x9D: ("STA", "abx", 3),
+    0x99: ("STA", "aby", 3),
+    0x81: ("STA", "izx", 2),
+    0x91: ("STA", "izy", 2),
     # STX/STY
-    0x86: ("STX", "zp", 2), 0x96: ("STX", "zpy", 2), 0x8E: ("STX", "abs", 3),
-    0x84: ("STY", "zp", 2), 0x94: ("STY", "zpx", 2), 0x8C: ("STY", "abs", 3),
+    0x86: ("STX", "zp", 2),
+    0x96: ("STX", "zpy", 2),
+    0x8E: ("STX", "abs", 3),
+    0x84: ("STY", "zp", 2),
+    0x94: ("STY", "zpx", 2),
+    0x8C: ("STY", "abs", 3),
     # transfers
-    0xAA: ("TAX", "imp", 1), 0xA8: ("TAY", "imp", 1),
-    0xBA: ("TSX", "imp", 1), 0x8A: ("TXA", "imp", 1),
-    0x9A: ("TXS", "imp", 1), 0x98: ("TYA", "imp", 1),
+    0xAA: ("TAX", "imp", 1),
+    0xA8: ("TAY", "imp", 1),
+    0xBA: ("TSX", "imp", 1),
+    0x8A: ("TXA", "imp", 1),
+    0x9A: ("TXS", "imp", 1),
+    0x98: ("TYA", "imp", 1),
     # INX/INY/DEX/DEY
-    0xE8: ("INX", "imp", 1), 0xC8: ("INY", "imp", 1),
-    0xCA: ("DEX", "imp", 1), 0x88: ("DEY", "imp", 1),
-    # Undocumented NMOS opcodes defMON uses (64tass needs `-i` to
-    # assemble these). Without them the host renders as `.byte` and its
+    0xE8: ("INX", "imp", 1),
+    0xC8: ("INY", "imp", 1),
+    0xCA: ("DEX", "imp", 1),
+    0x88: ("DEY", "imp", 1),
+    # Undocumented NMOS opcodes defMON uses (Kick Assembler assembles
+    # these natively). Without them the host renders as `.byte` and its
     # whole fall-through run is mis-classified as unreachable.
     #   LAX — load A and X together (count bytes, super-command args,
     #     pitch-LUT reads). Modes: (zp),Y / abs / #imm / zp / zp,Y /
@@ -151,28 +239,30 @@ OPS: dict[int, tuple[str, str, int]] = {
     0x4B: ("ALR", "imm", 2),
     0x6B: ("ARR", "imm", 2),
     0xCB: ("AXS", "imm", 2),
-    # ANC ($2B) and SBC ($EB) are DUPLICATE encodings: 64tass canonicalises
-    # `anc`->$0B and `sbc`->$E9, so these specific bytes can't round-trip
-    # through the mnemonic. They are kept in the table so classify follows
-    # their fall-through (fixing reachability), but the emitter renders
-    # them as `.byte` (see ROUND_TRIP_UNSAFE_OPCODES in emit) with the
-    # decoded instruction in the comment.
+    # ANC ($2B) and SBC ($EB) are DUPLICATE encodings of $0B/$E9. Kick
+    # Assembler distinguishes them with the dedicated `anc2`/`sbc2`
+    # mnemonics, so they round-trip byte-exact (see KICKASS_DUP_MNEMONICS).
     0x2B: ("ANC", "imm", 2),
     0xEB: ("SBC", "imm", 2),
 }
 
-# Opcodes whose byte 64tass will not reproduce from the mnemonic (it emits
-# the canonical duplicate instead). The emitter renders these as `.byte`
-# to preserve the byte-exact round-trip; they stay in OPS so classify
-# still treats them as instructions for reachability.
-ROUND_TRIP_UNSAFE_OPCODES = frozenset({0x2B, 0xEB})
+# Duplicate-encoding undocumented opcodes whose canonical mnemonic
+# (`anc`/`sbc`) assembles to the OTHER encoding ($0B/$E9). Kick Assembler
+# provides `anc2`/`sbc2` to reproduce these exact bytes; the emitter uses
+# this map to pick the right mnemonic for them.
+KICKASS_DUP_MNEMONICS = {0x2B: "anc2", 0xEB: "sbc2"}
+
 
 # Operand suffix per addressing mode.
-def fmt_operand(mode: str, p1: int, p2: int, pc: int, labels: dict[int, str]) -> tuple[str, int | None]:
+def fmt_operand(
+    mode: str, p1: int, p2: int, pc: int, labels: dict[int, str]
+) -> tuple[str, int | None]:
     """Returns (text, target_addr_or_None). target is set for abs/abx/aby/ind/rel
     so callers can build cross-references."""
+
     def lbl(addr: int) -> str:
         return labels.get(addr, f"${addr:04X}")
+
     if mode == "imp":
         return "", None
     if mode == "imm":
@@ -210,15 +300,15 @@ def fmt_operand(mode: str, p1: int, p2: int, pc: int, labels: dict[int, str]) ->
 
 
 def render_struct_offset(seg: dict, addr: int) -> str | None:
-    """Render an address inside a struct-typed data segment as a 64tass
-    expression. Two modes:
+    """Render an address inside a struct-typed data segment as an
+    assembler expression. Two modes:
 
     1. **Dotted-instance form** (preferred). When the segment carries
        an ``instances`` list of ``(name, addr)`` tuples — one entry per
        array element — the result is ``<instance>.<field>`` or
        ``<instance> + $<offset>`` when the field is unnamed. Backed by
        a ``.struct`` + per-instance ``.virtual`` / ``.dstruct`` emission
-       in defmon.s, so the dotted suffixes resolve at assemble time.
+       in defmon.asm, so the dotted suffixes resolve at assemble time.
 
     2. **Flat-equate form** (legacy). For segments without
        ``instances`` the result is the prior
@@ -284,21 +374,26 @@ def render_struct_offset(seg: dict, addr: int) -> str | None:
     return f"{seg['name']} + " + " + ".join(parts)
 
 
-def emit_64tass_instruction(mode: str, p1: int, p2: int, pc: int,
-                            labels: dict[int, str] | None = None,
-                            imm_subs: dict[int, str] | None = None,
-                            branch_operand_override: dict[int, str] | None = None,
-                            struct_segments: list[dict] | None = None,
-                            name_spans: list[tuple[int, int, str]] | None = None,
-                            anchor_spans: list[tuple[int, int, str]] | None = None) -> str:
-    """Format an instruction operand in 64tass syntax.
+def emit_instruction(
+    mode: str,
+    p1: int,
+    p2: int,
+    pc: int,
+    labels: dict[int, str] | None = None,
+    imm_subs: dict[int, str] | None = None,
+    branch_operand_override: dict[int, str] | None = None,
+    struct_segments: list[dict] | None = None,
+    name_spans: list[tuple[int, int, str]] | None = None,
+    anchor_spans: list[tuple[int, int, str]] | None = None,
+) -> str:
+    """Format a 6502 instruction operand.
 
-    64tass auto-picks ZP-mode encoding for operands that fit in a byte
-    and ABS encoding for everything else. So the `@b` / `@w` addressing-
-    mode forces are only needed in one specific case: an ABS-encoded
-    instruction whose operand happens to fall in the ZP range — without
-    `@w` 64tass would shrink it to a 2-byte ZP encoding and the
-    round-trip would break.
+    The operand syntax (``#$NN``, ``$NNNN``, ``($NN),y`` …) is identical
+    across assemblers; this returns just the operand text and the caller
+    supplies the mnemonic. defMON's image never encodes an ABS-mode
+    instruction whose operand falls in the zero page, so no explicit
+    addressing-mode width force is emitted — the round-trip check is the
+    authoritative guard if that ever changes.
 
     ``struct_segments`` — list of segment dicts (start/end_excl/name/
     struct) for data regions with a defined struct layout. When an
@@ -339,12 +434,21 @@ def emit_64tass_instruction(mode: str, p1: int, p2: int, pc: int,
 
     def _lookup_span(spans: list[tuple[int, int, str]], addr: int) -> str | None:
         import bisect
+
         idx = bisect.bisect_right([s[0] for s in spans], addr) - 1
         if idx < 0:
             return None
         start, end_excl, name = spans[idx]
         if not (start <= addr < end_excl):
             return None
+        # Kick Assembler is case-sensitive, so an anchor reference must use
+        # the exact spelling of the equate emitted at its base. When a
+        # label is defined there that differs only in case (e.g. the
+        # `screen_ram` equate vs the `SCREEN_RAM` anchor span), defer to
+        # the defined label so the reference resolves.
+        base = labels.get(start)
+        if base is not None and base.lower() == name.lower():
+            name = base
         offset = addr - start
         return name if offset == 0 else f"{name} + ${offset:02X}"
 
@@ -383,16 +487,13 @@ def emit_64tass_instruction(mode: str, p1: int, p2: int, pc: int,
         return f"({lbl_zp(p1)}),y"
     if mode == "abs":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)}"
+        return f"{lbl(addr)}"
     if mode == "abx":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)},x"
+        return f"{lbl(addr)},x"
     if mode == "aby":
         addr = p1 | (p2 << 8)
-        prefix = "@w " if addr < 0x100 else ""
-        return f"{prefix}{lbl(addr)},y"
+        return f"{lbl(addr)},y"
     if mode == "ind":
         addr = p1 | (p2 << 8)
         return f"({lbl(addr)})"
@@ -403,12 +504,19 @@ def emit_64tass_instruction(mode: str, p1: int, p2: int, pc: int,
         target = (pc + 2 + off) & 0xFFFF
         return lbl(target)
     if mode == "acc":
-        return "a"
+        # Kick Assembler uses the bare mnemonic for accumulator mode
+        # (`lsr`, not `lsr a` — the latter parses `a` as a symbol).
+        return ""
     return "?"
 
 
-def disassemble(mem: bytes, start: int, end: int, labels: dict[int, str] | None = None,
-                stop_on_rts: bool = False):
+def disassemble(
+    mem: bytes,
+    start: int,
+    end: int,
+    labels: dict[int, str] | None = None,
+    stop_on_rts: bool = False,
+):
     """Yield disassembly lines from [start, end)."""
     labels = labels or {}
     pc = start

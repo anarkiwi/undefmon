@@ -1,4 +1,4 @@
-"""Cross-check the auto-generated memory map in defmon.s against ground
+"""Cross-check the auto-generated memory map in defmon.asm against ground
 truth (the static image + Ghidra segments): each band's size and
 zero-fill share are re-derived from the image and asserted against the
 rendered map, so a wrong-offset attribution bug or an out-of-date map
@@ -13,14 +13,14 @@ from pathlib import Path
 from tools.re.emit_defmon_source import _fmt_map_size, LOAD_ADDR, END_ADDR_EXCL
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFMON_S = REPO_ROOT / "defmon.s"
+DEFMON_ASM = REPO_ROOT / "defmon.asm"
 STATIC_BIN = REPO_ROOT / "artefacts" / "defmon-static.bin"
 SEGMENTS = REPO_ROOT / "artefacts" / "ghidra" / "segments.json"
 
 IMAGE_END = 0x10000
 
 GLYPH_KIND = {"█": "code", "▒": "data", "░": "hw", "·": "sys"}
-ROW_RE = re.compile(r"^;\s+\$([0-9A-Fa-f]{4}).*?(\d[\d.]*)\s*([KB])\s\s+(.*\S)\s*$")
+ROW_RE = re.compile(r"^//\s+\$([0-9A-Fa-f]{4}).*?(\d[\d.]*)\s*([KB])\s\s+(.*\S)\s*$")
 ZERO_RE = re.compile(r"\(~(\d+)% zero\)")
 
 
@@ -56,7 +56,7 @@ class TestMemoryMap(unittest.TestCase):
         """Segments nest/overlap (arrangers inside sidtab_data), so a data
         band's extent is its own segment's clamped [start, end_excl) — as
         _emit_memory_map renders it — not the gap to the next row."""
-        cls.rows = _parse_main_map(DEFMON_S.read_text())
+        cls.rows = _parse_main_map(DEFMON_ASM.read_text())
         cls.mem = STATIC_BIN.read_bytes() if STATIC_BIN.is_file() else None
         cls.segs = {}
         for s in json.loads(SEGMENTS.read_text())["segments"]:

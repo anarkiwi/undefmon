@@ -1,26 +1,28 @@
-"""Emit a 64tass-assemblable .s file for the defMON static image.
+"""Emit a Kick Assembler source file for the defMON static image.
 
-Pass-1 strategy:
+Strategy:
   - Code-start oracle = PCs from `trace/entrypoints.json` (every PC the CPU
     actually executed across the 9-tune × 14-phase sweep).
   - From each code start, decode one instruction; mark its operand bytes
     as consumed.
-  - Emit disassembled instruction lines in 64tass syntax (`@b`/`@w`
-    forcing to keep the assembler from picking a different addressing
-    mode than the original bytes).
+  - Emit disassembled instruction lines. defMON's undocumented opcodes
+    (LAX/SAX/AXS/ALR/ARR and the duplicate-encoding ANC $2B / SBC $EB,
+    emitted as `anc2`/`sbc2`) all assemble natively in Kick Assembler.
   - For any byte not an instruction start and not consumed as an operand,
     emit `.byte`.
-  - All addressing-mode forcing is eager; the round-trip check
-    (`tools/re/roundtrip_check.py`) is the authoritative pass/fail.
+  - The round-trip check (`tools/re/roundtrip_check.py`) — assemble with
+    Kick Assembler and compare bytes — is the authoritative pass/fail.
 
-Pass-2 will layer Ghidra labels + data-segment hints on top without
-changing emitted bytes.
+The instruction lines are built assembler-neutrally (6502 operand syntax
+is identical across assemblers); a thin output filter (`_KickAssWriter`)
+renders the directive lines (`.block`, equates, origin, `.enc`, `.rept`)
+in Kick Assembler syntax and rewrites `;` comments to `//`.
 
 Usage:
     python3 -m tools.re.emit_defmon_source \\
         --bin artefacts/defmon-static.bin \\
         --entrypoints trace/entrypoints.json \\
-        --out tools/re/defmon.s
+        --out defmon.asm
 """
 
 from __future__ import annotations
@@ -34,10 +36,151 @@ from collections.abc import Callable
 from pathlib import Path
 
 from tools.re.dasm6502 import (
+    KICKASS_DUP_MNEMONICS,
     OPS,
-    ROUND_TRIP_UNSAFE_OPCODES,
-    emit_64tass_instruction,
+    emit_instruction,
 )
+
+# ── Kick Assembler output filter ────────────────────────────────────────
+# The emitter builds source lines with assembler-neutral 6502 operand
+# syntax plus a handful of directive forms carried over from the
+# disassembly pipeline (`name .block` / `.bend`, `name = $XXXX` equates,
+# `* = $XXXX` origin, `.enc "screen"`, `.rept N` / `.endrept`, and `;`
+# comments). This filter rewrites each such line into Kick Assembler
+# syntax as it is written, so the body of the emitter stays single-sourced
+# and readable. Struct overlays and undocumented opcodes are emitted in
+# Kick Assembler form directly (see `_emit_struct_instance` and the
+# `anc2`/`sbc2` handling in the instruction loop).
+
+_ENC_TO_KICKASS = {
+    "screen": "screencode_upper",
+    "none": "ascii",
+}
+
+_RE_ORIGIN = re.compile(r"^(\s*)\*\s*=\s*(\$[0-9A-Fa-f]+)\s*$")
+_RE_BLOCK = re.compile(r"^(\s*)([A-Za-z_]\w*)\s+\.block\s*$")
+_RE_BEND = re.compile(r"^(\s*)\.bend\s*$")
+_RE_REPT = re.compile(r"^(\s*)\.rept\s+(\S+)\s*$")
+_RE_ENDREPT = re.compile(r"^(\s*)\.endrept\s*$")
+_RE_ENC = re.compile(r'^(\s*)\.enc\s+"([^"]*)"\s*$')
+_RE_FILL_NOVALUE = re.compile(r"^(\s*)\.fill\s+([^,]+?)\s*$")
+_RE_EQUATE = re.compile(r"^([A-Za-z_]\w*)(\s+)=(\s+)(\S.*)$")
+
+
+def _split_comment(line: str) -> tuple[str, str | None]:
+    """Split a line into (code, comment) at the first `;` outside a
+    double-quoted string. The returned comment excludes the `;`."""
+    in_str = False
+    for i, ch in enumerate(line):
+        if ch == '"':
+            in_str = not in_str
+        elif ch == ";" and not in_str:
+            return line[:i], line[i + 1 :]
+    return line, None
+
+
+def _to_kickass_code(code: str) -> str:
+    """Translate the code portion (comment already stripped) of one line
+    from the pipeline's directive forms into Kick Assembler syntax."""
+    if not code.strip():
+        return code
+    m = _RE_ORIGIN.match(code)
+    if m:
+        return f"{m.group(1)}*={m.group(2)}"
+    m = _RE_BLOCK.match(code)
+    if m:
+        return f"{m.group(1)}{m.group(2)}: {{"
+    m = _RE_BEND.match(code)
+    if m:
+        return f"{m.group(1)}}}"
+    m = _RE_REPT.match(code)
+    if m:
+        return f"{m.group(1)}.for (var i=0; i<{m.group(2)}; i++) {{"
+    m = _RE_ENDREPT.match(code)
+    if m:
+        return f"{m.group(1)}}}"
+    m = _RE_ENC.match(code)
+    if m:
+        name = _ENC_TO_KICKASS.get(m.group(2), m.group(2))
+        return f'{m.group(1)}.encoding "{name}"'
+    m = _RE_FILL_NOVALUE.match(code)
+    if m:
+        return f"{m.group(1)}.fill {m.group(2)}, 0"
+    m = _RE_EQUATE.match(code)
+    if m:
+        return f".label {m.group(1)}{m.group(2)}={m.group(3)}{m.group(4)}"
+    return code
+
+
+def _to_kickass_line(line: str) -> str:
+    """Translate one full source line (without its trailing newline)."""
+    code, comment = _split_comment(line)
+    code = _to_kickass_code(code)
+    if comment is None:
+        return code
+    return f"{code}//{comment}"
+
+
+class _KickAssWriter:
+    """File-like wrapper that rewrites each line written through it into
+    Kick Assembler syntax (see `_to_kickass_line`). Buffers partial writes
+    until a newline so lines assembled from multiple writes translate as a
+    unit."""
+
+    def __init__(self, fh):
+        self._fh = fh
+        self._buf = ""
+
+    def write(self, s: str) -> int:
+        self._buf += s
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._fh.write(_to_kickass_line(line) + "\n")
+        return len(s)
+
+    def flush(self) -> None:
+        if self._buf:
+            self._fh.write(_to_kickass_line(self._buf))
+            self._buf = ""
+        self._fh.flush()
+
+
+def _emit_struct_instance(fh, element: dict, inst_name: str, inst_addr: int) -> None:
+    """Emit one struct overlay as a Kick Assembler virtual segment with a
+    brace-scoped label block: `*=$addr virtual` opens a no-output segment
+    so the PC advances (the bytes are produced by the SMC-operand
+    instruction stream elsewhere) and the brace scope exposes both the
+    base label (`inst_name`) and the dotted field labels
+    (`inst_name.field`). The byte layout mirrors the field/gap/tail
+    sequence so each field resolves at `inst_addr + offset`."""
+    esize = element.get("size") or 0
+    fields = sorted(element.get("fields", []), key=lambda f: f.get("offset", 0))
+    # Emitted in final Kick Assembler form (the output filter's origin
+    # rule does not match the trailing `virtual` keyword).
+    fh.write(f"        *=${inst_addr:04X} virtual\n")
+    fh.write(f"{inst_name} .block\n")
+    cur = 0
+    for f in fields:
+        fname = f.get("name")
+        foff = f.get("offset")
+        fsize = f.get("size", 1)
+        if fname is None or foff is None:
+            continue
+        if foff > cur:
+            fh.write(f"            .fill {foff - cur}, 0\n")
+        comment = f.get("comment", "")
+        suffix = f"    ; +${foff:02X}"
+        if comment:
+            suffix += f"  {comment}"
+        fh.write(f"{fname + ':':<20} .byte 0{suffix}\n")
+        cur = foff + fsize
+    if cur < esize:
+        fh.write(
+            f"            .fill {esize - cur}, 0"
+            f"    ; +${cur:02X}..${esize - 1:02X} (unnamed tail)\n"
+        )
+    fh.write(".bend\n")
+
 
 # ── Branch condition rendering ──────────────────────────────────────────
 # Whether a given instruction is a conditional branch — used both at
@@ -980,7 +1123,7 @@ def _format_notes_with_enums(notes: str) -> list[str]:
 
 
 # Fields in each annotation that are loaded by the TOML parser but
-# DELIBERATELY never emitted to defmon.s. The defmon.s output is meant
+# DELIBERATELY never emitted to defmon.asm. The defmon.asm output is meant
 # to read as a maintained piece of code; anything related to the
 # reverse-engineering process (probe evidence, prior versions of an
 # annotation, classification snapshots, mining provenance) belongs in
@@ -1548,7 +1691,7 @@ EQUATE_LABELS = {
     0x161F: "interval_lut_hi_a",
     0x1620: "interval_lut_hi_b",
     0x1638: "note_pitch_lut_hi",
-    # ── High-frequency unlabeled variable slots (≥4 refs in defmon.s).
+    # ── High-frequency unlabeled variable slots (≥4 refs in defmon.asm).
     # Editor / runtime state.
     0x08AB: "editor_busy_wait_counter",  # self-mod immediate at editor_frame_barrier+1
     0x08DA: "editor_other_delta",  # per-frame delta accumulator, parallel to editor_row_delta/_col_delta
@@ -2631,7 +2774,7 @@ def _emit_memory_map(
 
 
 def _emit_architecture_overview(fh) -> None:
-    """Emit a comment-block "theory of operation" header into `defmon.s`.
+    """Emit a comment-block "theory of operation" header into `defmon.asm`.
 
     Ties together the major structural sections of the binary so a reader
     can navigate the body top-to-bottom without consulting an external
@@ -3009,7 +3152,7 @@ def emit_source(
 
     ``labels`` is an {addr: name} dict used both for line prefixes at
     code-start positions and for operand resolution inside
-    ``emit_64tass_instruction``.
+    ``emit_instruction``.
 
     ``segments`` is an optional list of Ghidra data-segment dicts
     (see ``load_ghidra_segments``). When the emitter crosses a
@@ -3198,7 +3341,7 @@ def emit_source(
     # Struct-typed segments (subset of `segments` that carry a Ghidra-
     # exported struct layout) plus VIRTUAL_STRUCT_SEGMENTS (struct
     # layouts that overlay code regions and so aren't Ghidra-applied).
-    # Threaded into emit_64tass_instruction so ABS/ABX/ABY/IND operands
+    # Threaded into emit_instruction so ABS/ABX/ABY/IND operands
     # that fall inside such a segment but have no explicit label render
     # as `<seg> + <expr>` instead of bare hex. Hand-curated labels in
     # `labels` always take precedence. Virtual segments are kept out of
@@ -3208,7 +3351,7 @@ def emit_source(
     struct_segments.extend(VIRTUAL_STRUCT_SEGMENTS)
 
     # Tile of (start, end_excl, name) triples derived from the annotation
-    # catalogue. Last-resort fallback in `emit_64tass_instruction` for
+    # catalogue. Last-resort fallback in `emit_instruction` for
     # ABS operands whose target lands inside an annotated span but not on
     # the exact start byte — renders `name + $offset` so SMC-operand-byte
     # writes (`sta $11A2`) surface as `sta v0_gate_n_branch + $01`.
@@ -3255,13 +3398,18 @@ def emit_source(
                 f"fix the annotation"
             )
 
-    fh.write("; defMON static image — annotated 64tass source.\n")
+    fh.write("; defMON static image — annotated Kick Assembler source.\n")
     fh.write(";\n")
     fh.write(
         f"; Layout: ${base:04X}-${end_excl - 1:04X} "
         f"({end_excl - base} bytes), byte-identical to the\n"
         "; uncompressed PRG body.\n"
     )
+    fh.write(";\n")
+    # `_6502` selects the NMOS 6502 with the undocumented opcodes defMON
+    # uses (LAX/SAX/AXS/ALR/ARR/ANC/SBC). Assemble with Kick Assembler:
+    #   java -jar KickAss.jar defmon.asm -o defmon.prg
+    fh.write(".cpu _6502\n")
     fh.write(";\n")
     _emit_architecture_overview(fh)
     fh.write("\n")
@@ -3467,7 +3615,7 @@ def emit_source(
     # segment labels (pat_base_lo @ $1A00), ZP state vars (kbd_modifiers
     # @ $0E41, cbm_drive_num @ $00BA), and out-of-range references
     # (e.g. $D000 VIC-II SFRs if Ghidra has them) all need an equate
-    # so 64tass can resolve operand references like `sta sid_chip_view`.
+    # so the assembler can resolve operand references like `sta sid_chip_view`.
     #
     # Addresses claimed by .virtual/.dstruct emission (struct instances)
     # are filtered out — declaring them as both an equate and a .dstruct
@@ -3571,27 +3719,30 @@ def emit_source(
     instance_segments = [s for s in struct_segments if s.get("instances")]
     flat_segments = [s for s in struct_segments if not s.get("instances")]
 
-    # ── Native 64tass struct definitions + .virtual / .dstruct instance
-    # overlays. Used for segments whose member bytes are SMC operand
-    # bytes interleaved with code (no real .byte emission possible) —
-    # .virtual discards compilation so PC advances + dotted field labels
-    # resolve, but no bytes are emitted. Operand resolver renders as
-    # `<instance>.<field>` (see render_struct_offset).
+    # ── Virtual struct overlays. Used for segments whose member bytes are
+    # SMC operand bytes interleaved with code (no real .byte emission
+    # possible). Each instance is a Kick Assembler `*=$addr virtual`
+    # segment wrapping a brace-scoped label block: the PC advances + the
+    # base and dotted field labels (`voice_record_v0`,
+    # `voice_record_v0.freq_lo`) resolve, but no bytes are emitted — the
+    # player-IRQ instruction stream below produces them as the operand
+    # bytes of self-modifying loads/stores. Operand resolver renders refs
+    # as `<instance>.<field>` (see render_struct_offset).
     if instance_segments:
         bar = "; " + "─" * 70 + "\n"
         fh.write(bar)
         fh.write("; VIRTUAL STRUCT INSTANCES — typed overlays for SMC-operand bands.\n")
-        fh.write(";   .struct definition + per-instance .virtual / .dstruct blocks.\n")
-        fh.write(";   .virtual discards compilation so the bytes at these addresses\n")
-        fh.write(";   are NOT emitted here — the player-IRQ instruction stream below\n")
+        fh.write(";   Per-instance `*=$addr virtual` + brace-scoped label blocks.\n")
+        fh.write(";   The virtual segment discards output so the bytes at these\n")
+        fh.write(";   addresses are NOT emitted here — the player-IRQ instruction\n")
         fh.write(
-            ";   produces them as the operand bytes of self-modifying loads/stores.\n"
+            ";   stream below produces them as the operand bytes of self-modifying\n"
         )
+        fh.write(";   loads/stores.\n")
         fh.write(
             ";   The dotted field labels (e.g. `voice_record_v0.freq_lo`) resolve\n"
         )
-        fh.write(";   at assemble time, replacing the prior\n")
-        fh.write(";   `<seg> + N*Element_size + Element_<field>` flat-equate form.\n")
+        fh.write(";   at assemble time.\n")
         fh.write(bar)
         emitted_struct_defs: set[str] = set()
         for seg in instance_segments:
@@ -3612,8 +3763,7 @@ def emit_source(
                 # Auto-pick cell width and column count. Wider cells fit
                 # longer field names without truncation; lower column
                 # counts keep the diagram terminal-friendly for small
-                # structs. Truncation is acceptable since the per-field
-                # equate block below carries the full name unabbreviated.
+                # structs.
                 max_field_w = max(
                     (len(f.get("name", "")) for f in element.get("fields", [])),
                     default=4,
@@ -3625,45 +3775,10 @@ def emit_source(
                 ):
                     fh.write(f"; {line}\n" if line else ";\n")
                 fh.write("\n")
-                fh.write(f"{ename} .struct\n")
-                fields = sorted(
-                    element.get("fields", []), key=lambda f: f.get("offset", 0)
-                )
-                cur = 0
-                for f in fields:
-                    fname = f.get("name")
-                    foff = f.get("offset")
-                    fsize = f.get("size", 1)
-                    if fname is None or foff is None:
-                        continue
-                    if foff > cur:
-                        gap = foff - cur
-                        if gap == 1:
-                            fh.write(f"            .byte ?\n")
-                        else:
-                            fh.write(f"            .fill {gap}\n")
-                    comment = f.get("comment", "")
-                    suffix = f"    ; +${foff:02X}"
-                    if comment:
-                        suffix += f"  {comment}"
-                    fh.write(f"{fname:<20} .byte ?{suffix}\n")
-                    cur = foff + fsize
-                if cur < esize:
-                    fh.write(
-                        f"            .fill {esize - cur}"
-                        f"    ; +${cur:02X}..${esize - 1:02X}"
-                        f" (unnamed tail)\n"
-                    )
-                fh.write(f"            .endstruct\n")
-                fh.write(
-                    f".cerror size({ename}) != ${esize:02X}," f' "{ename} size drift"\n'
-                )
                 emitted_struct_defs.add(ename)
             fh.write(f"\n;   {seg['name']}: {seg.get('comment', '')}\n")
             for inst_name, inst_addr in seg["instances"]:
-                fh.write(f"            .virtual ${inst_addr:04X}\n")
-                fh.write(f"{inst_name:<24} .dstruct {ename}\n")
-                fh.write(f"            .endvirtual\n")
+                _emit_struct_instance(fh, element, inst_name, inst_addr)
         fh.write("\n")
 
     if flat_segments:
@@ -3755,7 +3870,7 @@ def emit_source(
         # Dedup enum-constant equates across regions: when two state
         # variables share a value_names enum (e.g. ui_mode at $7167 and
         # ui_mode_range_bound at $7169 both name $01=UI_MODE_SEQED), we
-        # emit each constant exactly once. 64tass rejects duplicate
+        # emit each constant exactly once. Kick Assembler rejects duplicate
         # definitions even when the right-hand value is identical.
         emitted_enum_constants: set[str] = set()
         for addr, name in equate_labels:
@@ -3842,7 +3957,7 @@ def emit_source(
     BYTES_PER_LINE = 16
     pending_data: list[int] = []
     pending_start = base
-    # 64tass's `.enc` is sticky — track the currently-active encoding
+    # the active text encoding is sticky — track it so we only emit
     # so we only emit a switch directive when it actually changes.
     current_enc: str = "none"
     # Sliding window of recently emitted instruction PCs, used to find
@@ -3890,7 +4005,7 @@ def emit_source(
     # local code is about a different variable than the inbound branch
     # tested.
     #
-    # 64tass treats bare ``_XXXX`` as a label local to the previous
+    # the assembler treats bare ``_XXXX`` as a label local to the previous
     # global label, so cross-scope branches would fail to resolve;
     # block-relative names are global-form by construction.
     block_pcs_sorted, block_name_by_pc = _build_block_pc_index(annotations, instr_at)
@@ -3949,7 +4064,7 @@ def emit_source(
     # name prefix stripped when redundant. Inside `kbd_scan .block`, the
     # label `kbd_scan_inner_continue` becomes `inner_continue`; the
     # synthetic anchor `kbd_scan_9` becomes `l_9` (the `l_` keeps it a
-    # valid 64tass identifier — bare leading-underscore + digit forms
+    # valid assembler identifier — bare leading-underscore + digit forms
     # like `_9` are LOCAL labels scoped to the most recent non-`_`
     # label, which breaks once any HW-alias label appears mid-block).
     # From outside, both are referenced as `kbd_scan.inner_continue` /
@@ -4212,7 +4327,7 @@ def emit_source(
         _, mode, n = instr_at[pc]
         p1 = mem[pc + 1] if n >= 2 else 0
         p2 = mem[pc + 2] if n >= 3 else 0
-        return emit_64tass_instruction(
+        return emit_instruction(
             mode,
             p1,
             p2,
@@ -4529,23 +4644,27 @@ def emit_source(
             bytes_text = ", ".join(f"${b:02X}" for b in chunk)
             fh.write(f"        .byte {bytes_text}    ; ${addr:04X}\n")
 
-        def _fill_literal(chunk: bytes) -> str:
-            """Return a 64tass fill literal for ``chunk``. 64tass reads
-            the byte width from the hex-digit count of the literal:
-            ``$XX`` is a 1-byte fill, ``$XXYY`` a 2-byte LE pattern,
-            ``$XXYYZZWW`` a 4-byte LE pattern, and so on. So pick the
-            narrowest periodic sub-pattern the chunk supports."""
-            for period in (1, 2, 4, 8):
-                if all(chunk[i] == chunk[i % period] for i in range(len(chunk))):
-                    sub = chunk[:period]
-                    v = 0
-                    for j, b in enumerate(sub):
-                        v |= b << (j * 8)
-                    return f"${v:0{period * 2}X}"
-            v = 0
-            for j, b in enumerate(chunk):
-                v |= b << (j * 8)
-            return f"${v:0{len(chunk) * 2}X}"
+        def _fill_value(chunk: bytes) -> str:
+            """Return a Kick Assembler `.fill` value expression that
+            reproduces ``chunk`` as a periodic pattern. A single repeated
+            byte is just `$XX`; a multi-byte little-endian period N>1
+            becomes an index expression over the fill's loop variable `i`
+            — `mod(i,N)==0 ? $b0 : (mod(i,N)==1 ? $b1 : (...))` — so the
+            row's byte cycle is preserved exactly. The fill starts on a
+            16-byte boundary and every period (1/2/4/8) divides 16, so the
+            pattern stays in phase across the elided rows."""
+            period = len(chunk)
+            for p in (1, 2, 4, 8):
+                if all(chunk[i] == chunk[i % p] for i in range(len(chunk))):
+                    period = p
+                    break
+            sub = chunk[:period]
+            if period == 1:
+                return f"${sub[0]:02X}"
+            expr = f"${sub[-1]:02X}"
+            for k in range(period - 2, -1, -1):
+                expr = f"mod(i,{period})=={k} ? ${sub[k]:02X} : ({expr})"
+            return expr
 
         def _emit_byte_segment(seg_addr: int, sub: bytes) -> None:
             """Emit ``sub`` as 16-byte .byte chunks, applying the
@@ -4572,10 +4691,10 @@ def emit_source(
                         last_addr, last_chunk = chunks[run_end - 1]
                         elided_lo = addr + BYTES_PER_LINE
                         elided_hi = last_addr - BYTES_PER_LINE
-                        literal = _fill_literal(chunk)
+                        value = _fill_value(chunk)
                         fh.write(
                             f"        .fill {middle * BYTES_PER_LINE}, "
-                            f"{literal}    "
+                            f"{value}    "
                             f"; ${elided_lo:04X}-${elided_hi:04X} "
                             f"({middle} identical rows)\n"
                         )
@@ -4769,7 +4888,7 @@ def emit_source(
                             fact, labels, block_pcs_sorted, block_name_by_pc, step_info
                         )
                     )
-            operand = emit_64tass_instruction(
+            operand = emit_instruction(
                 mode,
                 p1,
                 p2,
@@ -4800,21 +4919,11 @@ def emit_source(
                     lbl_name = labels.get(pc)
                 lbl_prefix = f"{lbl_name}:" if lbl_name else ""
             # Duplicate-encoding undocumented opcodes ($2B ANC, $EB SBC)
-            # can't round-trip through the mnemonic (64tass canonicalises
-            # to $0B/$E9), so render them as `.byte` for byte-exactness
-            # with the decoded instruction in the tail comment. They are
-            # still classified as instructions, so the fall-through this
-            # produces keeps the downstream run reachable.
-            unsafe_instr_note = None
-            if mem[pc] in ROUND_TRIP_UNSAFE_OPCODES:
-                byte_list = ", ".join(f"${mem[pc + i]:02X}" for i in range(n))
-                line = f"{lbl_prefix:<26} .byte {byte_list}"
-                unsafe_instr_note = (
-                    f"; {mnem_lower} {operand.strip()} "
-                    f"(undocumented opcode ${mem[pc]:02X})"
-                )
-            else:
-                line = f"{lbl_prefix:<26} {mnem_lower:<4} {operand:<28}"
+            # share a byte with the canonical $0B/$E9; Kick Assembler
+            # distinguishes them with the `anc2`/`sbc2` mnemonics, so they
+            # assemble byte-exact like any other instruction.
+            emit_mnem = KICKASS_DUP_MNEMONICS.get(mem[pc], mnem_lower)
+            line = f"{lbl_prefix:<26} {emit_mnem:<4} {operand:<28}"
 
             # Branch-condition comment is now driven by the cmp_facts
             # table (precomputed CFG dataflow, see tools/re/cmp_facts.py).
@@ -4871,8 +4980,6 @@ def emit_source(
                     )
 
             tail_parts: list[str] = []
-            if unsafe_instr_note:
-                tail_parts.append(unsafe_instr_note)
             if cond_text:
                 tail_parts.append(cond_text)
             if hw_text:
@@ -4935,13 +5042,14 @@ def emit_source(
 
 
 # ── Screen-code / PETSCII text encoding ────────────────────────────────
-# Names match 64tass's built-in `.enc` modes: ``none`` is pass-through
+# Internal encoding names (mapped to Kick Assembler by the output
+# filter): ``none`` is pass-through
 # (PETSCII / ASCII for our uppercase strings) and ``screen`` maps ASCII
 # uppercase letters to C64 screen codes.
 
 
 def _encode_text(s: str, encoding: str) -> bytes:
-    """Encode ``s`` per the 64tass encoding name. Returns bytes; raises
+    """Encode ``s`` per the internal encoding name. Returns bytes; raises
     ``ValueError`` for characters the encoding can't represent."""
     if encoding == "none":
         return s.encode("ascii")
@@ -5052,7 +5160,7 @@ def load_value_names(annotations: dict[int, dict]) -> dict[int, dict[int, str]]:
             if not (isinstance(name, str) and _IDENT_RE.match(name)):
                 raise SystemExit(
                     f"value_names[${addr:04X}][{vt}]: {name!r} is not a "
-                    f"valid 64tass identifier"
+                    f"valid assembler identifier"
                 )
             if not (0 <= v <= 0xFF):
                 continue
@@ -5419,7 +5527,7 @@ def load_ghidra_labels(symbols_path: Path) -> dict[int, str]:
 
     Returns {addr: name}. Includes data-segment names (e.g.
     pat_base_lo @ $1A00) and state-var names (e.g. cbm_drive_num @
-    $00BA) so operand resolution in emit_64tass_instruction renders
+    $00BA) so operand resolution in emit_instruction renders
     them by name everywhere they're referenced.
 
     Skips DEFAULT (Ghidra-auto DAT_xxxx / FUN_xxxx) and IMPORTED
@@ -5488,7 +5596,7 @@ def load_imm_overrides(annotations_path: Path) -> dict[int, str]:
     Schema::
 
         [imm."$11C8"]
-        name = "DECODER_THRESHOLD"   # symbolic name; valid 64tass ident
+        name = "DECODER_THRESHOLD"   # symbolic name; valid assembler ident
 
     The emitter looks up the static byte at `pc + 1` (the imm operand
     of the instruction starting at `pc`) and emits a NAMED CONSTANTS
@@ -5515,7 +5623,7 @@ def load_imm_overrides(annotations_path: Path) -> dict[int, str]:
             continue
         if not _IDENT_RE.match(name):
             raise SystemExit(
-                f"imm[${addr:04X}].name: {name!r} is not a valid " f"64tass identifier"
+                f"imm[${addr:04X}].name: {name!r} is not a valid " f"assembler identifier"
             )
         out[addr] = name
     return out
@@ -5826,7 +5934,7 @@ def main() -> None:
         default="trace/entrypoints.json",
         help="JSON with executed PCs (code-start oracle)",
     )
-    ap.add_argument("--out", default="defmon.s", help="output 64tass source")
+    ap.add_argument("--out", default="defmon.asm", help="output Kick Assembler source")
     ap.add_argument("--start", type=lambda s: int(s, 0), default=LOAD_ADDR)
     ap.add_argument(
         "--end",
@@ -5959,7 +6067,7 @@ def main() -> None:
 
     # Per-function register-clobber facts — computed inline (like the
     # callgraph) rather than read from build/reg_effects.json, so the
-    # emitter is self-contained and the committed defmon.s reproduces
+    # emitter is self-contained and the committed defmon.asm reproduces
     # without a separate build step. Drives the derived `registers
     # clobbered:` line for certain functions with no hand annotation.
     reg_effects: dict[int, dict] = {}
@@ -6034,13 +6142,14 @@ def main() -> None:
             if cmp_facts
             else {}
         )
+        ka_fh = _KickAssWriter(fh)
         ic, dc = emit_source(
             mem,
             args.start,
             args.end,
             instr_at,
             consumed,
-            fh,
+            ka_fh,
             labels=labels,
             segments=segments,
             annotations=annotations,
@@ -6060,6 +6169,7 @@ def main() -> None:
             register_inputs=register_inputs_map,
             reg_effects=reg_effects,
         )
+        ka_fh.flush()
 
     total = args.end - args.start
     print(f"wrote {out_path}  ({total} bytes  ${args.start:04X}-${args.end - 1:04X})")

@@ -5,6 +5,10 @@ __pycache__/
 # Intermediate build artefact: build/cmp_facts.json.
 build/
 
+# Kick Assembler symbol file, emitted next to the source by `make
+# roundtrip`.
+*.sym
+
 # Produced by `make fetch-static` (delegates to `docker build`).
 # Not committed; fetched from upstream at build time.
 artefacts/defmon-static.bin

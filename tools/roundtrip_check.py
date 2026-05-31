@@ -1,9 +1,11 @@
-"""Byte-compare 64tass output against the static image.
+"""Byte-compare Kick Assembler output against the static image.
 
-Pass `--reassembled` for the bytes 64tass emitted from defmon.s, and
-`--static` for the unpacked reference. The two are compared over the
-defmon load range ($0800 .. $E787). Exit 0 on a 0-byte diff, exit 1 on
-any mismatch with a sample of divergences printed.
+Pass `--reassembled` for the PRG Kick Assembler emitted from defmon.asm,
+and `--static` for the unpacked reference. Kick Assembler writes a PRG
+with a 2-byte load-address header, which is stripped before comparison
+(use `--no-prg-header` for a raw headerless image). The two are compared
+over the defmon load range ($0800 .. $E787). Exit 0 on a 0-byte diff,
+exit 1 on any mismatch with a sample of divergences printed.
 """
 
 from __future__ import annotations
@@ -26,7 +28,13 @@ def main() -> int:
     ap.add_argument(
         "--reassembled",
         required=True,
-        help="64tass --nostart output to compare against --static",
+        help="Kick Assembler PRG to compare against --static",
+    )
+    ap.add_argument(
+        "--no-prg-header",
+        action="store_true",
+        help="treat --reassembled as a raw headerless image (default: "
+        "strip the 2-byte PRG load-address header)",
     )
     ap.add_argument("--start", type=lambda s: int(s, 0), default=LOAD_ADDR)
     ap.add_argument("--end", type=lambda s: int(s, 0), default=END_ADDR_EXCL)
@@ -34,6 +42,20 @@ def main() -> int:
 
     expected = Path(args.static).read_bytes()[args.start : args.end]
     rebuilt = Path(args.reassembled).read_bytes()
+
+    if not args.no_prg_header:
+        if len(rebuilt) < 2:
+            print("FAIL: reassembled file too short for a PRG header", file=sys.stderr)
+            return 1
+        load_addr = rebuilt[0] | (rebuilt[1] << 8)
+        if load_addr != args.start:
+            print(
+                f"FAIL: PRG load address ${load_addr:04X} != "
+                f"expected ${args.start:04X}",
+                file=sys.stderr,
+            )
+            return 1
+        rebuilt = rebuilt[2:]
 
     if len(rebuilt) != len(expected):
         print(

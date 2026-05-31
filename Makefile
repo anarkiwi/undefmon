@@ -1,11 +1,11 @@
-# Minimal build: regenerate defmon.s from the static image.
+# Minimal build: regenerate defmon.asm from the static image.
 #
-#   make                — regenerate defmon.s (default)
-#   make defmon.s       — same
+#   make                — regenerate defmon.asm (default)
+#   make defmon.asm     — same
 #   make fetch-static   — reproduce artefacts/defmon-static.bin from the
 #                         upstream .d64 (uses Docker; see Dockerfile)
-#   make roundtrip      — assemble defmon.s with 64tass and verify the
-#                         bytes match defmon-static.bin
+#   make roundtrip      — assemble defmon.asm with Kick Assembler and
+#                         verify the bytes match defmon-static.bin
 #   make ghidra-export  — reproduce artefacts/ghidra/*.json from the repo's
 #                         RE inputs by running Ghidra in Docker. Writes the
 #                         5 JSON files into build/ghidra-fresh/ for diffing
@@ -27,19 +27,21 @@
 #                         coverage, hex/byte substitution, data-region
 #                         coverage, callgraph callers cross-check.
 #   make verify         — full reproducibility check: fetch-static, build
-#                         defmon.s, round-trip, lint, ghidra-export, then
+#                         defmon.asm, round-trip, lint, ghidra-export, then
 #                         diff every regenerated artefact against the
 #                         committed copy. Skips headlessvice probes (sweep /
 #                         probe-disasm) since they need a special image.
-#   make clean          — remove build/ and defmon.s
+#   make clean          — remove build/ and defmon.asm
 #   make distclean      — also remove fetched artefacts under artefacts/
 #
 # Required external tools:
-#   docker   — for `make fetch-static` + `make ghidra-export`
-#              (exomizer and Ghidra live only inside their images)
-#   64tass   — for `make roundtrip` (`apt-get install 64tass`)
+#   docker          — for `make fetch-static` + `make ghidra-export`
+#                     (exomizer and Ghidra live only inside their images)
+#   java + KickAss  — for `make roundtrip`. Point KICKASS_JAR at your
+#                     KickAss.jar (default /usr/local/kickass/KickAss.jar)
+#                     and JAVA at the launcher (default `java`).
 
-OUT          := defmon.s
+OUT          := defmon.asm
 STATIC_BIN   := artefacts/defmon-static.bin
 ANNOTATIONS  := tools/re/annotations.toml
 ENTRYPOINTS  := trace/entrypoints.json
@@ -50,11 +52,12 @@ SHELL        := /bin/bash
 
 PYTHON       ?= python3
 DOCKER       ?= docker
-TASS         ?= 64tass
+JAVA         ?= java
+KICKASS_JAR  ?= /usr/local/kickass/KickAss.jar
 
 GHIDRA_FRESH := $(BUILD_DIR)/ghidra-fresh
 
-.PHONY: all defmon.s fetch-static roundtrip ghidra-export sweep \
+.PHONY: all defmon.asm fetch-static roundtrip ghidra-export sweep \
         probe-list probe-disasm lint callgraph unreachable-triage \
         reg-effects verify clean distclean
 
@@ -65,11 +68,12 @@ $(STATIC_BIN): Dockerfile tools/fetch_static.py tools/d64.py
 
 fetch-static: $(STATIC_BIN)
 
-# defmon.s is regenerated whenever the static image, annotations, the
-# emitter, or the comparison-site facts change. cmp_facts.json is the
-# only intermediate build artefact and lives under build/.
+# defmon.asm is regenerated whenever the static image, annotations, the
+# emitter, the disassembler, or the comparison-site facts change.
+# cmp_facts.json is the only intermediate build artefact and lives under
+# build/.
 $(OUT): $(STATIC_BIN) $(ANNOTATIONS) \
-        tools/re/reg_effects.py \
+        tools/re/reg_effects.py tools/re/dasm6502.py \
         tools/re/emit_defmon_source.py $(BUILD_DIR)/cmp_facts.json
 	$(PYTHON) -m tools.re.emit_defmon_source
 
@@ -81,14 +85,16 @@ $(BUILD_DIR)/cmp_facts.json: $(STATIC_BIN) $(ANNOTATIONS) $(ENTRYPOINTS) \
 $(BUILD_DIR):
 	mkdir -p $@
 
-# Assemble defmon.s with 64tass and verify the resulting bytes match
-# the unpacked static image at the original load address. This is the
-# correctness gate the emitter's `make defmon.s` output is judged on.
-roundtrip: $(OUT) $(STATIC_BIN)
-	$(TASS) -i -b --nostart -o $(BUILD_DIR)/defmon-reassembled.bin $(OUT)
+# Assemble defmon.asm with Kick Assembler and verify the resulting bytes
+# match the unpacked static image at the original load address. This is
+# the correctness gate the emitter's `make defmon.asm` output is judged
+# on. Kick Assembler writes a PRG (2-byte load-address header), which
+# roundtrip_check strips before comparing.
+roundtrip: $(OUT) $(STATIC_BIN) | $(BUILD_DIR)
+	$(JAVA) -jar $(KICKASS_JAR) $(OUT) -o $(BUILD_DIR)/defmon-reassembled.prg
 	$(PYTHON) -m tools.roundtrip_check \
 	    --static $(STATIC_BIN) \
-	    --reassembled $(BUILD_DIR)/defmon-reassembled.bin
+	    --reassembled $(BUILD_DIR)/defmon-reassembled.prg
 
 # Run Ghidra in Docker to reproduce artefacts/ghidra/*.json. The build
 # is heavy (~5-10 min cold; cached fast); the output lives under
@@ -158,15 +164,15 @@ lint: $(BUILD_DIR)/cmp_facts.json $(BUILD_DIR)/callgraph.json
 	$(PYTHON) -m tools.re.callgraph_check
 
 # Full reproducibility check from inputs. Asserts that the committed
-# defmon.s, ghidra/*.json, and trace/*.json are all reproducible from
+# defmon.asm, ghidra/*.json, and trace/*.json are all reproducible from
 # annotations.toml + entrypoints.json + the upstream .d64 (fetched via
 # Docker). Does NOT exercise the headlessvice-dependent probes (sweep,
 # probe-disasm) — those need a special docker image and run for too
 # long to gate the build.
 verify: $(STATIC_BIN) | $(BUILD_DIR)
-	@git show HEAD:defmon.s > $(BUILD_DIR)/defmon.s.committed
+	@git show HEAD:$(OUT) > $(BUILD_DIR)/defmon.asm.committed
 	$(MAKE) $(OUT)
-	@diff -q $(OUT) $(BUILD_DIR)/defmon.s.committed
+	@diff -q $(OUT) $(BUILD_DIR)/defmon.asm.committed
 	$(MAKE) roundtrip
 	$(MAKE) lint
 	$(MAKE) ghidra-export
