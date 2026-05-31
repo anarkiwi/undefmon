@@ -19327,6 +19327,24 @@
       "is_primary": true
     },
     {
+      "addr": "$D784",
+      "name": "configurable_emitter_advance_hook",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
+      "addr": "$D78F",
+      "name": "LAB_d78f",
+      "source": "DEFAULT",
+      "is_primary": true
+    },
+    {
+      "addr": "$D790",
+      "name": "configurable_emitter_noop_tail",
+      "source": "USER_DEFINED",
+      "is_primary": true
+    },
+    {
       "addr": "$D791",
       "name": "FUN_d791",
       "source": "DEFAULT",

@@ -1400,8 +1400,6 @@ configurable_emitter_post_write_hook_writeonly = $D772
 selfmod_emitter_target_lo = $D77E
 selfmod_emitter_target_hi = $D77F
 load_decoder_noop_tail_return = $D783
-;   notes: Reached by 0 direct callers (fall-through-only) from the configurable_emitter_advance_hook fragment.
-configurable_emitter_advance_hook = $D784
 psid_export_template     = $D7F8
 ;   notes: Copied to the output file's leading 124 bytes and patched with the tune-specific song count, init/play addresses, and metadata.
 COLOR_RAM                = $D800
@@ -19819,6 +19817,8 @@ configurable_emitter_post_write_hook_advance .block
 ; Self-modifying byte emitter.
 ;
 ;   callers:             19 code sites: $D390, $D39B, $D3A7, $D3B3, $D569, $D575, $D581, $D58D, +11 more
+;   inputs:              A
+;   registers clobbered: none (preserves A/X/Y)
 ;
 ;   Two-instruction self-modifying emitter: a write into the slot patched
 ;   by configurable_emitter_target_setup, then a jump into the post-write
@@ -19832,14 +19832,34 @@ configurable_emitter_post_write_hook_advance .block
 ;   on cleared bits).
 self_modifying_byte_emitter .block
                            sta  VEC_IRQ_HI    ; $D77D
-; ──── SMC-patched JMP (targets uncatalogued) ────
+; ──── SMC-patched JMP (2 catalogued targets) ────
 ;   Patched at: $D769, $D76E
-;   SMC-JMP. Operand bytes patched at $D769/$D7BE (STA-sourced from the
-;   surrounding setup chain). The JMP redirects execution to a
-;   runtime-computed target — emit_setup chooses where to resume after the
-;   configurable emitter writes a row.
+;   SMC-JMP selecting the configurable emitter's post-write hook. Two
+;   arms patch the operand with immediates: $D767/$D769/$D76E (advance
+;   hook -> $D784) and $D772/$D774/$D779 (write-only/noop -> $D790). The
+;   target set is therefore statically fixed.
+;   Targets:
+;     $D784  configurable_emitter_advance_hook  [advance ($D767 arm)]
+;     $D790  configurable_emitter_noop_tail    [noop ($D772 arm)]
                            jmp  VEC_IRQ_HI    ; $D780
-        .byte $60, $EE, $5A, $D7, $EE, $7E, $D7, $D0, $03, $EE, $7F, $D7, $60, $60    ; $D783
+        .byte $60    ; $D783
+.bend
+
+; ──────────────────────────────────────────────────────────────────────
+; $D784  configurable_emitter_advance_hook
+; ──────────────────────────────────────────────────────────────────────
+; Configurable-emitter advance hook.
+;
+;   registers clobbered: none (preserves A/X/Y)
+;
+;   increment configurable_emitter_target_smc (counter); increment self_modifying_byte_emitter; if hi-byte wrap then increment self_modifying_byte_emitter; return. Bumps the patched-immediate write operand at self_modifying_byte_emitter by one.
+configurable_emitter_advance_hook .block
+                           inc  configurable_emitter_target_smc    ; $D784
+                           inc  selfmod_emitter_target_lo    ; $D787
+                           bne  l_1    ; $D78A  (selfmod_emitter_target_lo + 1) was non-zero?
+                           inc  selfmod_emitter_target_hi    ; $D78C
+l_1:                       rts    ; $D78F
+configurable_emitter_noop_tail: rts    ; $D790
 .bend
 
 ; ──────────────────────────────────────────────────────────────────────

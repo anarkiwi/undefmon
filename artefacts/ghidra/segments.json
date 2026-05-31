@@ -161,7 +161,7 @@
       "end_excl": "$E000",
       "name": "ram_under_io",
       "element_size": 1,
-      "defined_units": 2162,
+      "defined_units": 2149,
       "comment": "RAM under I/O: defMON runs with $01=$35 to access this RAM region; static image preserves the boot-time bytes"
     }
   ]
