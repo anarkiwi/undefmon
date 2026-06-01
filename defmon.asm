@@ -752,7 +752,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //   apparent (from data): $7583 in disk_confirm_prompt_template
 .label kbd_scancode_lut         = $0F90
 //   notes:
-//     Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The trailing bytes at splash_status_template_data are a separate data table — see that region's role.
+//     Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The LUT fills the whole 64-entry table to its last byte (scancode 63). A zero pad then runs up to splash_build_date_string, the splash build-date string (printed separately, not part of this LUT).
 //
 //     Decoded key map by scancode (Y), keyed by the C64 keymatrix row/col:
 //
@@ -780,7 +780,11 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //      60       | row 7 col 3   | $32                    | SPACE
 //      62       | row 7 col 1   | $1F                    | LEFTARROW
 //      63       | row 7 col 0   | $31                    | RUN/STOP
-.label splash_status_template_data = $0FA2
+.label splash_build_date_string = $0FF2
+//   notes:
+//     Printed on the splash by print_zstring (string index A=$08): the splash painter loads the pointer to this string into X/Y with A=$08 and calls print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. The 13 bytes are raw screen codes for the digits ('0'..'9' = $30..$39), i.e. the literal text "2020100822014".
+//
+//     The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string; kbd_page_band_end follows it. This build-date string is the only display data in the band.
 .label kbd_page_band_end        = $0FFF
 
 // ── PLAYER IRQ — SUB-FRAME + MAIN-TICK + PITCH LUT ($1000-$17FF) ───────
@@ -20661,7 +20665,7 @@ l_11:                      sta  kbd_scan.l_7,x    // $D99B
 //   Patched at: $95B4
 //   LDA writer-source inconclusive (register-sourced or chained — curate me)
 l_12:                      lda  sidtab_dispatch_lut6,x    // $D9A4
-                           sta  splash_status_template_data + $1E,x    // $D9A7
+                           sta  kbd_scancode_lut + $30,x    // $D9A7
                            cmp  #$08    // $D9AA
                            bne  l_13    // $D9AC  sidtab_dispatch_lut6,X was not $08?
                            lda  #$61    // $D9AE

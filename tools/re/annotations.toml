@@ -702,7 +702,7 @@ Sequence:
   - A←$00 / call border_set_a (set border colour to black).
   - write VIC_BORDER / write VIC_BG0 (force border + bg to black).
   - call vic_sprite_init.
-  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print zstring #8 = 'defMON' splash at splash_status_template_data).
+  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print zstring #8 = 'defMON' splash build-date string at splash_build_date_string).
   - increment editor_frame_barrier (kick the busy-wait counter) → fall into editor_frame_barrier.
 
 Distinct from main_loop entry — this is the FIRST-TIME editor entry from the autoboot/LOAD path. Repeated re-entries (e.g. after disk-menu exit) go through main_loop directly.
@@ -3374,10 +3374,15 @@ name     = "kbd_dead_trampoline"
 role     = "Dead-code 1-byte trampoline `shift ps_sweep_sub_path left` before kbd_scan_samemod_branch."
 evidence = "tools/re/xref.py --target 0x0F0D → 1 apparent caller (screen-text data); harness/probe_function_attribution.py 2026-05-15 never_hit."
 
-[region."$0FA2"]
-name     = "splash_status_template_data"
-role     = "Data region — splash-screen / status-bar template bytes ($06 $03 $36 $04 $12 $35 $16 $15 $08 $02 $38...)."
-evidence = "tools/re/xref.py --target 0x0FA2 → 0 real callers; harness/probe_function_attribution.py 2026-05-15 never_hit."
+[region."$0FF2"]
+name     = "splash_build_date_string"
+role     = "Splash status-line build-date / version string in screen codes — 'defMON' splash stamp reading '20201008' (the 8-digit release date) then '22014'."
+notes    = """
+Printed on the splash by print_zstring (string index A=$08): the splash painter loads the pointer to this string into X/Y with A=$08 and calls print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. The 13 bytes are raw screen codes for the digits ('0'..'9' = $30..$39), i.e. the literal text "2020100822014".
+
+The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string; kbd_page_band_end follows it. This build-date string is the only display data in the band.
+"""
+evidence = "Bytes at splash_build_date_string in artefacts/defmon-static.bin decode as screen codes for '2020100822014'; the print_zstring #8 caller loads X=$F2 / Y=$0F (pointer $0FF2) / A=$08. Corrects a prior mis-split: kbd_scancode_lut scancode 0-63 decode confirms $0FA2-$0FCF is the LUT tail (Y=18→'F', Y=57→'Q', Y=63→'1', matching the C64 keymatrix), not the 'splash_status_template_data' it was attributed to."
 
 [region."$0A0A"]
 name               = "pre_quiesce_sprite_data"
@@ -5361,9 +5366,9 @@ notes = "Written by kbd_scan each frame from CIA1 matrix scan; read by modifier_
 
 [region."$0F90"]
 name     = "kbd_scancode_lut"
-role     = "scancode→screen-code LUT (64 bytes, kbd_scancode_lut-splash_status_template_data)."
+role     = "scancode→screen-code LUT (64 bytes, kbd_scancode_lut through scancode 63)."
 notes    = """
-Read by kbd_scan inner walker at kbd_scan_inner_continue: `read kbd_scancode_lut,Y` with Y = scancode position (0..63). Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). Walker order: kbd_scan scans rows 7 down to 0; within each row, column 0 first via ror. So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The trailing bytes at splash_status_template_data are a separate data table — see that region's role.
+Read by kbd_scan inner walker at kbd_scan_inner_continue: `read kbd_scancode_lut,Y` with Y = scancode position (0..63). Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). Walker order: kbd_scan scans rows 7 down to 0; within each row, column 0 first via ror. So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The LUT fills the whole 64-entry table to its last byte (scancode 63). A zero pad then runs up to splash_build_date_string, the splash build-date string (printed separately, not part of this LUT).
 
 Decoded key map by scancode (Y), keyed by the C64 keymatrix row/col:
 
