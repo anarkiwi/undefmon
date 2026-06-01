@@ -2720,7 +2720,7 @@ evidence            = "trace/disasm_evidence.json §4 (3 actions visit $7460-$74
 name                = "dir_read_open"
 role                = "Open + read 1541 directory."
 callers             = "disk_clear_loop_smc indirect via dir_paint_reset_cell / call-chain rooted at save_ui_entry (disk-menu open) and the `D` reload commands."
-inputs              = "disk_dir_bit_imm_operand = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)"
+inputs              = "disk_dir_selector_char = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)"
 outputs             = "Directory text painted into screen RAM via dir_paint_blocks_glyph/dir_paint_glyph cursor; dir_line_counter counts lines emitted (caps at $18 = 24 lines)."
 registers_clobbered = "A, X, Y"
 notes               = """
@@ -2728,14 +2728,14 @@ Sequence:
   - call disk_menu_screen_init (screen init).
   - KERNAL setup:
       SETLFS lfn=1 / drive=$BA / sa=0.
-      SETNAM len=1 / name=disk_dir_bit_imm_operand (current drive's directory selector char).
+      SETNAM len=1 / name=disk_dir_selector_char (current drive's directory selector char).
       OPEN, CHKIN(1).
       bcs → dir_read_close_tail on error.
   - Skip 4 BAM header bytes via 4× call KERNAL_CHRIN.
   - call kbd_scan (key-poll for user abort) / read kbd_decoded_key / compare =KEY_STOP (CLR) → dir_read_close_tail abort.
   - Falls through to the directory-entry loop at dir_entry_inner_loop.
 
-The byte at disk_dir_bit_imm_operand (single-char directory selector) defaults to '$'
+The byte at disk_dir_selector_char (single-char directory selector) defaults to '$'
 ($24 = ASCII dollar sign). defMON's disk-menu lets the user override
 this with a custom pattern (e.g. '$0' for all files including
 deletions, or '$:NAME' for a name match) by typing into the menu's
@@ -3647,6 +3647,7 @@ kbd_probe_excluded = true
 [region."$7167"]
 name     = "ui_mode"
 role     = "main-loop dispatch byte read at mode_dispatch."
+notes    = "Boot default $01 = UI_MODE_SEQED — defMON powers on in the sequence editor. mode_dispatch reads this byte each main-loop pass to pick the active editor handler."
 evidence = "harness/defmon.py: current_mode() reads here; harness/probe_handlers.py exercises each dispatcher."
 
 [region."$7167".values]
@@ -3664,6 +3665,7 @@ evidence = "harness/defmon.py: current_mode() reads here; harness/probe_handlers
 [region."$7168"]
 name = "ui_mode_prev"
 role = "saved when entering sidTAB (sidTAB_handler) for restore on LEFTARROW exit."
+notes = "Boot default UI_MODE_SEQED mirrors the ui_mode power-on value. sidTAB_handler copies ui_mode here on entry and restores it on the LEFTARROW exit."
 
 [region."$7171"]
 name     = "sid_chip_view"
@@ -3698,6 +3700,7 @@ role = "low byte of SID#2 mapping ($00..$E0 stride $20)."
 [region."$7165"]
 name = "sid2_base_hi"
 role = "high byte of the SID#2 register base address; the user-key cycle steps it through the four supported mappings."
+notes = "Boot default $D5; with sid2_base_lo = $00 it selects the default SID#2 register base. The user-key cycle steps the lo/hi pair through the four supported stereo-SID bases."
 
 [region."$7165".values]
 "$D4" = "SID#2 mapped at $D4xx (alias of SID#1, useful for some 2SID layouts)"
@@ -3986,6 +3989,7 @@ role = "Two $00 padding bytes after the SID#2 pitch-sweep helper's rts, before s
 [region."$E13C"]
 name = "seqlist_helper_pad"
 role = "Padding byte(s) after the preceding helper's rts, before seqLIST_helper."
+notes = "The two $FF bytes here are filler between the preceding helper's rts and seqLIST_helper; alignment padding, never read or executed."
 
 [region."$CCEE"]
 name     = "sid2_player_init_body"
@@ -4839,6 +4843,7 @@ seqlist_col_cursor is the seqLIST col-cursor; seqlist_row_counter is the related
 [region."$729F"]
 name = "seqED_cursor_band_end"
 role = "End of the seqED cursor band."
+notes = "Last byte of the seqED cursor-state cluster that begins at seqED_cursor_band; an initialized editor cursor slot (boot default $10), part of the pre-initialized UI-state band shipped in the image."
 
 [region."$729A"]
 name     = "key_pitch_lut"
@@ -5495,8 +5500,10 @@ notes              = "The $A9 is the opcode of the screen-fill `A←$00` at scre
 kbd_probe_excluded = true
 
 [region."$745E"]
-name               = "disk_dir_bit_imm_operand"
-role               = "Self-mod operand byte ($24), 1 byte — operand of a bit-immediate inside the disk-menu directory-fetch body around disk_menu_screen_init call screen_fill_body."
+name               = "disk_dir_selector_char"
+role               = "Disk directory-listing filename character — $24 = '$', the standard C64 directory wildcard — written to the SETNAM name byte by the disk-menu directory fetch."
+notes              = "Defaults to '$' ($24) and is selectable per drive; passed to SETNAM with length 1 as the directory-listing filename, so the menu loads the drive's '$' directory."
+evidence           = "Byte $745E = $24 = PETSCII '$'; the disk-menu directory-fetch body sets SETNAM len=1 name=this byte. Renamed from a prior label that mischaracterised it as a BIT-instruction operand."
 kbd_probe_excluded = true
 
 [region."$757F"]

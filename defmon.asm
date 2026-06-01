@@ -1027,6 +1027,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //     $D5 = SID#2 mapped at $D5xx
 //     $DE = SID#2 mapped at $DExx
 //     $DF = SID#2 mapped at $DFxx
+//   notes: Boot default $D5; with sid2_base_lo = $00 it selects the default SID#2 register base. The user-key cycle steps the lo/hi pair through the four supported stereo-SID bases.
 .label super_cmd_staged         = $7166
 .label ui_mode                  = $7167
 .label UI_MODE_SEQED            = $01
@@ -1155,6 +1156,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 .label seqlist_cursor_aux3      = $7299
 .label key_pitch_lut            = $729A
 .label seqED_cursor_band_end    = $729F
+//   notes: Last byte of the seqED cursor-state cluster that begins at seqED_cursor_band; an initialized editor cursor slot (boot default $10), part of the pre-initialized UI-state band shipped in the image.
 //   code edges:          none
 //   apparent (from data): $728E in cursor_state_728d
 .label cursor_writer_state_end  = $72A0
@@ -1172,7 +1174,8 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 // ── DISK MENU + SAVE PATH + STATUS PAINTERS ($7400-$87FF) ──────────────
 .label disk_menu_ui_band_start  = $7400
 .label disk_paint_lda_imm_smc   = $740F
-.label disk_dir_bit_imm_operand = $745E
+.label disk_dir_selector_char   = $745E
+//   notes: Defaults to '$' ($24) and is selectable per drive; passed to SETNAM with length 1 as the directory-listing filename, so the menu loads the drive's '$' directory.
 .label dir_line_counter         = $745F
 .label disk_clear_loop_smc      = $747B
 //   notes: disk_clear_loop_smc = low, disk_clear_loop_smc = high. Initialised to $15/$D8 → psid_export_template (color-RAM row 0 col 21); each iteration bumps by $28 to walk 25 rows.
@@ -5867,7 +5870,7 @@ l_3:                       dey    // $748E
 // Open + read 1541 directory.
 //
 //   callers:             disk_clear_loop_smc indirect via dir_paint_reset_cell / call-chain rooted at save_ui_entry (disk-menu open) and the `D` reload commands.
-//   inputs:              disk_dir_bit_imm_operand = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)
+//   inputs:              disk_dir_selector_char = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)
 //   outputs:             Directory text painted into screen RAM via dir_paint_blocks_glyph/dir_paint_glyph cursor; dir_line_counter counts lines emitted (caps at $18 = 24 lines).
 //   registers clobbered: A, X, Y
 //
@@ -5875,14 +5878,14 @@ l_3:                       dey    // $748E
 //     - call disk_menu_screen_init (screen init).
 //     - KERNAL setup:
 //         SETLFS lfn=1 / drive=$BA / sa=0.
-//         SETNAM len=1 / name=disk_dir_bit_imm_operand (current drive's directory selector char).
+//         SETNAM len=1 / name=disk_dir_selector_char (current drive's directory selector char).
 //         OPEN, CHKIN(1).
 //         bcs → dir_read_close_tail on error.
 //     - Skip 4 BAM header bytes via 4× call KERNAL_CHRIN.
 //     - call kbd_scan (key-poll for user abort) / read kbd_decoded_key / compare =KEY_STOP (CLR) → dir_read_close_tail abort.
 //     - Falls through to the directory-entry loop at dir_entry_inner_loop.
 //
-//   The byte at disk_dir_bit_imm_operand (single-char directory selector) defaults to '$'
+//   The byte at disk_dir_selector_char (single-char directory selector) defaults to '$'
 //   ($24 = ASCII dollar sign). defMON's disk-menu lets the user override
 //   this with a custom pattern (e.g. '$0' for all files including
 //   deletions, or '$:NAME' for a name match) by typing into the menu's
