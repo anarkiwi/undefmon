@@ -782,10 +782,11 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //      63       | row 7 col 0   | $31                    | RUN/STOP
 .label splash_build_date_string = $0FF2
 //   notes:
-//     Printed on the splash by print_zstring (string index A=$08): the splash painter loads the pointer to this string into X/Y with A=$08 and calls print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. The 13 bytes are raw screen codes for the digits ('0'..'9' = $30..$39), i.e. the literal text "2020100822014".
+//     The run spans splash_build_date_string through its 14th byte at kbd_page_band_end. post_load_startup paints the splash by loading the pointer to this string into X/Y with A=$08 (the character count) and calling print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. With A=$08 only the first 8 digits — the date '20201008' — are printed; the 6-digit time tail '220143' (the last digit lands at kbd_page_band_end) is stored in the image but not displayed.
 //
-//     The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string; kbd_page_band_end follows it. This build-date string is the only display data in the band.
+//     The bytes are raw screen codes for the digits ('0'..'9' = $30..$39). The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string.
 .label kbd_page_band_end        = $0FFF
+//   notes: The byte here ($33 = screen-code '3') is the 14th and last digit of the build-stamp string at splash_build_date_string ('20201008220143' = date + time); it is stored but not displayed (post_load_startup prints only the 8-digit date).
 
 // ── PLAYER IRQ — SUB-FRAME + MAIN-TICK + PITCH LUT ($1000-$17FF) ───────
 .label v0_slide_acc             = $101A
@@ -8072,14 +8073,14 @@ statusline_print_hex_byte: {
 // ──────────────────────────────────────────────────────────────────────
 // $83E2  statusline_print_zstring
 // ──────────────────────────────────────────────────────────────────────
-// self-mods statusline_print_zstring with X/Y (string pointer), then X←$00 / read VEC_IRQ_HI,X / call print_char_to_statusline / increment X / compare X=$FF / bne — prints up to 255 chars from (X,Y) to status line.
+// Prints A screen-code characters from (X,Y) to the status line.
 //
 //   callers:             7 code sites: $08A4, $81BF, $8371, $C615, $C63A, $C643, $C67C
-//   inputs:              X = string addr lo, Y = string addr hi. A clobbered (saved at statusline_print_zstring).
+//   inputs:              X = string addr lo, Y = string addr hi, A = character count (written into the loop terminator; consumed, not preserved).
 //   outputs:             X, Y
 //   registers clobbered: A, X, Y
 //
-//   Self-modifies the LDA VEC_IRQ_HI,X operand bytes in place. 4 callers.
+//   Self-mods the read-source operand (from X/Y) and the loop-terminator count operand (from A, at statusline_print_zstring+$13), then loops X←$00 / read string[X] / call print_char_to_statusline / increment X / stop when X reaches A. The static-image terminator operand is the $FF default, overwritten per call. 4 callers.
 statusline_print_zstring: {
                            sta  statusline_print_zstring + $13    // $83E2
                            stx  statusline_print_zstring + $0C    // $83E5

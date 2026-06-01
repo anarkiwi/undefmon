@@ -702,7 +702,7 @@ Sequence:
   - A←$00 / call border_set_a (set border colour to black).
   - write VIC_BORDER / write VIC_BG0 (force border + bg to black).
   - call vic_sprite_init.
-  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print zstring #8 = 'defMON' splash build-date string at splash_build_date_string).
+  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print the 8-digit date '20201008' from splash_build_date_string to the status line; A=$08 is the character count, so the trailing build-time digits are not shown).
   - increment editor_frame_barrier (kick the busy-wait counter) → fall into editor_frame_barrier.
 
 Distinct from main_loop entry — this is the FIRST-TIME editor entry from the autoboot/LOAD path. Repeated re-entries (e.g. after disk-menu exit) go through main_loop directly.
@@ -2987,9 +2987,9 @@ evidence = "tools/re/xref.py --target 0x83D5 → 2 callers."
 
 [function."$83E2"]
 name     = "print_zstring"
-role     = "self-mods statusline_print_zstring with X/Y (string pointer), then X←$00 / read VEC_IRQ_HI,X / call print_char_to_statusline / increment X / compare X=$FF / bne — prints up to 255 chars from (X,Y) to status line."
-inputs   = "X = string addr lo, Y = string addr hi. A clobbered (saved at statusline_print_zstring)."
-notes    = "Self-modifies the LDA VEC_IRQ_HI,X operand bytes in place. 4 callers."
+role     = "Prints A screen-code characters from (X,Y) to the status line."
+inputs   = "X = string addr lo, Y = string addr hi, A = character count (written into the loop terminator; consumed, not preserved)."
+notes    = "Self-mods the read-source operand (from X/Y) and the loop-terminator count operand (from A, at statusline_print_zstring+$13), then loops X←$00 / read string[X] / call print_char_to_statusline / increment X / stop when X reaches A. The static-image terminator operand is the $FF default, overwritten per call. 4 callers."
 evidence = "tools/re/xref.py --target 0x83E2 → 4 callers."
 
 [function."$838C"]
@@ -3376,13 +3376,13 @@ evidence = "tools/re/xref.py --target 0x0F0D → 1 apparent caller (screen-text 
 
 [region."$0FF2"]
 name     = "splash_build_date_string"
-role     = "Splash status-line build-date / version string in screen codes — 'defMON' splash stamp reading '20201008' (the 8-digit release date) then '22014'."
+role     = "Splash build-date / version stamp: 14 screen-code digits '20201008220143' = build date 20201008 (YYYYMMDD) + build time 220143 (HHMMSS)."
 notes    = """
-Printed on the splash by print_zstring (string index A=$08): the splash painter loads the pointer to this string into X/Y with A=$08 and calls print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. The 13 bytes are raw screen codes for the digits ('0'..'9' = $30..$39), i.e. the literal text "2020100822014".
+The run spans splash_build_date_string through its 14th byte at kbd_page_band_end. post_load_startup paints the splash by loading the pointer to this string into X/Y with A=$08 (the character count) and calling print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. With A=$08 only the first 8 digits — the date '20201008' — are printed; the 6-digit time tail '220143' (the last digit lands at kbd_page_band_end) is stored in the image but not displayed.
 
-The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string; kbd_page_band_end follows it. This build-date string is the only display data in the band.
+The bytes are raw screen codes for the digits ('0'..'9' = $30..$39). The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string.
 """
-evidence = "Bytes at splash_build_date_string in artefacts/defmon-static.bin decode as screen codes for '2020100822014'; the print_zstring #8 caller loads X=$F2 / Y=$0F (pointer $0FF2) / A=$08. Corrects a prior mis-split: kbd_scancode_lut scancode 0-63 decode confirms $0FA2-$0FCF is the LUT tail (Y=18→'F', Y=57→'Q', Y=63→'1', matching the C64 keymatrix), not the 'splash_status_template_data' it was attributed to."
+evidence = "Bytes at splash_build_date_string in artefacts/defmon-static.bin decode as screen codes for '20201008220143' ($0FF2-$0FFF, 14 bytes). post_load_startup loads X=$F2 / Y=$0F (pointer $0FF2) / A=$08; print_zstring at $83E2 self-mods its CPX terminator with A (= char count), so 8 chars print. Corrects a prior mis-split: kbd_scancode_lut scancode 0-63 decode confirms $0FA2-$0FCF is the LUT tail (Y=18→'F', Y=57→'Q', Y=63→'1', matching the C64 keymatrix), not the 'splash_status_template_data' it was attributed to."
 
 [region."$0A0A"]
 name               = "pre_quiesce_sprite_data"
@@ -4737,6 +4737,7 @@ notes = "Holds the 8-byte matrix mirror (kbd_matrix_mirror..kbd_matrix_mirror_en
 [region."$0FFF"]
 name = "kbd_page_band_end"
 role = "End of the keyboard-input page band; just below the player API stubs at player_init/player_play/player_sound_update."
+notes = "The byte here ($33 = screen-code '3') is the 14th and last digit of the build-stamp string at splash_build_date_string ('20201008220143' = date + time); it is stored but not displayed (post_load_startup prints only the 8-digit date). The address also serves as the never-executed sentinel target of the jsr_with_ram_helper self-modifying JSR (see jsr_with_ram_helper)."
 
 [region."$1825"]
 name     = "load_decoder_dest_floor_below"
