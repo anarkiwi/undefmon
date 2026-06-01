@@ -752,7 +752,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //   apparent (from data): $7583 in disk_confirm_prompt_template
 .label kbd_scancode_lut         = $0F90
 //   notes:
-//     Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The trailing bytes at splash_status_template_data are a separate data table — see that region's role.
+//     Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The LUT fills the whole 64-entry table to its last byte (scancode 63). A zero pad then runs up to splash_build_date_string, the splash build-date string (printed separately, not part of this LUT).
 //
 //     Decoded key map by scancode (Y), keyed by the C64 keymatrix row/col:
 //
@@ -780,8 +780,13 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //      60       | row 7 col 3   | $32                    | SPACE
 //      62       | row 7 col 1   | $1F                    | LEFTARROW
 //      63       | row 7 col 0   | $31                    | RUN/STOP
-.label splash_status_template_data = $0FA2
+.label splash_build_date_string = $0FF2
+//   notes:
+//     The run spans splash_build_date_string through its 14th byte at kbd_page_band_end. post_load_startup paints the splash by loading the pointer to this string into X/Y with A=$08 (the character count) and calling print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. With A=$08 only the first 8 digits — the date '20201008' — are printed; the 6-digit time tail '220143' (the last digit lands at kbd_page_band_end) is stored in the image but not displayed.
+//
+//     The bytes are raw screen codes for the digits ('0'..'9' = $30..$39). The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string.
 .label kbd_page_band_end        = $0FFF
+//   notes: The byte here ($33 = screen-code '3') is the 14th and last digit of the build-stamp string at splash_build_date_string ('20201008220143' = date + time); it is stored but not displayed (post_load_startup prints only the 8-digit date).
 
 // ── PLAYER IRQ — SUB-FRAME + MAIN-TICK + PITCH LUT ($1000-$17FF) ───────
 .label v0_slide_acc             = $101A
@@ -1022,6 +1027,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 //     $D5 = SID#2 mapped at $D5xx
 //     $DE = SID#2 mapped at $DExx
 //     $DF = SID#2 mapped at $DFxx
+//   notes: Boot default $D5; with sid2_base_lo = $00 it selects the default SID#2 register base. The user-key cycle steps the lo/hi pair through the four supported stereo-SID bases.
 .label super_cmd_staged         = $7166
 .label ui_mode                  = $7167
 .label UI_MODE_SEQED            = $01
@@ -1150,6 +1156,7 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 .label seqlist_cursor_aux3      = $7299
 .label key_pitch_lut            = $729A
 .label seqED_cursor_band_end    = $729F
+//   notes: Last byte of the seqED cursor-state cluster that begins at seqED_cursor_band; an initialized editor cursor slot (boot default $10), part of the pre-initialized UI-state band shipped in the image.
 //   code edges:          none
 //   apparent (from data): $728E in cursor_state_728d
 .label cursor_writer_state_end  = $72A0
@@ -1167,7 +1174,8 @@ freq_hi:             .byte 0    // +$0F  FREQ hi immediate operand
 // ── DISK MENU + SAVE PATH + STATUS PAINTERS ($7400-$87FF) ──────────────
 .label disk_menu_ui_band_start  = $7400
 .label disk_paint_lda_imm_smc   = $740F
-.label disk_dir_bit_imm_operand = $745E
+.label disk_dir_selector_char   = $745E
+//   notes: Defaults to '$' ($24) and is selectable per drive; passed to SETNAM with length 1 as the directory-listing filename, so the menu loads the drive's '$' directory.
 .label dir_line_counter         = $745F
 .label disk_clear_loop_smc      = $747B
 //   notes: disk_clear_loop_smc = low, disk_clear_loop_smc = high. Initialised to $15/$D8 → psid_export_template (color-RAM row 0 col 21); each iteration bumps by $28 to walk 25 rows.
@@ -5862,7 +5870,7 @@ l_3:                       dey    // $748E
 // Open + read 1541 directory.
 //
 //   callers:             disk_clear_loop_smc indirect via dir_paint_reset_cell / call-chain rooted at save_ui_entry (disk-menu open) and the `D` reload commands.
-//   inputs:              disk_dir_bit_imm_operand = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)
+//   inputs:              disk_dir_selector_char = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)
 //   outputs:             Directory text painted into screen RAM via dir_paint_blocks_glyph/dir_paint_glyph cursor; dir_line_counter counts lines emitted (caps at $18 = 24 lines).
 //   registers clobbered: A, X, Y
 //
@@ -5870,14 +5878,14 @@ l_3:                       dey    // $748E
 //     - call disk_menu_screen_init (screen init).
 //     - KERNAL setup:
 //         SETLFS lfn=1 / drive=$BA / sa=0.
-//         SETNAM len=1 / name=disk_dir_bit_imm_operand (current drive's directory selector char).
+//         SETNAM len=1 / name=disk_dir_selector_char (current drive's directory selector char).
 //         OPEN, CHKIN(1).
 //         bcs → dir_read_close_tail on error.
 //     - Skip 4 BAM header bytes via 4× call KERNAL_CHRIN.
 //     - call kbd_scan (key-poll for user abort) / read kbd_decoded_key / compare =KEY_STOP (CLR) → dir_read_close_tail abort.
 //     - Falls through to the directory-entry loop at dir_entry_inner_loop.
 //
-//   The byte at disk_dir_bit_imm_operand (single-char directory selector) defaults to '$'
+//   The byte at disk_dir_selector_char (single-char directory selector) defaults to '$'
 //   ($24 = ASCII dollar sign). defMON's disk-menu lets the user override
 //   this with a custom pattern (e.g. '$0' for all files including
 //   deletions, or '$:NAME' for a name match) by typing into the menu's
@@ -8068,14 +8076,14 @@ statusline_print_hex_byte: {
 // ──────────────────────────────────────────────────────────────────────
 // $83E2  statusline_print_zstring
 // ──────────────────────────────────────────────────────────────────────
-// self-mods statusline_print_zstring with X/Y (string pointer), then X←$00 / read VEC_IRQ_HI,X / call print_char_to_statusline / increment X / compare X=$FF / bne — prints up to 255 chars from (X,Y) to status line.
+// Prints A screen-code characters from (X,Y) to the status line.
 //
 //   callers:             7 code sites: $08A4, $81BF, $8371, $C615, $C63A, $C643, $C67C
-//   inputs:              X = string addr lo, Y = string addr hi. A clobbered (saved at statusline_print_zstring).
+//   inputs:              X = string addr lo, Y = string addr hi, A = character count (written into the loop terminator; consumed, not preserved).
 //   outputs:             X, Y
 //   registers clobbered: A, X, Y
 //
-//   Self-modifies the LDA VEC_IRQ_HI,X operand bytes in place. 4 callers.
+//   Self-mods the read-source operand (from X/Y) and the loop-terminator count operand (from A, at statusline_print_zstring+$13), then loops X←$00 / read string[X] / call print_char_to_statusline / increment X / stop when X reaches A. The static-image terminator operand is the $FF default, overwritten per call. 4 callers.
 statusline_print_zstring: {
                            sta  statusline_print_zstring + $13    // $83E2
                            stx  statusline_print_zstring + $0C    // $83E5
@@ -20661,7 +20669,7 @@ l_11:                      sta  kbd_scan.l_7,x    // $D99B
 //   Patched at: $95B4
 //   LDA writer-source inconclusive (register-sourced or chained — curate me)
 l_12:                      lda  sidtab_dispatch_lut6,x    // $D9A4
-                           sta  splash_status_template_data + $1E,x    // $D9A7
+                           sta  kbd_scancode_lut + $30,x    // $D9A7
                            cmp  #$08    // $D9AA
                            bne  l_13    // $D9AC  sidtab_dispatch_lut6,X was not $08?
                            lda  #$61    // $D9AE

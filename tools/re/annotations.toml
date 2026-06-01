@@ -702,7 +702,7 @@ Sequence:
   - A←$00 / call border_set_a (set border colour to black).
   - write VIC_BORDER / write VIC_BG0 (force border + bg to black).
   - call vic_sprite_init.
-  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print zstring #8 = 'defMON' splash at splash_status_template_data).
+  - X←$F2 / Y←$0F / A←$08 / call print_zstring (print the 8-digit date '20201008' from splash_build_date_string to the status line; A=$08 is the character count, so the trailing build-time digits are not shown).
   - increment editor_frame_barrier (kick the busy-wait counter) → fall into editor_frame_barrier.
 
 Distinct from main_loop entry — this is the FIRST-TIME editor entry from the autoboot/LOAD path. Repeated re-entries (e.g. after disk-menu exit) go through main_loop directly.
@@ -2720,7 +2720,7 @@ evidence            = "trace/disasm_evidence.json §4 (3 actions visit $7460-$74
 name                = "dir_read_open"
 role                = "Open + read 1541 directory."
 callers             = "disk_clear_loop_smc indirect via dir_paint_reset_cell / call-chain rooted at save_ui_entry (disk-menu open) and the `D` reload commands."
-inputs              = "disk_dir_bit_imm_operand = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)"
+inputs              = "disk_dir_selector_char = current drive's directory-selector char ($24 = '$', the standard '$0' wildcard for directory listing)"
 outputs             = "Directory text painted into screen RAM via dir_paint_blocks_glyph/dir_paint_glyph cursor; dir_line_counter counts lines emitted (caps at $18 = 24 lines)."
 registers_clobbered = "A, X, Y"
 notes               = """
@@ -2728,14 +2728,14 @@ Sequence:
   - call disk_menu_screen_init (screen init).
   - KERNAL setup:
       SETLFS lfn=1 / drive=$BA / sa=0.
-      SETNAM len=1 / name=disk_dir_bit_imm_operand (current drive's directory selector char).
+      SETNAM len=1 / name=disk_dir_selector_char (current drive's directory selector char).
       OPEN, CHKIN(1).
       bcs → dir_read_close_tail on error.
   - Skip 4 BAM header bytes via 4× call KERNAL_CHRIN.
   - call kbd_scan (key-poll for user abort) / read kbd_decoded_key / compare =KEY_STOP (CLR) → dir_read_close_tail abort.
   - Falls through to the directory-entry loop at dir_entry_inner_loop.
 
-The byte at disk_dir_bit_imm_operand (single-char directory selector) defaults to '$'
+The byte at disk_dir_selector_char (single-char directory selector) defaults to '$'
 ($24 = ASCII dollar sign). defMON's disk-menu lets the user override
 this with a custom pattern (e.g. '$0' for all files including
 deletions, or '$:NAME' for a name match) by typing into the menu's
@@ -2987,9 +2987,9 @@ evidence = "tools/re/xref.py --target 0x83D5 → 2 callers."
 
 [function."$83E2"]
 name     = "print_zstring"
-role     = "self-mods statusline_print_zstring with X/Y (string pointer), then X←$00 / read VEC_IRQ_HI,X / call print_char_to_statusline / increment X / compare X=$FF / bne — prints up to 255 chars from (X,Y) to status line."
-inputs   = "X = string addr lo, Y = string addr hi. A clobbered (saved at statusline_print_zstring)."
-notes    = "Self-modifies the LDA VEC_IRQ_HI,X operand bytes in place. 4 callers."
+role     = "Prints A screen-code characters from (X,Y) to the status line."
+inputs   = "X = string addr lo, Y = string addr hi, A = character count (written into the loop terminator; consumed, not preserved)."
+notes    = "Self-mods the read-source operand (from X/Y) and the loop-terminator count operand (from A, at statusline_print_zstring+$13), then loops X←$00 / read string[X] / call print_char_to_statusline / increment X / stop when X reaches A. The static-image terminator operand is the $FF default, overwritten per call. 4 callers."
 evidence = "tools/re/xref.py --target 0x83E2 → 4 callers."
 
 [function."$838C"]
@@ -3374,10 +3374,15 @@ name     = "kbd_dead_trampoline"
 role     = "Dead-code 1-byte trampoline `shift ps_sweep_sub_path left` before kbd_scan_samemod_branch."
 evidence = "tools/re/xref.py --target 0x0F0D → 1 apparent caller (screen-text data); harness/probe_function_attribution.py 2026-05-15 never_hit."
 
-[region."$0FA2"]
-name     = "splash_status_template_data"
-role     = "Data region — splash-screen / status-bar template bytes ($06 $03 $36 $04 $12 $35 $16 $15 $08 $02 $38...)."
-evidence = "tools/re/xref.py --target 0x0FA2 → 0 real callers; harness/probe_function_attribution.py 2026-05-15 never_hit."
+[region."$0FF2"]
+name     = "splash_build_date_string"
+role     = "Splash build-date / version stamp: 14 screen-code digits '20201008220143' = build date 20201008 (YYYYMMDD) + build time 220143 (HHMMSS)."
+notes    = """
+The run spans splash_build_date_string through its 14th byte at kbd_page_band_end. post_load_startup paints the splash by loading the pointer to this string into X/Y with A=$08 (the character count) and calling print_zstring, which streams the screen-code bytes to the status line via print_char_to_statusline. With A=$08 only the first 8 digits — the date '20201008' — are printed; the 6-digit time tail '220143' (the last digit lands at kbd_page_band_end) is stored in the image but not displayed.
+
+The bytes are raw screen codes for the digits ('0'..'9' = $30..$39). The 64-byte kbd_scancode_lut (scancodes 0-63) plus a zero pad precede this string.
+"""
+evidence = "Bytes at splash_build_date_string in artefacts/defmon-static.bin decode as screen codes for '20201008220143' ($0FF2-$0FFF, 14 bytes). post_load_startup loads X=$F2 / Y=$0F (pointer $0FF2) / A=$08; print_zstring at $83E2 self-mods its CPX terminator with A (= char count), so 8 chars print. Corrects a prior mis-split: kbd_scancode_lut scancode 0-63 decode confirms $0FA2-$0FCF is the LUT tail (Y=18→'F', Y=57→'Q', Y=63→'1', matching the C64 keymatrix), not the 'splash_status_template_data' it was attributed to."
 
 [region."$0A0A"]
 name               = "pre_quiesce_sprite_data"
@@ -3642,6 +3647,7 @@ kbd_probe_excluded = true
 [region."$7167"]
 name     = "ui_mode"
 role     = "main-loop dispatch byte read at mode_dispatch."
+notes    = "Boot default $01 = UI_MODE_SEQED — defMON powers on in the sequence editor. mode_dispatch reads this byte each main-loop pass to pick the active editor handler."
 evidence = "harness/defmon.py: current_mode() reads here; harness/probe_handlers.py exercises each dispatcher."
 
 [region."$7167".values]
@@ -3659,6 +3665,7 @@ evidence = "harness/defmon.py: current_mode() reads here; harness/probe_handlers
 [region."$7168"]
 name = "ui_mode_prev"
 role = "saved when entering sidTAB (sidTAB_handler) for restore on LEFTARROW exit."
+notes = "Boot default UI_MODE_SEQED mirrors the ui_mode power-on value. sidTAB_handler copies ui_mode here on entry and restores it on the LEFTARROW exit."
 
 [region."$7171"]
 name     = "sid_chip_view"
@@ -3693,6 +3700,7 @@ role = "low byte of SID#2 mapping ($00..$E0 stride $20)."
 [region."$7165"]
 name = "sid2_base_hi"
 role = "high byte of the SID#2 register base address; the user-key cycle steps it through the four supported mappings."
+notes = "Boot default $D5; with sid2_base_lo = $00 it selects the default SID#2 register base. The user-key cycle steps the lo/hi pair through the four supported stereo-SID bases."
 
 [region."$7165".values]
 "$D4" = "SID#2 mapped at $D4xx (alias of SID#1, useful for some 2SID layouts)"
@@ -3981,6 +3989,7 @@ role = "Two $00 padding bytes after the SID#2 pitch-sweep helper's rts, before s
 [region."$E13C"]
 name = "seqlist_helper_pad"
 role = "Padding byte(s) after the preceding helper's rts, before seqLIST_helper."
+notes = "The two $FF bytes here are filler between the preceding helper's rts and seqLIST_helper; alignment padding, never read or executed."
 
 [region."$CCEE"]
 name     = "sid2_player_init_body"
@@ -4732,6 +4741,7 @@ notes = "Holds the 8-byte matrix mirror (kbd_matrix_mirror..kbd_matrix_mirror_en
 [region."$0FFF"]
 name = "kbd_page_band_end"
 role = "End of the keyboard-input page band; just below the player API stubs at player_init/player_play/player_sound_update."
+notes = "The byte here ($33 = screen-code '3') is the 14th and last digit of the build-stamp string at splash_build_date_string ('20201008220143' = date + time); it is stored but not displayed (post_load_startup prints only the 8-digit date). The address also serves as the never-executed sentinel target of the jsr_with_ram_helper self-modifying JSR (see jsr_with_ram_helper)."
 
 [region."$1825"]
 name     = "load_decoder_dest_floor_below"
@@ -4833,6 +4843,7 @@ seqlist_col_cursor is the seqLIST col-cursor; seqlist_row_counter is the related
 [region."$729F"]
 name = "seqED_cursor_band_end"
 role = "End of the seqED cursor band."
+notes = "Last byte of the seqED cursor-state cluster that begins at seqED_cursor_band; an initialized editor cursor slot (boot default $10), part of the pre-initialized UI-state band shipped in the image."
 
 [region."$729A"]
 name     = "key_pitch_lut"
@@ -5361,9 +5372,9 @@ notes = "Written by kbd_scan each frame from CIA1 matrix scan; read by modifier_
 
 [region."$0F90"]
 name     = "kbd_scancode_lut"
-role     = "scancode→screen-code LUT (64 bytes, kbd_scancode_lut-splash_status_template_data)."
+role     = "scancode→screen-code LUT (64 bytes, kbd_scancode_lut through scancode 63)."
 notes    = """
-Read by kbd_scan inner walker at kbd_scan_inner_continue: `read kbd_scancode_lut,Y` with Y = scancode position (0..63). Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). Walker order: kbd_scan scans rows 7 down to 0; within each row, column 0 first via ror. So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The trailing bytes at splash_status_template_data are a separate data table — see that region's role.
+Read by kbd_scan inner walker at kbd_scan_inner_continue: `read kbd_scancode_lut,Y` with Y = scancode position (0..63). Value = defMON internal key code stored to kbd_decoded_key (KEY_NONE = no binding, e.g. modifier keys filtered). Walker order: kbd_scan scans rows 7 down to 0; within each row, column 0 first via ror. So scancode Y = ((7 - row) * 8) + col, with row 7 occupying scancodes 56..63 (Y=63 = row 7 col 0 = RUN/STOP key in the C64 matrix), and row 0 occupying scancodes 0..7. The LUT fills the whole 64-entry table to its last byte (scancode 63). A zero pad then runs up to splash_build_date_string, the splash build-date string (printed separately, not part of this LUT).
 
 Decoded key map by scancode (Y), keyed by the C64 keymatrix row/col:
 
@@ -5489,8 +5500,10 @@ notes              = "The $A9 is the opcode of the screen-fill `A←$00` at scre
 kbd_probe_excluded = true
 
 [region."$745E"]
-name               = "disk_dir_bit_imm_operand"
-role               = "Self-mod operand byte ($24), 1 byte — operand of a bit-immediate inside the disk-menu directory-fetch body around disk_menu_screen_init call screen_fill_body."
+name               = "disk_dir_selector_char"
+role               = "Disk directory-listing filename character — $24 = '$', the standard C64 directory wildcard — written to the SETNAM name byte by the disk-menu directory fetch."
+notes              = "Defaults to '$' ($24) and is selectable per drive; passed to SETNAM with length 1 as the directory-listing filename, so the menu loads the drive's '$' directory."
+evidence           = "Byte $745E = $24 = PETSCII '$'; the disk-menu directory-fetch body sets SETNAM len=1 name=this byte. Renamed from a prior label that mischaracterised it as a BIT-instruction operand."
 kbd_probe_excluded = true
 
 [region."$757F"]
