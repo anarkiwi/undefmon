@@ -14772,7 +14772,7 @@ l_12:                      sty  super_cmd_page_commit + $10D    // $B77D
                            iny    // $B786
                            sta  (zp_scratch_9e),y    // $B787
                            ldy  #$FF    // $B789  ; ← (SMC operand at $B78A, no name)
-l_13:                      bcc  l_14    // $B78B
+l_13:                      bcc  l_14    // $B78B  song_position entry byte bit 7 clear (carry from the ASL at $B760, preserved across the jmp into l_13)
                            iny    // $B78D
                            lax  (zp_ptr1_lo),y    // $B78E
                            sty  super_cmd_page_commit + $124    // $B790
@@ -20471,7 +20471,18 @@ configurable_emitter_advance_hook: {
                            bne  l_1    // $D78A  (selfmod_emitter_target_lo + 1) was non-zero?
                            inc  selfmod_emitter_target_hi    // $D78C
 l_1:                       rts    // $D78F
-configurable_emitter_noop_tail: rts    // $D790
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// $D790  configurable_emitter_noop_tail
+// ──────────────────────────────────────────────────────────────────────
+// Configurable-emitter no-op (write-only) post-write hook — returns without advancing.
+//
+//   registers clobbered: none (preserves A/X/Y)
+//
+//   A bare rts: the self_modifying_byte_emitter jmp lands here when configurable_emitter_post_write_hook_writeonly patched the operand to this address, so a byte is written without bumping the target pointer (the counterpart to configurable_emitter_advance_hook). Reached only via that self-modifying jmp, so it is seeded as a [function] for reachability.
+configurable_emitter_noop_tail: {
+                           rts    // $D790
 }
 
 // ──────────────────────────────────────────────────────────────────────

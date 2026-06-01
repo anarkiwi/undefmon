@@ -894,6 +894,11 @@ name  = "configurable_emitter_advance_hook"
 role  = "Configurable-emitter advance hook."
 notes = "increment configurable_emitter_target_smc (counter); increment self_modifying_byte_emitter; if hi-byte wrap then increment self_modifying_byte_emitter; return. Bumps the patched-immediate write operand at self_modifying_byte_emitter by one."
 
+[function."$D790"]
+name  = "configurable_emitter_noop_tail"
+role  = "Configurable-emitter no-op (write-only) post-write hook — returns without advancing."
+notes = "A bare rts: the self_modifying_byte_emitter jmp lands here when configurable_emitter_post_write_hook_writeonly patched the operand to this address, so a byte is written without bumping the target pointer (the counterpart to configurable_emitter_advance_hook). Reached only via that self-modifying jmp, so it is seeded as a [function] for reachability."
+
 [function."$D791"]
 name  = "bounded_forward_memcpy"
 role  = "Bounded forward memcpy."
@@ -6128,6 +6133,13 @@ condition = "paint cell src byte bit 6 set after ASL (render digit, skip placeho
 condition = "paint cell src byte bit 6 set after ASL (render digit, skip placeholder)"
 [branch."$A958"]
 condition = "paint cell src byte bit 6 set after ASL (render digit, skip placeholder)"
+
+# Manual override: cmp_facts can't see this one because the carry is set
+# upstream of a jmp join (l_13). The byte at (zp_ptr1) — a song_position
+# entry — is ASL'd at $B760, leaving carry = its bit 7; nothing between
+# there and this join touches carry, so BCC here tests that bit 7.
+[branch."$B78B"]
+condition = "song_position entry byte bit 7 clear (carry from the ASL at $B760, preserved across the jmp into l_13)"
 
 # ──────────────────────────────────────────────────────────────────────
 # Per-PC IMM operand overrides — give specific `#$XX` immediate
