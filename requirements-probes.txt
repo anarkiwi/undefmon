@@ -10,5 +10,5 @@
 # ``ViceContainer.entrypoint`` override the headlessvice wiring uses.
 # See tools/probe.py for usage.
 
-defmon-driver==0.2.0
+defmon-driver==0.3.0
 vice-driver==0.2.0
