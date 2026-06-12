@@ -17,7 +17,7 @@
 #                       ghidra_import --no-decompile to produce the 5 JSONs
 #   3. export           scratch with just the 5 JSONs
 
-FROM eclipse-temurin:21-jdk-noble AS ghidra-install
+FROM eclipse-temurin:25-jdk-noble AS ghidra-install
 ARG GHIDRA_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1_build/ghidra_12.1_PUBLIC_20260513.zip
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
