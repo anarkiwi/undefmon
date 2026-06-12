@@ -39,7 +39,7 @@ jobs:
         run: pip install black
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Reproduce defmon-static.bin from upstream .d64
         uses: docker/build-push-action@v7
@@ -75,7 +75,7 @@ jobs:
           python-version: "3.12"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Reproduce defmon-static.bin (Ghidra import consumes it)
         uses: docker/build-push-action@v7
