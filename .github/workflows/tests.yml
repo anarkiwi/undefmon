@@ -21,7 +21,19 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install Kick Assembler (for round-trip)
+      # Cache the unpacked KickAssembler across runs. The download URL is
+      # unversioned, so a static key is fine: once the cache is populated
+      # CI never hits theweb.dk again (which 415s bursts and rate-limits),
+      # and a manual cache eviction is the way to pick up an upstream bump.
+      - name: Cache Kick Assembler
+        id: cache-kickass
+        uses: actions/cache@v4
+        with:
+          path: ~/kickass
+          key: kickass-jar-v1
+
+      - name: Download Kick Assembler
+        if: steps.cache-kickass.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$HOME/kickass"
           # theweb.dk 415s the default curl User-Agent (pose as a browser)
@@ -31,8 +43,11 @@ jobs:
             http://theweb.dk/KickAssembler/KickAssembler.zip \
             -o /tmp/kickass.zip
           unzip -q /tmp/kickass.zip -d "$HOME/kickass"
+
+      - name: Locate KickAss.jar (for round-trip)
+        run: |
           jar="$(find "$HOME/kickass" -name KickAss.jar | head -1)"
-          test -n "$jar" || { echo "KickAss.jar not found in download"; exit 1; }
+          test -n "$jar" || { echo "KickAss.jar not found"; exit 1; }
           echo "KICKASS_JAR=$jar" >> "$GITHUB_ENV"
 
       - name: Install black (for the lint test)
