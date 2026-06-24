@@ -21,28 +21,29 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      # Cache the unpacked KickAssembler across runs. The download URL is
-      # unversioned, so a static key is fine: once the cache is populated
-      # CI never hits theweb.dk again (which 415s bursts and rate-limits),
-      # and a manual cache eviction is the way to pick up an upstream bump.
+      # Cache KickAss.jar across runs. Key is pinned to the assembler
+      # version so an upstream bump (new release asset + key) invalidates
+      # cleanly. Once populated, CI hits no network for the jar at all.
       - name: Cache Kick Assembler
         id: cache-kickass
         uses: actions/cache@v4
         with:
           path: ~/kickass
-          key: kickass-jar-v1
+          key: kickass-jar-v5.25
 
       - name: Download Kick Assembler
         if: steps.cache-kickass.outputs.cache-hit != 'true'
         run: |
           mkdir -p "$HOME/kickass"
-          # theweb.dk 415s the default curl User-Agent (pose as a browser)
-          # and rate-limits bursts, so retry on any error with a delay.
-          curl -fsSL -A "Mozilla/5.0" \
-            --retry 6 --retry-all-errors --retry-delay 10 \
-            http://theweb.dk/KickAssembler/KickAssembler.zip \
-            -o /tmp/kickass.zip
-          unzip -q /tmp/kickass.zip -d "$HOME/kickass"
+          # KickAss.jar is vendored as a release asset on this repo because
+          # the upstream (theweb.dk) 415s GitHub Actions runner IPs. The
+          # release URL is GitHub-to-GitHub, so it is always reachable.
+          # sha256 is checked so a tampered/truncated asset fails loudly.
+          curl -fsSL --retry 3 --retry-all-errors \
+            https://github.com/anarkiwi/undefmon/releases/download/kickass-5.25/KickAss.jar \
+            -o "$HOME/kickass/KickAss.jar"
+          echo "9592a39336e73a1db8b4a7749256d62d29b113b1c7f0f6c86ea43870ebd9ae1f  $HOME/kickass/KickAss.jar" \
+            | sha256sum -c -
 
       - name: Locate KickAss.jar (for round-trip)
         run: |
