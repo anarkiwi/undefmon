@@ -11,4 +11,4 @@
 # See tools/probe.py for usage.
 
 defmon-driver==0.4.0
-vice-driver==0.4.0
+vice-driver==0.5.0
